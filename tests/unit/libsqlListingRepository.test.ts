@@ -1,8 +1,8 @@
-import type BetterSqlite3 from 'better-sqlite3';
+import type { Client } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ScoredListing } from '../../src/domain/entities/ScoredListing.js';
-import { openDatabase } from '../../src/infrastructure/persistence/sqlite/Database.js';
-import { SqliteListingRepository } from '../../src/infrastructure/persistence/sqlite/SqliteListingRepository.js';
+import { openDatabase } from '../../src/infrastructure/persistence/libsql/Database.js';
+import { LibsqlListingRepository } from '../../src/infrastructure/persistence/libsql/LibsqlListingRepository.js';
 import { makeListing, makeModelCriteria } from '../fixtures/sampleData.js';
 
 function buildScored(overrides: Partial<ScoredListing> = {}): ScoredListing {
@@ -15,13 +15,13 @@ function buildScored(overrides: Partial<ScoredListing> = {}): ScoredListing {
   };
 }
 
-describe('SqliteListingRepository', () => {
-  let db: BetterSqlite3.Database;
-  let repo: SqliteListingRepository;
+describe('LibsqlListingRepository', () => {
+  let db: Client;
+  let repo: LibsqlListingRepository;
 
-  beforeEach(() => {
-    db = openDatabase(':memory:');
-    repo = new SqliteListingRepository(db, [makeModelCriteria()]);
+  beforeEach(async () => {
+    db = await openDatabase({ url: ':memory:' });
+    repo = new LibsqlListingRepository(db, [makeModelCriteria()]);
   });
 
   afterEach(() => {
@@ -65,6 +65,19 @@ describe('SqliteListingRepository', () => {
     const goodDeals = await repo.getGoodDealsSince(future);
 
     expect(goodDeals).toHaveLength(0);
+  });
+
+  it('getRecentGoodDeals returns only good deals, capped at the limit', async () => {
+    await repo.save(buildScored({ listing: makeListing({ externalId: 'g1' }), isGoodDeal: true }));
+    await repo.save(buildScored({ listing: makeListing({ externalId: 'g2' }), isGoodDeal: true }));
+    await repo.save(
+      buildScored({ listing: makeListing({ externalId: 'bad' }), isGoodDeal: false }),
+    );
+
+    const recent = await repo.getRecentGoodDeals(1);
+
+    expect(recent).toHaveLength(1);
+    expect(recent[0]?.isGoodDeal).toBe(true);
   });
 
   it('round-trips score breakdown and model match through storage', async () => {

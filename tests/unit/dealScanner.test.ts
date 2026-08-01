@@ -53,6 +53,10 @@ class InMemoryRepository implements ListingRepository {
     return Promise.resolve(this.saved.filter((s) => s.isGoodDeal));
   }
 
+  getRecentGoodDeals(limit: number): Promise<ScoredListing[]> {
+    return Promise.resolve(this.saved.filter((s) => s.isGoodDeal).slice(0, limit));
+  }
+
   close(): Promise<void> {
     return Promise.resolve();
   }

@@ -13,9 +13,12 @@ import { BikerSource } from './infrastructure/sources/biker/BikerSource.js';
 import { MoteurSource } from './infrastructure/sources/moteur/MoteurSource.js';
 import { ConsoleNotificationProvider } from './infrastructure/notifications/ConsoleNotificationProvider.js';
 import { DiscordNotificationProvider } from './infrastructure/notifications/DiscordNotificationProvider.js';
-import { openDatabase } from './infrastructure/persistence/sqlite/Database.js';
-import { SqliteListingRepository } from './infrastructure/persistence/sqlite/SqliteListingRepository.js';
+import { openDatabase, type DatabaseConfig } from './infrastructure/persistence/libsql/Database.js';
+import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
+import type { BrowserManager } from './infrastructure/sources/shared/BrowserManager.js';
 import { PlaywrightBrowserManager } from './infrastructure/sources/shared/PlaywrightBrowserManager.js';
+import { ServerlessPlaywrightBrowserManager } from './infrastructure/sources/shared/ServerlessPlaywrightBrowserManager.js';
+import type { Env } from './config/env.js';
 
 /**
  * Everything the CLI needs, wired up in one place. This is the only file
@@ -43,10 +46,10 @@ export async function buildContainer(): Promise<Container> {
   });
 
   const criteria = await loadCriteria(env.CRITERIA_CONFIG_PATH);
-  const db = openDatabase(env.DATABASE_PATH);
-  const repository = new SqliteListingRepository(db, criteria.models, logger);
+  const db = await openDatabase(resolveDatabaseConfig(env));
+  const repository = new LibsqlListingRepository(db, criteria.models, logger);
 
-  const browserManager = new PlaywrightBrowserManager(env.PLAYWRIGHT_HEADLESS);
+  const browserManager = createBrowserManager(env);
   const sourceOptions = { throttleMs: env.SCRAPE_THROTTLE_MS };
   const sources: MarketplaceSource[] = [
     new AvitoSource(browserManager, sourceOptions, logger.child({ source: 'avito' })),
@@ -78,4 +81,29 @@ export async function buildContainer(): Promise<Container> {
       await repository.close();
     },
   };
+}
+
+/**
+ * Prefers an explicit DATABASE_URL (Turso on Vercel); otherwise derives a
+ * local `file:` URL from DATABASE_PATH so the CLI works with zero config.
+ */
+export function resolveDatabaseConfig(env: Env): DatabaseConfig {
+  if (env.DATABASE_URL) {
+    return env.DATABASE_AUTH_TOKEN
+      ? { url: env.DATABASE_URL, authToken: env.DATABASE_AUTH_TOKEN }
+      : { url: env.DATABASE_URL };
+  }
+  return { url: `file:${env.DATABASE_PATH}` };
+}
+
+/**
+ * On Vercel, Chromium ships as a Lambda layer via @sparticuz/chromium and
+ * is driven by playwright-core. Everywhere else, the normal Playwright
+ * install drives a locally-installed Chromium.
+ */
+function createBrowserManager(env: Env): BrowserManager {
+  if (process.env['VERCEL']) {
+    return new ServerlessPlaywrightBrowserManager();
+  }
+  return new PlaywrightBrowserManager(env.PLAYWRIGHT_HEADLESS);
 }

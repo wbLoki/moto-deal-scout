@@ -1,4 +1,10 @@
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import chromium from '@sparticuz/chromium';
+import {
+  chromium as playwright,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from 'playwright-core';
 import type { BrowserManager } from './BrowserManager.js';
 
 const DEFAULT_USER_AGENT =
@@ -6,16 +12,14 @@ const DEFAULT_USER_AGENT =
   '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
 /**
- * Local/dev {@link BrowserManager}: drives a Chromium installed by
- * `playwright install`. Owns one shared browser + context; sources ask for
- * pages via {@link newPage} and never touch lifecycle. Call {@link close}
- * once at shutdown, after all sources are done.
+ * Serverless {@link BrowserManager} for Vercel/AWS Lambda. Uses
+ * `playwright-core` (no bundled browsers) driving the Chromium binary that
+ * `@sparticuz/chromium` unpacks from the Lambda layer at runtime. Behaves
+ * identically to the local manager from a source's point of view.
  */
-export class PlaywrightBrowserManager implements BrowserManager {
+export class ServerlessPlaywrightBrowserManager implements BrowserManager {
   private browser: Browser | undefined;
   private context: BrowserContext | undefined;
-
-  constructor(private readonly headless: boolean) {}
 
   async newPage(): Promise<Page> {
     const context = await this.getContext();
@@ -30,7 +34,13 @@ export class PlaywrightBrowserManager implements BrowserManager {
   }
 
   private async getContext(): Promise<BrowserContext> {
-    this.browser ??= await chromium.launch({ headless: this.headless });
+    if (!this.browser) {
+      this.browser = await playwright.launch({
+        args: chromium.args,
+        executablePath: await chromium.executablePath(),
+        headless: true,
+      });
+    }
     this.context ??= await this.browser.newContext({
       userAgent: DEFAULT_USER_AGENT,
       locale: 'fr-MA',

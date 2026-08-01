@@ -1,12 +1,19 @@
 # Moto Deal Scout
 
 Scans Moroccan motorcycle marketplaces daily, scores listings against models you're
-actually shopping for, and only notifies you about the good deals — not every listing
-that exists.
+actually shopping for, and surfaces only the good deals — on a web dashboard and via
+notifications — not every listing that exists.
 
 Sources: [Avito.ma](https://www.avito.ma), [Biker.ma](https://www.biker.ma),
 [Moteur.ma](https://www.moteur.ma) (its `/fr/moto/achat-moto-occasion/` section, despite
 the site being car-focused otherwise).
+
+It runs two ways from one codebase:
+
+- **As a web app** (Next.js) — a dashboard of current good deals, plus a cron-triggered
+  `/api/scan` route. Deploys to Vercel.
+- **As a standalone CLI** — `scan` / `report` / `schedule` commands for running locally or
+  on any always-on box.
 
 ## How it works
 
@@ -20,7 +27,7 @@ the site being car-focused otherwise).
    and city, weighted 40/25/20/15.
 4. Listings scoring at or above `minScoreForGoodDeal` (default 70) are "good deals" and
    get pushed to every configured notifier. Everything scanned — good deal or not — is
-   saved to SQLite so it's never re-reported.
+   saved to the database so it's never re-reported and so the dashboard can show it.
 5. A daily report (scan stats + good deals, or "no good deals today") always goes out,
    separately from the good-deal alert.
 
@@ -28,7 +35,7 @@ the site being car-focused otherwise).
 
 ```bash
 npm install
-npm run playwright:install   # downloads the Chromium build Playwright drives
+npm run playwright:install   # local Chromium for CLI/dev scans (not needed on Vercel)
 cp .env.example .env         # then edit as needed — see below
 ```
 
@@ -37,26 +44,81 @@ you're actually shopping for: which models, what counts as a fair price for each
 preferred cities, and the score threshold for "good deal". This is the file you'll touch
 most.
 
-## Running it
+## Running the web app locally
 
 ```bash
-npm run dev:scan       # run one scan now, notify about good deals, exit
-npm run dev:report     # re-send today's good-deal digest from storage, without scanning
-npm run dev:schedule   # start the cron scheduler and keep running (8:00 AM Africa/Casablanca by default)
+npm run dev          # Next.js dev server at http://localhost:3000
 ```
 
-For production, `npm run build` then `npm start` (runs `schedule` from compiled JS) —
-or point a process manager (`pm2`, systemd, a container) at the `schedule` command so it
-survives restarts and keeps its daily cadence.
+The dashboard reads good deals from the database. To populate it, trigger a scan — either
+run the CLI (`npm run scan`) or hit the route:
+
+```bash
+curl http://localhost:3000/api/scan
+```
+
+(Locally, with no `CRON_SECRET` set, the route is open. See deployment for how it's
+protected in production.)
+
+## Running the CLI
+
+```bash
+npm run scan       # run one scan now, notify about good deals, exit
+npm run report     # re-send today's good-deal digest from storage, without scanning
+npm run schedule   # start the built-in cron scheduler and keep running (8:00 AM Africa/Casablanca)
+```
+
+`schedule` is the always-on mode for a VPS / systemd / pm2 / container: it keeps the
+process alive and runs a scan every day at the configured time, independent of Vercel.
+Build the CLI to plain JS with `npm run build:cli` (outputs to `dist/`).
+
+## Deploying to Vercel
+
+Vercel doesn't run long-lived processes or keep a local filesystem, so two things differ
+from local use: the schedule comes from Vercel Cron hitting `/api/scan`, and the database
+must be remote. [Turso](https://turso.tech) is the natural fit — it's libsql (the same
+SQLite dialect this app already uses), so no code changes are needed.
+
+1. **Create a Turso database** and grab its URL and an auth token:
+   ```bash
+   turso db create moto-deal-scout
+   turso db show moto-deal-scout --url         # -> DATABASE_URL
+   turso db tokens create moto-deal-scout      # -> DATABASE_AUTH_TOKEN
+   ```
+   (The `listings` table is created automatically on first connection.)
+2. **Import the repo into Vercel** and set environment variables (Project → Settings →
+   Environment Variables):
+   - `DATABASE_URL` = `libsql://<your-db>.turso.io`
+   - `DATABASE_AUTH_TOKEN` = the token from step 1
+   - `CRON_SECRET` = any long random string — Vercel automatically sends it to the cron
+     route as a Bearer token, and `/api/scan` + `/api/report` reject requests without it
+   - `DISCORD_WEBHOOK_URL` = optional, to also push alerts to Discord
+3. **Deploy.** The cron in [`vercel.json`](vercel.json) runs `/api/scan` daily.
+
+On Vercel the app uses `@sparticuz/chromium` + `playwright-core` for a serverless-friendly
+Chromium — selected automatically at runtime via the `VERCEL` env var, so nothing to
+configure.
+
+### Caveats worth knowing
+
+- **Function timeout.** A full scan (3 sources × several models × a few pages) can take a
+  while. `/api/scan` sets `maxDuration = 60`, the Hobby-plan ceiling; Pro allows more. If
+  scans time out, raise `maxDuration`, trim `models` in your criteria, lower `maxPages` in
+  the sources, or reduce `SCRAPE_THROTTLE_MS`.
+- **Cron timezone.** Vercel Cron runs in **UTC**. [`vercel.json`](vercel.json) uses
+  `0 7 * * *` ≈ 8:00 AM in Morocco (UTC+1). Morocco pauses to UTC+0 during Ramadan, when
+  that run lands at 7:00 AM local — adjust if it matters. (The `SCAN_TIMEZONE` /
+  `SCAN_CRON_EXPRESSION` vars only affect the standalone CLI `schedule` command, not
+  Vercel.)
+- **Hobby crons** run once per day max, which is exactly this schedule.
 
 ## Notifications
 
-- **Console** — always on, prints to stdout. Good for `schedule` running under a
-  supervisor whose logs you check, or just for `dev:scan` while you're tuning criteria.
-- **Discord** — set `DISCORD_WEBHOOK_URL` in `.env` to a
+- **Console** — always on, prints to stdout. Handy for the CLI and for reading Vercel
+  function logs.
+- **Discord** — set `DISCORD_WEBHOOK_URL` to a
   [channel webhook URL](https://support.discord.com/hc/en-us/articles/228383668) and it
-  activates automatically. Leave it unset and the provider silently no-ops — it's safe to
-  leave wired up either way.
+  activates automatically. Leave it unset and the provider silently no-ops.
 
 To add a new channel (Telegram, email, SMS, ...), implement
 [`NotificationProvider`](src/domain/interfaces/NotificationProvider.ts) and add an
@@ -65,15 +127,18 @@ needs to change.
 
 ## Configuration reference (`.env`)
 
-| Variable               | Default                         | Notes                                                           |
-| ---------------------- | ------------------------------- | --------------------------------------------------------------- |
-| `DATABASE_PATH`        | `./data/moto-deal-scout.sqlite` | Created automatically.                                          |
-| `CRITERIA_CONFIG_PATH` | _(unset)_                       | Optional JSON file overriding `defaultCriteria.ts` — see below. |
-| `SCAN_CRON_EXPRESSION` | `0 8 * * *`                     | Standard 5-field cron.                                          |
-| `SCAN_TIMEZONE`        | `Africa/Casablanca`             | IANA timezone name.                                             |
-| `SCRAPE_THROTTLE_MS`   | `2000`                          | Delay between page loads on the same marketplace.               |
-| `PLAYWRIGHT_HEADLESS`  | `true`                          | Set `false` to watch the browser while debugging a scraper.     |
-| `DISCORD_WEBHOOK_URL`  | _(unset)_                       | Activates the Discord notifier.                                 |
+| Variable               | Default                         | Notes                                                                         |
+| ---------------------- | ------------------------------- | ----------------------------------------------------------------------------- |
+| `DATABASE_URL`         | _(unset)_                       | libsql URL. Unset locally (a `file:` URL is derived); set to Turso on Vercel. |
+| `DATABASE_AUTH_TOKEN`  | _(unset)_                       | Auth token for a remote Turso database.                                       |
+| `DATABASE_PATH`        | `./data/moto-deal-scout.sqlite` | Local SQLite file, used only when `DATABASE_URL` is unset.                    |
+| `CRON_SECRET`          | _(unset)_                       | Protects `/api/scan` + `/api/report`. Always set it in production.            |
+| `CRITERIA_CONFIG_PATH` | _(unset)_                       | Optional JSON file overriding `defaultCriteria.ts` — see below.               |
+| `SCAN_CRON_EXPRESSION` | `0 8 * * *`                     | CLI `schedule` only (not Vercel).                                             |
+| `SCAN_TIMEZONE`        | `Africa/Casablanca`             | CLI `schedule` only (not Vercel).                                             |
+| `SCRAPE_THROTTLE_MS`   | `2000`                          | Delay between page loads on the same marketplace.                             |
+| `PLAYWRIGHT_HEADLESS`  | `true`                          | Local only; set `false` to watch the browser while debugging a scraper.       |
+| `DISCORD_WEBHOOK_URL`  | _(unset)_                       | Activates the Discord notifier.                                               |
 
 ### Overriding criteria without editing code
 
@@ -124,16 +189,20 @@ a human-readable breakdown of why.
 
 ## Architecture
 
-Clean-architecture-ish layering, dependencies point inward:
+Clean-architecture-ish layering, dependencies point inward. The web app and the CLI are
+two thin entrypoints over the same core:
 
 ```
+app/                Next.js — dashboard page + /api/scan and /api/report route handlers
 src/
   domain/           entities + interfaces only — no framework, no I/O
   application/      FuzzyModelMatcher, ListingScorer, DealScanner, notifier dispatch
-  infrastructure/    Playwright sources, SQLite repository, Discord/console notifiers
+  infrastructure/   Playwright sources (local + serverless), libsql repository, notifiers
   config/           env + search-criteria loading and validation (zod)
-  container.ts       composition root — the only file that wires concrete classes together
-  cli.ts             commander entrypoint (scan / report / schedule)
+  container.ts      composition root — the only file that wires concrete classes together
+  runners.ts        runScan() / runReport() — shared by the CLI and the API routes
+  readModel.ts      lightweight DB read path for the dashboard (no browser)
+  cli.ts            commander entrypoint (scan / report / schedule)
 ```
 
 - **Add a marketplace**: implement [`MarketplaceSource`](src/domain/interfaces/MarketplaceSource.ts)
@@ -141,19 +210,20 @@ src/
   application layer (matching, scoring, dedup, notifying) doesn't change.
 - **Add a notifier**: implement [`NotificationProvider`](src/domain/interfaces/NotificationProvider.ts),
   add it to `container.ts`'s `notifiers` array.
-- **Swap storage**: implement [`ListingRepository`](src/domain/interfaces/ListingRepository.ts)
-  against whatever you want instead of SQLite.
+- **Swap storage**: implement [`ListingRepository`](src/domain/interfaces/ListingRepository.ts).
+  The default is one libsql-backed implementation that serves both a local SQLite file and
+  remote Turso.
 
 ## Testing
 
 ```bash
-npm test            # vitest run, 65 tests
+npm test            # vitest run, 66 tests
 npm run test:watch
-npm run typecheck
+npm run typecheck   # tsc over CLI, app, and tests
 npm run lint
 ```
 
-Unit tests cover the fuzzy matcher, scorer, SQLite repository (in-memory), notifiers
+Unit tests cover the fuzzy matcher, scorer, libsql repository (in-memory), notifiers
 (mocked fetch for Discord), the scanner (fake sources/repository), and the text-parsing
 helpers the scrapers depend on. The Playwright sources themselves aren't unit tested
 (they're thin, selector-heavy, and were verified against the live sites during

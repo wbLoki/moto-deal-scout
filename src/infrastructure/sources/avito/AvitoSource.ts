@@ -1,11 +1,11 @@
 import type { Logger } from 'pino';
-import type { Page } from 'playwright';
+import type { Page } from 'playwright-core';
 import type { Listing } from '../../../domain/entities/Listing.js';
 import type {
   MarketplaceSource,
   SourceQuery,
 } from '../../../domain/interfaces/MarketplaceSource.js';
-import type { PlaywrightBrowserManager } from '../shared/PlaywrightBrowserManager.js';
+import type { BrowserManager } from '../shared/BrowserManager.js';
 import { delay } from '../shared/throttle.js';
 import {
   parseNumber,
@@ -50,7 +50,7 @@ export class AvitoSource implements MarketplaceSource {
   readonly name = 'Avito.ma';
 
   constructor(
-    private readonly browserManager: PlaywrightBrowserManager,
+    private readonly browserManager: BrowserManager,
     private readonly options: AvitoSourceOptions,
     private readonly logger: Logger,
   ) {}
