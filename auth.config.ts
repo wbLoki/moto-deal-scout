@@ -16,12 +16,19 @@ if (process.env['AUTH_GITHUB_ID'] && process.env['AUTH_GITHUB_SECRET']) {
 
 const PUBLIC_PATHS = ['/login', '/signup'];
 
+// Auth.js auto-reads AUTH_SECRET from the environment, but we also wire it in
+// explicitly (when present) so both the middleware and server share the same
+// value. If this is undefined, AUTH_SECRET is not set in the running
+// environment — set it (in Vercel, for every environment) and redeploy.
+const secret = process.env['AUTH_SECRET'];
+
 /**
  * Edge-safe base config shared by the middleware and the full server config.
  * The Credentials provider and any database-touching callbacks live in
  * `auth.ts` instead, since middleware runs on the edge runtime.
  */
 export const authConfig = {
+  ...(secret ? { secret } : {}),
   trustHost: true,
   pages: { signIn: '/login' },
   session: { strategy: 'jwt' },
