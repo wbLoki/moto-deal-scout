@@ -25,11 +25,31 @@ export interface ModelCriteria {
 }
 
 /**
+ * A hard budget + model-year window applied to every model at scan time.
+ * Unlike a model's `priceRangeMAD` (a fair-value reference used for
+ * *scoring*), this excludes out-of-range listings entirely before they're
+ * scored or stored. Adjustable at runtime via the settings UI.
+ */
+export interface SearchRange {
+  readonly budgetMin: number;
+  readonly budgetMax: number;
+  readonly yearMin: number;
+  readonly yearMax: number;
+}
+
+/**
  * Global preferences applied across all models: where to look, how good a
  * deal has to be before we bother the user about it, and how stale a
  * listing can be before we ignore it.
  */
 export interface GlobalCriteria {
+  /**
+   * Optional hard budget/year window. When set, listings outside it are
+   * dropped before scoring. Populated at runtime from stored settings.
+   * (`| undefined` is explicit so zod's optional output assigns cleanly
+   * under exactOptionalPropertyTypes.)
+   */
+  readonly searchRange?: SearchRange | undefined;
   /** Ordered best-to-worst; the first entries score highest on the city factor. */
   readonly preferredCities: readonly string[];
   /**

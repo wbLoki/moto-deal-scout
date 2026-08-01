@@ -37,6 +37,15 @@ export const MIGRATIONS: readonly string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_listings_good_deal_created
      ON listings (is_good_deal, created_at)`,
+  // Single-row table (id is pinned to 1) holding the user-adjustable search range.
+  `CREATE TABLE IF NOT EXISTS search_settings (
+    id          INTEGER PRIMARY KEY CHECK (id = 1),
+    budget_min  INTEGER NOT NULL,
+    budget_max  INTEGER NOT NULL,
+    year_min    INTEGER NOT NULL,
+    year_max    INTEGER NOT NULL,
+    updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`,
 ];
 
 /**

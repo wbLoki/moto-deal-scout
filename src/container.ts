@@ -15,6 +15,7 @@ import { ConsoleNotificationProvider } from './infrastructure/notifications/Cons
 import { DiscordNotificationProvider } from './infrastructure/notifications/DiscordNotificationProvider.js';
 import { openDatabase, type DatabaseConfig } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
+import { LibsqlSettingsRepository } from './infrastructure/persistence/libsql/LibsqlSettingsRepository.js';
 import type { BrowserManager } from './infrastructure/sources/shared/BrowserManager.js';
 import { PlaywrightBrowserManager } from './infrastructure/sources/shared/PlaywrightBrowserManager.js';
 import { ServerlessPlaywrightBrowserManager } from './infrastructure/sources/shared/ServerlessPlaywrightBrowserManager.js';
@@ -45,8 +46,17 @@ export async function buildContainer(): Promise<Container> {
     ...(env.NODE_ENV !== 'production' ? { transport: { target: 'pino-pretty' } } : {}),
   });
 
-  const criteria = await loadCriteria(env.CRITERIA_CONFIG_PATH);
+  const baseCriteria = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
+
+  // A stored search range (set via the settings UI) overrides whatever the
+  // criteria config shipped with, so scans honour the latest saved value.
+  const settingsRepo = new LibsqlSettingsRepository(db);
+  const storedRange = await settingsRepo.getSearchRange();
+  const criteria: SearchCriteria = storedRange
+    ? { ...baseCriteria, global: { ...baseCriteria.global, searchRange: storedRange } }
+    : baseCriteria;
+
   const repository = new LibsqlListingRepository(db, criteria.models, logger);
 
   const browserManager = createBrowserManager(env);

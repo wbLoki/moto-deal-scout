@@ -109,6 +109,7 @@ export class DealScanner {
   ): Promise<ScoredListing | undefined> {
     if (!this.isWithinAcceptableAge(listing)) return undefined;
     if (!this.isAcceptableCity(listing.city)) return undefined;
+    if (!this.isWithinSearchRange(listing)) return undefined;
 
     const alreadySeen = await this.repository.hasSeen(listing.sourceId, listing.externalId);
     if (alreadySeen) return undefined;
@@ -139,5 +140,23 @@ export class DealScanner {
     if (acceptableCities.length === 0) return true;
     const normalized = city.trim().toLowerCase();
     return acceptableCities.some((c) => c.trim().toLowerCase() === normalized);
+  }
+
+  /**
+   * Hard budget/year window from the runtime settings. Price is always
+   * present so the budget bound always applies; a listing with no stated
+   * year can't be judged against the year bound, so it passes.
+   */
+  private isWithinSearchRange(listing: Listing): boolean {
+    const range = this.criteria.global.searchRange;
+    if (!range) return true;
+    if (listing.priceMAD < range.budgetMin || listing.priceMAD > range.budgetMax) return false;
+    if (
+      listing.year !== undefined &&
+      (listing.year < range.yearMin || listing.year > range.yearMax)
+    ) {
+      return false;
+    }
+    return true;
   }
 }

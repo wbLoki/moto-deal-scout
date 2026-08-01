@@ -154,6 +154,48 @@ describe('DealScanner', () => {
     expect(report.newListingsSeen).toBe(0);
   });
 
+  it('excludes listings priced outside the search budget range', async () => {
+    const criteria = buildCriteria({
+      searchRange: { budgetMin: 60000, budgetMax: 90000, yearMin: 2010, yearMax: 2030 },
+    });
+    const tooExpensive = makeListing({ externalId: 'p1', priceMAD: 120000 });
+    const tooCheap = makeListing({ externalId: 'p2', priceMAD: 40000 });
+    const inRange = makeListing({ externalId: 'p3', priceMAD: 75000 });
+    const source = new FakeSource('avito', 'Avito.ma', [[tooExpensive, tooCheap, inRange]]);
+    const scanner = new DealScanner({
+      sources: [source],
+      repository,
+      criteria,
+      logger: silentLogger,
+    });
+
+    const report = await scanner.scan();
+
+    expect(report.newListingsSeen).toBe(1);
+    expect(report.sources[0]?.newListings).toBe(1);
+  });
+
+  it('excludes listings with a model year outside the search year range', async () => {
+    const criteria = buildCriteria({
+      searchRange: { budgetMin: 0, budgetMax: 500000, yearMin: 2019, yearMax: 2024 },
+    });
+    const tooOld = makeListing({ externalId: 'y1', year: 2016 });
+    const inRange = makeListing({ externalId: 'y2', year: 2021 });
+    const unknownYear = makeListing({ externalId: 'y3', year: undefined });
+    const source = new FakeSource('avito', 'Avito.ma', [[tooOld, inRange, unknownYear]]);
+    const scanner = new DealScanner({
+      sources: [source],
+      repository,
+      criteria,
+      logger: silentLogger,
+    });
+
+    const report = await scanner.scan();
+
+    // In-range plus the unknown-year listing (which can't be judged) are kept; the 2016 is dropped.
+    expect(report.newListingsSeen).toBe(2);
+  });
+
   it('excludes listings older than maxListingAgeDays', async () => {
     const criteria = buildCriteria({ maxListingAgeDays: 7 });
     const stale = makeListing({

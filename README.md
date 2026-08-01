@@ -60,6 +60,19 @@ curl http://localhost:3000/api/scan
 (Locally, with no `CRON_SECRET` set, the route is open. See deployment for how it's
 protected in production.)
 
+### Search range (what gets scanned)
+
+The dashboard has a **Search range** panel: a global budget window and model-year window.
+When set, the scanner keeps only listings inside it — everything outside is dropped before
+scoring, so it changes _what gets found and stored_, not just what's displayed. The value
+is saved to the database (a single-row `search_settings` table), so the daily cron uses the
+latest saved range too. **Save range** persists it (applies on the next scan); **Scan now**
+runs a scan immediately with the current settings. Both run as server actions — no exposed
+endpoint. This is distinct from each model's `priceRangeMAD`/`minYear` in
+[`defaultCriteria.ts`](src/config/defaultCriteria.ts), which are fair-value references used
+for _scoring_; the search range is a hard include/exclude filter. Until you set one, scans
+are unfiltered by budget/year.
+
 ## Running the CLI
 
 ```bash

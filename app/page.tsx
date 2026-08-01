@@ -1,10 +1,12 @@
 import { getDashboardData } from '../src/readModel.js';
 import type { ScoredListing } from '../src/domain/entities/ScoredListing.js';
+import { SearchSettings } from './SearchSettings.js';
 
 // Reads the database on each request, so it must run on the Node runtime
-// and never be statically cached.
+// and never be statically cached. maxDuration covers the "Scan now" action.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 function formatMAD(value: number): string {
   return new Intl.NumberFormat('fr-MA').format(value) + ' MAD';
@@ -45,7 +47,7 @@ function DealCard({ scored }: { scored: ScoredListing }) {
 }
 
 export default async function DashboardPage() {
-  const { criteria, goodDeals } = await getDashboardData(60);
+  const { criteria, goodDeals, searchRange } = await getDashboardData(60);
 
   const sources = new Set(goodDeals.map((d) => d.listing.sourceId));
   const topScore = goodDeals.reduce((max, d) => Math.max(max, d.score.total), 0);
@@ -60,6 +62,8 @@ export default async function DashboardPage() {
         {criteria.models.length === 1 ? '' : 's'}, scored on price, mileage, year and city.
         Threshold: {criteria.global.minScoreForGoodDeal}/100.
       </p>
+
+      <SearchSettings current={searchRange} />
 
       <div className="stats">
         <div className="stat">
@@ -78,7 +82,8 @@ export default async function DashboardPage() {
 
       {goodDeals.length === 0 ? (
         <div className="empty">
-          No good deals stored yet. Trigger a scan (or wait for the daily cron run) and refresh.
+          No good deals stored yet. Adjust the range above and hit “Scan now”, or wait for the daily
+          run.
         </div>
       ) : (
         <div className="grid">
