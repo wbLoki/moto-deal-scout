@@ -60,18 +60,27 @@ curl http://localhost:3000/api/scan
 (Locally, with no `CRON_SECRET` set, the route is open. See deployment for how it's
 protected in production.)
 
-### Search range (what gets scanned)
+## Accounts, roles, and requests (multi-user)
 
-The dashboard has a **Search range** panel: a global budget window and model-year window.
-When set, the scanner keeps only listings inside it — everything outside is dropped before
-scoring, so it changes _what gets found and stored_, not just what's displayed. The value
-is saved to the database (a single-row `search_settings` table), so the daily cron uses the
-latest saved range too. **Save range** persists it (applies on the next scan); **Scan now**
-runs a scan immediately with the current settings. Both run as server actions — no exposed
-endpoint. This is distinct from each model's `priceRangeMAD`/`minYear` in
-[`defaultCriteria.ts`](src/config/defaultCriteria.ts), which are fair-value references used
-for _scoring_; the search range is a hard include/exclude filter. Until you set one, scans
-are unfiltered by budget/year.
+The web app requires sign-in. It's multi-tenant: one shared daily scan feeds everyone, and
+each user gets a personal view.
+
+- **Sign-in** — email+password ([Auth.js](https://authjs.dev) with bcrypt), plus optional
+  Google/GitHub OAuth that light up only when their env vars are set. Set `AUTH_SECRET` (required
+  in production) and `ADMIN_EMAIL` (the address that becomes **admin** on sign-up).
+- **Your range (per user)** — the dashboard's **Your range** panel sets a personal budget and
+  model-year window. It's a _view filter_: your dashboard shows only good deals inside it. Saving
+  re-filters instantly (no scan needed); it doesn't affect anyone else or what gets scraped.
+- **Admin (`/admin`)** — manages the tracked **models** (brand, aliases, fair-value price range,
+  mileage/year used for _scoring_, enable/disable, delete) and runs **Scan now**. Models live in
+  the database, seeded once from [`defaultCriteria.ts`](src/config/defaultCriteria.ts); the daily
+  scan searches every enabled model and stores every match.
+- **Model requests (`/requests`)** — any user can suggest a model. It lands in the admin's
+  approval queue; approving creates an enabled model (with starter criteria the admin refines).
+
+Roles and route access are enforced by `middleware.ts` (redirects anonymous users to `/login`)
+and re-checked inside every admin server action. The split `auth.config.ts` (edge-safe) /
+`auth.ts` (Node) keeps bcrypt and DB access out of the edge middleware.
 
 ## Running the CLI
 
@@ -140,18 +149,22 @@ needs to change.
 
 ## Configuration reference (`.env`)
 
-| Variable               | Default                         | Notes                                                                         |
-| ---------------------- | ------------------------------- | ----------------------------------------------------------------------------- |
-| `DATABASE_URL`         | _(unset)_                       | libsql URL. Unset locally (a `file:` URL is derived); set to Turso on Vercel. |
-| `DATABASE_AUTH_TOKEN`  | _(unset)_                       | Auth token for a remote Turso database.                                       |
-| `DATABASE_PATH`        | `./data/moto-deal-scout.sqlite` | Local SQLite file, used only when `DATABASE_URL` is unset.                    |
-| `CRON_SECRET`          | _(unset)_                       | Protects `/api/scan` + `/api/report`. Always set it in production.            |
-| `CRITERIA_CONFIG_PATH` | _(unset)_                       | Optional JSON file overriding `defaultCriteria.ts` — see below.               |
-| `SCAN_CRON_EXPRESSION` | `0 8 * * *`                     | CLI `schedule` only (not Vercel).                                             |
-| `SCAN_TIMEZONE`        | `Africa/Casablanca`             | CLI `schedule` only (not Vercel).                                             |
-| `SCRAPE_THROTTLE_MS`   | `2000`                          | Delay between page loads on the same marketplace.                             |
-| `PLAYWRIGHT_HEADLESS`  | `true`                          | Local only; set `false` to watch the browser while debugging a scraper.       |
-| `DISCORD_WEBHOOK_URL`  | _(unset)_                       | Activates the Discord notifier.                                               |
+| Variable                | Default                         | Notes                                                                         |
+| ----------------------- | ------------------------------- | ----------------------------------------------------------------------------- |
+| `DATABASE_URL`          | _(unset)_                       | libsql URL. Unset locally (a `file:` URL is derived); set to Turso on Vercel. |
+| `DATABASE_AUTH_TOKEN`   | _(unset)_                       | Auth token for a remote Turso database.                                       |
+| `DATABASE_PATH`         | `./data/moto-deal-scout.sqlite` | Local SQLite file, used only when `DATABASE_URL` is unset.                    |
+| `CRON_SECRET`           | _(unset)_                       | Protects `/api/scan` + `/api/report`. Always set it in production.            |
+| `CRITERIA_CONFIG_PATH`  | _(unset)_                       | Optional JSON file overriding `defaultCriteria.ts` — see below.               |
+| `SCAN_CRON_EXPRESSION`  | `0 8 * * *`                     | CLI `schedule` only (not Vercel).                                             |
+| `SCAN_TIMEZONE`         | `Africa/Casablanca`             | CLI `schedule` only (not Vercel).                                             |
+| `SCRAPE_THROTTLE_MS`    | `2000`                          | Delay between page loads on the same marketplace.                             |
+| `PLAYWRIGHT_HEADLESS`   | `true`                          | Local only; set `false` to watch the browser while debugging a scraper.       |
+| `DISCORD_WEBHOOK_URL`   | _(unset)_                       | Activates the Discord notifier.                                               |
+| `AUTH_SECRET`           | _(unset)_                       | Auth.js session secret. Required in production (`openssl rand -base64 32`).   |
+| `ADMIN_EMAIL`           | _(unset)_                       | Address that gets the admin role on sign-up.                                  |
+| `AUTH_GOOGLE_ID/SECRET` | _(unset)_                       | Enables Google OAuth when both are set.                                       |
+| `AUTH_GITHUB_ID/SECRET` | _(unset)_                       | Enables GitHub OAuth when both are set.                                       |
 
 ### Overriding criteria without editing code
 

@@ -6,6 +6,7 @@ import type { SearchCriteria, SearchRange } from './domain/entities/SearchCriter
 import { listingWithinRange } from './domain/services/rangeFilter.js';
 import { openDatabase } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
+import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
 import { LibsqlUserSearchRangeRepository } from './infrastructure/persistence/libsql/LibsqlUserSearchRangeRepository.js';
 import { DEFAULT_SEARCH_RANGE } from './settingsModel.js';
 
@@ -26,25 +27,31 @@ const FETCH_MULTIPLIER = 5;
 /**
  * Per-user dashboard read: opens the database once, reads recent good deals
  * (shared across all users) and this user's budget/year range, and returns
- * only the deals inside that range.
+ * only the deals inside that range. Models come from the DB (admin-managed).
  */
 export async function getDashboardData(userId: string, limit = 60): Promise<DashboardData> {
   const env = loadEnv();
-  const criteria = await loadCriteria(env.CRITERIA_CONFIG_PATH);
+  const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
-  const listings = new LibsqlListingRepository(db, criteria.models);
   try {
+    const modelRepo = new LibsqlModelRepository(db);
+    await modelRepo.seedIfEmpty(config.models);
+    const allModels = await modelRepo.listAll();
+    const enabledModels = await modelRepo.listEnabledCriteria();
+
+    const listings = new LibsqlListingRepository(db, allModels);
     const allGood = await listings.getRecentGoodDeals(limit * FETCH_MULTIPLIER);
     const storedRange = await new LibsqlUserSearchRangeRepository(db).get(userId);
     const searchRange = storedRange ?? DEFAULT_SEARCH_RANGE;
     const inRange = allGood.filter((d) => listingWithinRange(d.listing, searchRange));
+
     return {
-      criteria,
+      criteria: { models: enabledModels, global: config.global },
       goodDeals: inRange.slice(0, limit),
       searchRange,
       totalBeforeFilter: allGood.length,
     };
   } finally {
-    await listings.close();
+    db.close();
   }
 }

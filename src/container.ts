@@ -18,6 +18,7 @@ import {
   resolveDatabaseConfig,
 } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
+import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
 import type { BrowserManager } from './infrastructure/sources/shared/BrowserManager.js';
 import { PlaywrightBrowserManager } from './infrastructure/sources/shared/PlaywrightBrowserManager.js';
 import { ServerlessPlaywrightBrowserManager } from './infrastructure/sources/shared/ServerlessPlaywrightBrowserManager.js';
@@ -48,11 +49,21 @@ export async function buildContainer(): Promise<Container> {
     ...(env.NODE_ENV !== 'production' ? { transport: { target: 'pino-pretty' } } : {}),
   });
 
-  // The scan stores every matching listing for the admin's models; budget/
-  // year filtering is per-user and applied on the dashboard, not here.
-  const criteria = await loadCriteria(env.CRITERIA_CONFIG_PATH);
+  // Tracked models live in the DB (admin-managed); the config file only
+  // seeds them on first run and supplies the global scoring settings. The
+  // scan iterates the enabled models and stores every match; budget/year
+  // filtering is per-user and applied on the dashboard, not here.
+  const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
-  const repository = new LibsqlListingRepository(db, criteria.models, logger);
+  const modelRepo = new LibsqlModelRepository(db);
+  await modelRepo.seedIfEmpty(config.models);
+  const enabledModels = await modelRepo.listEnabledCriteria();
+  const allModels = await modelRepo.listAll();
+  const criteria: SearchCriteria = { models: enabledModels, global: config.global };
+
+  // The listing repository needs every model (incl. disabled) to reconstruct
+  // stored rows that may reference a model since turned off.
+  const repository = new LibsqlListingRepository(db, allModels, logger);
 
   const browserManager = createBrowserManager(env);
   const sourceOptions = { throttleMs: env.SCRAPE_THROTTLE_MS };

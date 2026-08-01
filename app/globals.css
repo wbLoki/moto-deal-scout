@@ -520,3 +520,120 @@ a {
   gap: 0.75rem;
   margin: -0.75rem 0 1.75rem;
 }
+
+/* --- Admin --- */
+.admin-section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.1rem 1.25rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-section > .settings-title {
+  margin-bottom: 0.9rem;
+}
+
+.model-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.model-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.model-card-head .inline-form {
+  margin-left: auto;
+}
+
+.model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.model-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.model-grid label.wide {
+  grid-column: span 2;
+}
+
+.model-grid label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.model-grid input {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.4rem 0.55rem;
+  font-size: 0.9rem;
+}
+
+.model-grid input[type='checkbox'] {
+  width: auto;
+}
+
+.model-actions {
+  margin-top: 0.75rem;
+}
+
+.badge.on {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+.request-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.request-card .req-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.request-card .req-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.status-pill {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.status-pill.approved {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+.status-pill.rejected {
+  color: var(--warn);
+  border-color: var(--warn);
+}
