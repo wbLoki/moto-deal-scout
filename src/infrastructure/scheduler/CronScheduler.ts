@@ -32,6 +32,8 @@ export class CronScheduler {
   }
 
   stop(): void {
-    this.task?.stop();
+    // node-cron v4's stop() returns a promise; this is a fire-and-forget
+    // shutdown call, so we don't await it.
+    void this.task?.stop();
   }
 }
