@@ -1,6 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createClient, type Client } from '@libsql/client';
+import type { Env } from '../../../config/env.js';
+import { loadEnv } from '../../../config/env.js';
 import { MIGRATIONS } from './schema.js';
 
 export interface DatabaseConfig {
@@ -30,6 +32,21 @@ export async function openDatabase(config: DatabaseConfig): Promise<Client> {
   }
 
   return client;
+}
+
+/** Chooses the Turso database when configured, else a local SQLite file. */
+export function resolveDatabaseConfig(env: Env): DatabaseConfig {
+  if (env.DATABASE_URL) {
+    return env.DATABASE_AUTH_TOKEN
+      ? { url: env.DATABASE_URL, authToken: env.DATABASE_AUTH_TOKEN }
+      : { url: env.DATABASE_URL };
+  }
+  return { url: `file:${env.DATABASE_PATH}` };
+}
+
+/** Opens a client using the ambient environment. Convenience for the web/auth layer. */
+export function openDatabaseFromEnv(): Promise<Client> {
+  return openDatabase(resolveDatabaseConfig(loadEnv()));
 }
 
 /** For a `file:` URL, make sure the parent directory exists before opening. */

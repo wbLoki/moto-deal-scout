@@ -39,6 +39,25 @@ const envSchema = z.object({
    * routes are unprotected — always set it in production.
    */
   CRON_SECRET: z.string().min(1).optional(),
+
+  /**
+   * Email address that gets the `admin` role on sign-up / first OAuth login.
+   * The admin manages tracked models and approves model requests.
+   */
+  ADMIN_EMAIL: z.string().email().optional(),
+
+  /**
+   * Auth.js session-signing secret. Required in production (auth fails
+   * without it). Generate one with `openssl rand -base64 32`.
+   */
+  AUTH_SECRET: z.string().min(1).optional(),
+
+  // OAuth providers are enabled only when both id and secret are present, so
+  // the app runs fine with just email+password until you fill these in.
+  AUTH_GOOGLE_ID: z.string().min(1).optional(),
+  AUTH_GOOGLE_SECRET: z.string().min(1).optional(),
+  AUTH_GITHUB_ID: z.string().min(1).optional(),
+  AUTH_GITHUB_SECRET: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

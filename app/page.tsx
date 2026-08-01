@@ -1,9 +1,13 @@
+import { redirect } from 'next/navigation';
+import { auth } from '../auth.js';
 import { getDashboardData } from '../src/readModel.js';
 import type { ScoredListing } from '../src/domain/entities/ScoredListing.js';
 import { SearchSettings } from './SearchSettings.js';
+import { ScanNowButton } from './ScanNowButton.js';
+import { SiteHeader } from './SiteHeader.js';
 
 // Reads the database on each request, so it must run on the Node runtime
-// and never be statically cached. maxDuration covers the "Scan now" action.
+// and never be statically cached. maxDuration covers the admin "Scan now".
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -47,28 +51,36 @@ function DealCard({ scored }: { scored: ScoredListing }) {
 }
 
 export default async function DashboardPage() {
-  const { criteria, goodDeals, searchRange } = await getDashboardData(60);
+  const session = await auth();
+  if (!session?.user?.id) redirect('/login');
+  const isAdmin = session.user.role === 'admin';
+
+  const { criteria, goodDeals, searchRange, totalBeforeFilter } = await getDashboardData(
+    session.user.id,
+  );
 
   const sources = new Set(goodDeals.map((d) => d.listing.sourceId));
   const topScore = goodDeals.reduce((max, d) => Math.max(max, d.score.total), 0);
+  const hiddenByRange = totalBeforeFilter - goodDeals.length;
 
   return (
     <main className="container">
-      <div className="header">
-        <h1 className="title">🏍️ Moto Deal Scout</h1>
-      </div>
+      <SiteHeader />
+
       <p className="subtitle">
         Good deals across {criteria.models.length} tracked model
         {criteria.models.length === 1 ? '' : 's'}, scored on price, mileage, year and city.
         Threshold: {criteria.global.minScoreForGoodDeal}/100.
+        {isAdmin && ' You are an admin.'}
       </p>
 
       <SearchSettings current={searchRange} />
+      {isAdmin && <ScanNowButton />}
 
       <div className="stats">
         <div className="stat">
           <div className="stat-value">{goodDeals.length}</div>
-          <div className="stat-label">Good deals</div>
+          <div className="stat-label">In your range</div>
         </div>
         <div className="stat">
           <div className="stat-value">{sources.size}</div>
@@ -78,12 +90,17 @@ export default async function DashboardPage() {
           <div className="stat-value">{topScore || '—'}</div>
           <div className="stat-label">Top score</div>
         </div>
+        <div className="stat">
+          <div className="stat-value">{hiddenByRange > 0 ? hiddenByRange : '—'}</div>
+          <div className="stat-label">Outside range</div>
+        </div>
       </div>
 
       {goodDeals.length === 0 ? (
         <div className="empty">
-          No good deals stored yet. Adjust the range above and hit “Scan now”, or wait for the daily
-          run.
+          No good deals in your range yet. Widen your budget/year above
+          {totalBeforeFilter > 0 ? ` (${totalBeforeFilter} exist outside it)` : ''}, or wait for the
+          next daily scan.
         </div>
       ) : (
         <div className="grid">

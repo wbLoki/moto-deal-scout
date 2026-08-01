@@ -37,7 +37,8 @@ export const MIGRATIONS: readonly string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_listings_good_deal_created
      ON listings (is_good_deal, created_at)`,
-  // Single-row table (id is pinned to 1) holding the user-adjustable search range.
+  // Deprecated: the pre-multi-user global range. Kept so existing databases
+  // migrate cleanly; per-user ranges now live in user_search_ranges.
   `CREATE TABLE IF NOT EXISTS search_settings (
     id          INTEGER PRIMARY KEY CHECK (id = 1),
     budget_min  INTEGER NOT NULL,
@@ -46,6 +47,51 @@ export const MIGRATIONS: readonly string[] = [
     year_max    INTEGER NOT NULL,
     updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   )`,
+  // Accounts. password_hash is null for OAuth-only users; role is 'user' | 'admin'.
+  `CREATE TABLE IF NOT EXISTS users (
+    id            TEXT PRIMARY KEY,
+    email         TEXT NOT NULL UNIQUE,
+    name          TEXT,
+    password_hash TEXT,
+    role          TEXT NOT NULL DEFAULT 'user',
+    created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`,
+  // Per-user budget/year window used to filter their personal dashboard view.
+  `CREATE TABLE IF NOT EXISTS user_search_ranges (
+    user_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    budget_min  INTEGER NOT NULL,
+    budget_max  INTEGER NOT NULL,
+    year_min    INTEGER NOT NULL,
+    year_max    INTEGER NOT NULL,
+    updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`,
+  // Admin-managed models that the scanner searches for. Seeded from
+  // defaultCriteria on first run; approved model requests are inserted here.
+  `CREATE TABLE IF NOT EXISTS models (
+    id             TEXT PRIMARY KEY,
+    brand          TEXT    NOT NULL,
+    model          TEXT    NOT NULL,
+    aliases        TEXT    NOT NULL DEFAULT '[]',
+    price_min      INTEGER NOT NULL,
+    price_max      INTEGER NOT NULL,
+    max_mileage_km INTEGER NOT NULL,
+    min_year       INTEGER NOT NULL,
+    enabled        INTEGER NOT NULL DEFAULT 1,
+    created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`,
+  // User-submitted model suggestions awaiting admin approval.
+  `CREATE TABLE IF NOT EXISTS model_requests (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    brand       TEXT    NOT NULL,
+    model       TEXT    NOT NULL,
+    note        TEXT,
+    status      TEXT    NOT NULL DEFAULT 'pending',
+    created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    decided_at  TEXT,
+    decided_by  TEXT    REFERENCES users(id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_model_requests_status ON model_requests (status, created_at)`,
 ];
 
 /**

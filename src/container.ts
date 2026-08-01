@@ -13,9 +13,11 @@ import { BikerSource } from './infrastructure/sources/biker/BikerSource.js';
 import { MoteurSource } from './infrastructure/sources/moteur/MoteurSource.js';
 import { ConsoleNotificationProvider } from './infrastructure/notifications/ConsoleNotificationProvider.js';
 import { DiscordNotificationProvider } from './infrastructure/notifications/DiscordNotificationProvider.js';
-import { openDatabase, type DatabaseConfig } from './infrastructure/persistence/libsql/Database.js';
+import {
+  openDatabase,
+  resolveDatabaseConfig,
+} from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
-import { LibsqlSettingsRepository } from './infrastructure/persistence/libsql/LibsqlSettingsRepository.js';
 import type { BrowserManager } from './infrastructure/sources/shared/BrowserManager.js';
 import { PlaywrightBrowserManager } from './infrastructure/sources/shared/PlaywrightBrowserManager.js';
 import { ServerlessPlaywrightBrowserManager } from './infrastructure/sources/shared/ServerlessPlaywrightBrowserManager.js';
@@ -46,17 +48,10 @@ export async function buildContainer(): Promise<Container> {
     ...(env.NODE_ENV !== 'production' ? { transport: { target: 'pino-pretty' } } : {}),
   });
 
-  const baseCriteria = await loadCriteria(env.CRITERIA_CONFIG_PATH);
+  // The scan stores every matching listing for the admin's models; budget/
+  // year filtering is per-user and applied on the dashboard, not here.
+  const criteria = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
-
-  // A stored search range (set via the settings UI) overrides whatever the
-  // criteria config shipped with, so scans honour the latest saved value.
-  const settingsRepo = new LibsqlSettingsRepository(db);
-  const storedRange = await settingsRepo.getSearchRange();
-  const criteria: SearchCriteria = storedRange
-    ? { ...baseCriteria, global: { ...baseCriteria.global, searchRange: storedRange } }
-    : baseCriteria;
-
   const repository = new LibsqlListingRepository(db, criteria.models, logger);
 
   const browserManager = createBrowserManager(env);
@@ -93,18 +88,10 @@ export async function buildContainer(): Promise<Container> {
   };
 }
 
-/**
- * Prefers an explicit DATABASE_URL (Turso on Vercel); otherwise derives a
- * local `file:` URL from DATABASE_PATH so the CLI works with zero config.
- */
-export function resolveDatabaseConfig(env: Env): DatabaseConfig {
-  if (env.DATABASE_URL) {
-    return env.DATABASE_AUTH_TOKEN
-      ? { url: env.DATABASE_URL, authToken: env.DATABASE_AUTH_TOKEN }
-      : { url: env.DATABASE_URL };
-  }
-  return { url: `file:${env.DATABASE_PATH}` };
-}
+// Re-exported for existing importers (readModel, settingsModel). The source
+// of truth now lives in the Database module so the web/auth layer can open a
+// client without importing this Playwright-heavy composition root.
+export { resolveDatabaseConfig };
 
 /**
  * On Vercel, Chromium ships as a Lambda layer via @sparticuz/chromium and

@@ -5,6 +5,7 @@ import type { ScoredListing } from '../../domain/entities/ScoredListing.js';
 import type { SearchCriteria } from '../../domain/entities/SearchCriteria.js';
 import type { ListingRepository } from '../../domain/interfaces/ListingRepository.js';
 import type { MarketplaceSource } from '../../domain/interfaces/MarketplaceSource.js';
+import { listingWithinRange } from '../../domain/services/rangeFilter.js';
 import { FuzzyModelMatcher } from './FuzzyModelMatcher.js';
 import { ListingScorer } from './ListingScorer.js';
 
@@ -143,20 +144,13 @@ export class DealScanner {
   }
 
   /**
-   * Hard budget/year window from the runtime settings. Price is always
-   * present so the budget bound always applies; a listing with no stated
-   * year can't be judged against the year bound, so it passes.
+   * Optional global hard budget/year window (admin config). In the
+   * multi-user setup the per-user range is applied as a view filter on the
+   * dashboard instead, so this is usually unset and the scan stores every
+   * matching listing.
    */
   private isWithinSearchRange(listing: Listing): boolean {
     const range = this.criteria.global.searchRange;
-    if (!range) return true;
-    if (listing.priceMAD < range.budgetMin || listing.priceMAD > range.budgetMax) return false;
-    if (
-      listing.year !== undefined &&
-      (listing.year < range.yearMin || listing.year > range.yearMax)
-    ) {
-      return false;
-    }
-    return true;
+    return range ? listingWithinRange(listing, range) : true;
   }
 }

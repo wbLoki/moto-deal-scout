@@ -42,15 +42,6 @@ export const defaultCriteria: SearchCriteria = {
       maxMileageKm: 30000,
       minYear: 2017,
     },
-    {
-      id: 'yamaha-nmax',
-      brand: 'Yamaha',
-      model: 'NMAX',
-      aliases: ['N-MAX', 'N MAX', 'NMAX 155'],
-      priceRangeMAD: { min: 20000, max: 35000 },
-      maxMileageKm: 25000,
-      minYear: 2018,
-    },
   ],
   global: {
     preferredCities: ['Casablanca', 'Rabat', 'Mohammedia'],

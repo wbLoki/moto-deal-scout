@@ -361,3 +361,162 @@ a {
   border-top: 1px solid var(--border);
   padding-top: 1rem;
 }
+
+/* --- Auth pages --- */
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.75rem;
+}
+
+.auth-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+}
+
+.auth-subtitle {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 1.4rem;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.auth-field input {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.95rem;
+}
+
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.auth-alt {
+  margin: 1.2rem 0 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.auth-alt a {
+  color: var(--accent);
+}
+
+.oauth {
+  margin-top: 1.2rem;
+}
+
+.oauth-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 0.4rem 0 0.9rem;
+}
+
+.oauth-divider::before,
+.oauth-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+
+.oauth-divider span {
+  padding: 0 0.6rem;
+}
+
+.oauth-buttons {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.oauth-buttons form {
+  flex: 1;
+}
+
+.oauth-buttons .btn {
+  width: 100%;
+}
+
+/* --- Site header --- */
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.site-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.site-nav a:hover {
+  color: var(--text);
+}
+
+.site-user {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.btn-small {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.scan-now {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: -0.75rem 0 1.75rem;
+}

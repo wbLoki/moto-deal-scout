@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import type { SearchRange } from '../src/domain/entities/SearchCriteria.js';
-import { saveSearchRangeAction, scanNowAction, type ActionResult } from './actions.js';
+import { saveSearchRangeAction, type ActionResult } from './actions.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -13,7 +13,6 @@ export function SearchSettings({ current }: { current: SearchRange }) {
   const [yearMax, setYearMax] = useState(current.yearMax);
   const [status, setStatus] = useState<ActionResult | null>(null);
   const [saving, startSave] = useTransition();
-  const [scanning, startScan] = useTransition();
 
   const invalid = budgetMax < budgetMin || yearMax < yearMin;
 
@@ -25,22 +24,12 @@ export function SearchSettings({ current }: { current: SearchRange }) {
     });
   };
 
-  const scanNow = () => {
-    setStatus(null);
-    startScan(async () => {
-      const result = await scanNowAction();
-      setStatus(result);
-    });
-  };
-
-  const busy = saving || scanning;
-
   return (
     <section className="settings">
       <div className="settings-head">
-        <h2 className="settings-title">Search range</h2>
+        <h2 className="settings-title">Your range</h2>
         <span className="settings-hint">
-          Only listings within this budget and year window are kept.
+          Your dashboard shows only deals within this budget and year window.
         </span>
       </div>
 
@@ -97,11 +86,13 @@ export function SearchSettings({ current }: { current: SearchRange }) {
       {invalid && <p className="settings-error">Max must be greater than or equal to min.</p>}
 
       <div className="settings-actions">
-        <button className="btn btn-primary" onClick={save} disabled={busy || invalid} type="button">
+        <button
+          className="btn btn-primary"
+          onClick={save}
+          disabled={saving || invalid}
+          type="button"
+        >
           {saving ? 'Saving…' : 'Save range'}
-        </button>
-        <button className="btn" onClick={scanNow} disabled={busy} type="button">
-          {scanning ? 'Scanning…' : 'Scan now'}
         </button>
         {status && (
           <span className={status.ok ? 'settings-status ok' : 'settings-status err'}>
