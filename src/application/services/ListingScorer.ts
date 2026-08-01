@@ -1,0 +1,133 @@
+import type { Listing } from '../../domain/entities/Listing.js';
+import type { ScoreBreakdown } from '../../domain/entities/ScoredListing.js';
+import type { GlobalCriteria, ModelCriteria } from '../../domain/entities/SearchCriteria.js';
+
+/** Points available per factor. Must sum to 100. */
+const WEIGHTS = {
+  price: 40,
+  mileage: 25,
+  year: 20,
+  city: 15,
+} as const;
+
+/**
+ * Linear scoring primitive for "lower is better" factors: full marks at or
+ * below `goodAt`, zero at or above `badAt`, interpolated linearly between.
+ */
+function scoreLowerIsBetter(
+  value: number,
+  goodAt: number,
+  badAt: number,
+  maxPoints: number,
+): number {
+  if (value <= goodAt) return maxPoints;
+  if (value >= badAt) return 0;
+  return (maxPoints * (badAt - value)) / (badAt - goodAt);
+}
+
+/** Mirror of {@link scoreLowerIsBetter} for "higher is better" factors. */
+function scoreHigherIsBetter(
+  value: number,
+  badAt: number,
+  goodAt: number,
+  maxPoints: number,
+): number {
+  if (value >= goodAt) return maxPoints;
+  if (value <= badAt) return 0;
+  return (maxPoints * (value - badAt)) / (goodAt - badAt);
+}
+
+function normalizeCity(city: string): string {
+  return city.trim().toLowerCase();
+}
+
+function scorePrice(listing: Listing, model: ModelCriteria, reasons: string[]): number {
+  const { min, max } = model.priceRangeMAD;
+  const badAt = max * 1.2;
+  const points = scoreLowerIsBetter(listing.priceMAD, min, badAt, WEIGHTS.price);
+
+  if (listing.priceMAD <= min) {
+    reasons.push(`Price ${listing.priceMAD} MAD is at or below the fair range (${min}-${max}).`);
+  } else if (listing.priceMAD <= max) {
+    reasons.push(`Price ${listing.priceMAD} MAD is within the fair range (${min}-${max}).`);
+  } else {
+    const overPct = Math.round(((listing.priceMAD - max) / max) * 100);
+    reasons.push(`Price ${listing.priceMAD} MAD is ${overPct}% above the fair range max (${max}).`);
+  }
+  return points;
+}
+
+function scoreMileage(listing: Listing, model: ModelCriteria, reasons: string[]): number {
+  if (listing.mileageKm === undefined) {
+    reasons.push('Mileage not listed — scored as average.');
+    return WEIGHTS.mileage * 0.5;
+  }
+  const goodAt = model.maxMileageKm * 0.4;
+  const badAt = model.maxMileageKm * 1.15;
+  const points = scoreLowerIsBetter(listing.mileageKm, goodAt, badAt, WEIGHTS.mileage);
+
+  if (listing.mileageKm > model.maxMileageKm) {
+    reasons.push(`Mileage ${listing.mileageKm}km exceeds the ${model.maxMileageKm}km threshold.`);
+  } else {
+    reasons.push(`Mileage ${listing.mileageKm}km is within the ${model.maxMileageKm}km threshold.`);
+  }
+  return points;
+}
+
+function scoreYear(listing: Listing, model: ModelCriteria, reasons: string[]): number {
+  if (listing.year === undefined) {
+    reasons.push('Model year not listed — scored as average.');
+    return WEIGHTS.year * 0.5;
+  }
+  const currentYear = new Date().getFullYear();
+  const badAt = model.minYear - 2;
+  const points = scoreHigherIsBetter(listing.year, badAt, currentYear, WEIGHTS.year);
+
+  if (listing.year < model.minYear) {
+    reasons.push(`Year ${listing.year} is older than the preferred minimum (${model.minYear}).`);
+  } else {
+    reasons.push(`Year ${listing.year} meets the preferred minimum (${model.minYear}).`);
+  }
+  return points;
+}
+
+function scoreCity(listing: Listing, global: GlobalCriteria, reasons: string[]): number {
+  const city = normalizeCity(listing.city);
+  const index = global.preferredCities.findIndex((c) => normalizeCity(c) === city);
+
+  if (index === -1) {
+    reasons.push(`City "${listing.city}" is acceptable but not in the preferred list.`);
+    return WEIGHTS.city * 0.5;
+  }
+  const rank = global.preferredCities.length <= 1 ? 0 : index / (global.preferredCities.length - 1);
+  const points = WEIGHTS.city * (1 - rank * 0.4);
+  reasons.push(
+    `City "${listing.city}" is preferred (rank ${index + 1}/${global.preferredCities.length}).`,
+  );
+  return points;
+}
+
+/**
+ * Scores a listing 0-100 against one model's criteria and the user's
+ * global preferences. Higher is better; see {@link WEIGHTS} for how the
+ * 100 points split across price, mileage, year, and city.
+ */
+export class ListingScorer {
+  score(listing: Listing, model: ModelCriteria, global: GlobalCriteria): ScoreBreakdown {
+    const reasons: string[] = [];
+    const price = scorePrice(listing, model, reasons);
+    const mileage = scoreMileage(listing, model, reasons);
+    const year = scoreYear(listing, model, reasons);
+    const city = scoreCity(listing, global, reasons);
+    const total = Math.round(price + mileage + year + city);
+
+    return {
+      price: Math.round(price),
+      mileage: Math.round(mileage),
+      year: Math.round(year),
+      city: Math.round(city),
+      total,
+      reasons,
+    };
+  }
+}
