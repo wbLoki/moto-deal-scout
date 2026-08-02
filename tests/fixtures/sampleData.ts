@@ -21,6 +21,7 @@ export function makeGlobalCriteria(overrides: Partial<GlobalCriteria> = {}): Glo
     minScoreForGoodDeal: 70,
     maxListingAgeDays: 14,
     minModelMatchConfidence: 0.55,
+    minPriceFactor: 0.5,
     ...overrides,
   };
 }

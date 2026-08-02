@@ -194,10 +194,16 @@ file fails fast with a readable error rather than silently misbehaving):
     "acceptableCities": [],
     "minScoreForGoodDeal": 70,
     "maxListingAgeDays": 14,
-    "minModelMatchConfidence": 0.55
+    "minModelMatchConfidence": 0.55,
+    "minPriceFactor": 0.5
   }
 }
 ```
+
+`minPriceFactor` is a plausibility floor: a listing priced below a model's fair-value
+minimum × this factor (e.g. an MT-07 under 65 000 × 0.5 = 32 500 MAD) is treated as a
+typo, a deposit ("avance"), or a scam and dropped — at scan time, and also hidden on the
+dashboard for anything stored before the floor existed. Set it to `0` to disable.
 
 ## Scoring
 

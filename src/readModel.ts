@@ -4,6 +4,7 @@ import { resolveDatabaseConfig } from './container.js';
 import type { ScoredListing } from './domain/entities/ScoredListing.js';
 import type { SearchCriteria, SearchRange } from './domain/entities/SearchCriteria.js';
 import { listingWithinRange } from './domain/services/rangeFilter.js';
+import { priceIsPlausible } from './domain/services/priceFilter.js';
 import { openDatabase } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
@@ -62,10 +63,19 @@ export async function getDashboardData(userId: string, limit = 60): Promise<Dash
     const storedRange = await new LibsqlUserSearchRangeRepository(db).get(userId);
     const searchRange = storedRange ?? DEFAULT_SEARCH_RANGE;
 
-    const recent = await listings.getRecentGoodDeals(limit * FETCH_MULTIPLIER);
+    // Hide implausibly-cheap listings (typos/deposits) that may have been
+    // stored before the scan-time price floor existed.
+    const plausible = (d: ScoredListing): boolean =>
+      priceIsPlausible(
+        d.listing.priceMAD,
+        d.match.criteria.priceRangeMAD.min,
+        config.global.minPriceFactor,
+      );
+
+    const recent = (await listings.getRecentGoodDeals(limit * FETCH_MULTIPLIER)).filter(plausible);
     const recentInRange = recent.filter((d) => listingWithinRange(d.listing, searchRange));
 
-    const today = await listings.getGoodDealsSince(startOfToday());
+    const today = (await listings.getGoodDealsSince(startOfToday())).filter(plausible);
     const todayInRange = today.filter((d) => listingWithinRange(d.listing, searchRange));
 
     const watchedSet = new Set(watchedModelIds);

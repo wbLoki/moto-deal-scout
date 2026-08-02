@@ -6,6 +6,7 @@ import type { SearchCriteria } from '../../domain/entities/SearchCriteria.js';
 import type { ListingRepository } from '../../domain/interfaces/ListingRepository.js';
 import type { MarketplaceSource } from '../../domain/interfaces/MarketplaceSource.js';
 import { listingWithinRange } from '../../domain/services/rangeFilter.js';
+import { priceIsPlausible } from '../../domain/services/priceFilter.js';
 import { FuzzyModelMatcher } from './FuzzyModelMatcher.js';
 import { ListingScorer } from './ListingScorer.js';
 
@@ -111,6 +112,7 @@ export class DealScanner {
     if (!this.isWithinAcceptableAge(listing)) return undefined;
     if (!this.isAcceptableCity(listing.city)) return undefined;
     if (!this.isWithinSearchRange(listing)) return undefined;
+    if (!this.isPlausiblePrice(listing, model)) return undefined;
 
     const alreadySeen = await this.repository.hasSeen(listing.sourceId, listing.externalId);
     if (alreadySeen) return undefined;
@@ -152,5 +154,18 @@ export class DealScanner {
   private isWithinSearchRange(listing: Listing): boolean {
     const range = this.criteria.global.searchRange;
     return range ? listingWithinRange(listing, range) : true;
+  }
+
+  /**
+   * Drops listings priced implausibly far below the model's fair value —
+   * almost always a typo, a deposit/"avance", or a scam (e.g. an MT-07 for
+   * 8 000 MAD) — so they never become fake "good deals".
+   */
+  private isPlausiblePrice(listing: Listing, model: SearchCriteria['models'][number]): boolean {
+    return priceIsPlausible(
+      listing.priceMAD,
+      model.priceRangeMAD.min,
+      this.criteria.global.minPriceFactor,
+    );
   }
 }

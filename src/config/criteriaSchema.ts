@@ -34,6 +34,7 @@ const globalCriteriaSchema = z.object({
   minScoreForGoodDeal: z.number().min(0).max(100).default(70),
   maxListingAgeDays: z.number().positive().default(14),
   minModelMatchConfidence: z.number().min(0).max(1).default(0.55),
+  minPriceFactor: z.number().min(0).max(1).default(0.5),
   searchRange: searchRangeSchema.optional(),
 });
 

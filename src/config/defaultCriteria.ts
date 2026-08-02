@@ -49,5 +49,6 @@ export const defaultCriteria: SearchCriteria = {
     minScoreForGoodDeal: 70,
     maxListingAgeDays: 14,
     minModelMatchConfidence: 0.55,
+    minPriceFactor: 0.5,
   },
 };

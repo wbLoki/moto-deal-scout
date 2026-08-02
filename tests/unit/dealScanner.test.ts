@@ -175,6 +175,42 @@ describe('DealScanner', () => {
     expect(report.sources[0]?.newListings).toBe(1);
   });
 
+  it('drops implausibly cheap listings (typos/deposits) below the price floor', async () => {
+    // Model fair min is 65000; with minPriceFactor 0.5 the floor is 32500.
+    const criteria = buildCriteria({ minPriceFactor: 0.5 });
+    const typo = makeListing({ externalId: 'c1', priceMAD: 8000 });
+    const deposit = makeListing({ externalId: 'c2', priceMAD: 20000 });
+    const realDeal = makeListing({ externalId: 'c3', priceMAD: 60000 });
+    const source = new FakeSource('avito', 'Avito.ma', [[typo, deposit, realDeal]]);
+    const scanner = new DealScanner({
+      sources: [source],
+      repository,
+      criteria,
+      logger: silentLogger,
+    });
+
+    const report = await scanner.scan();
+
+    expect(report.newListingsSeen).toBe(1);
+    expect(repository.saved.map((s) => s.listing.externalId)).toEqual(['c3']);
+  });
+
+  it('keeps implausibly cheap listings when the price floor is disabled (factor 0)', async () => {
+    const criteria = buildCriteria({ minPriceFactor: 0 });
+    const cheap = makeListing({ externalId: 'z1', priceMAD: 8000 });
+    const source = new FakeSource('avito', 'Avito.ma', [[cheap]]);
+    const scanner = new DealScanner({
+      sources: [source],
+      repository,
+      criteria,
+      logger: silentLogger,
+    });
+
+    const report = await scanner.scan();
+
+    expect(report.newListingsSeen).toBe(1);
+  });
+
   it('excludes listings with a model year outside the search year range', async () => {
     const criteria = buildCriteria({
       searchRange: { budgetMin: 0, budgetMax: 500000, yearMin: 2019, yearMax: 2024 },

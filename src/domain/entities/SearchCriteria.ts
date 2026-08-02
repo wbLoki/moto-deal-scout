@@ -63,6 +63,13 @@ export interface GlobalCriteria {
   readonly maxListingAgeDays: number;
   /** Minimum fuzzy-match confidence (0-1) to accept a title as matching a model. */
   readonly minModelMatchConfidence: number;
+  /**
+   * Fraction of a model's fair-range minimum below which a price is treated
+   * as implausible (a typo, a deposit/"avance", or a scam) and the listing is
+   * dropped before scoring. E.g. 0.5 drops an MT-07 (fair min 65 000) priced
+   * under 32 500. Set to 0 to disable.
+   */
+  readonly minPriceFactor: number;
 }
 
 export interface SearchCriteria {
