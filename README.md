@@ -68,6 +68,10 @@ each user gets a personal view.
 - **Sign-in** — email+password ([Auth.js](https://authjs.dev) with bcrypt), plus optional
   Google/GitHub OAuth that light up only when their env vars are set. Set `AUTH_SECRET` (required
   in production) and `ADMIN_EMAIL` (the address that becomes **admin** on sign-up).
+- **Onboarding + watched models** — after sign-up a user is sent to `/onboarding` to pick the
+  models they want to follow (editable anytime on `/profile`). The dashboard then shows three
+  groupings, each filtered to the user's range: **Daily deals** (found in the latest day),
+  **Your watched models**, and **All deals**.
 - **Your range (per user)** — the dashboard's **Your range** panel sets a personal budget and
   model-year window. It's a _view filter_: your dashboard shows only good deals inside it. Saving
   re-filters instantly (no scan needed); it doesn't affect anyone else or what gets scraped.

@@ -637,3 +637,56 @@ a {
   color: var(--warn);
   border-color: var(--warn);
 }
+
+/* --- Model picker (onboarding / profile) --- */
+.auth-card.wide {
+  max-width: 560px;
+}
+
+.model-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.5rem;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.pick:hover {
+  border-color: var(--accent-dim);
+}
+
+.pick input {
+  width: auto;
+}
+
+/* --- Dashboard deal sections --- */
+.deal-section {
+  margin-bottom: 2rem;
+}
+
+.deal-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0 0 0.9rem;
+}
+
+.deal-section-head h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.deal-section-count {
+  color: var(--muted);
+  font-size: 0.85rem;
+}

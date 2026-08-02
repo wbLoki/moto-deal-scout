@@ -13,6 +13,7 @@ export async function SiteHeader() {
         🏍️ Moto Deal Scout
       </Link>
       <nav className="site-nav">
+        <Link href="/profile">Profile</Link>
         <Link href="/requests">Model requests</Link>
         {user?.role === 'admin' && <Link href="/admin">Admin</Link>}
         {user && (

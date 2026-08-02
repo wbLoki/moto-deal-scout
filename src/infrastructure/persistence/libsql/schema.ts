@@ -92,6 +92,18 @@ export const MIGRATIONS: readonly string[] = [
     decided_by  TEXT    REFERENCES users(id)
   )`,
   `CREATE INDEX IF NOT EXISTS idx_model_requests_status ON model_requests (status, created_at)`,
+  // Models a user has chosen to follow (picked at onboarding, edited on profile).
+  `CREATE TABLE IF NOT EXISTS user_watched_models (
+    user_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    model_id TEXT NOT NULL,
+    PRIMARY KEY (user_id, model_id)
+  )`,
+  // Presence of a row means the user has completed onboarding (even if they
+  // picked no models). A separate table avoids a non-idempotent ALTER on users.
+  `CREATE TABLE IF NOT EXISTS user_onboarding (
+    user_id      TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    onboarded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`,
 ];
 
 /**
