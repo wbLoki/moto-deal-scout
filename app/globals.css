@@ -690,3 +690,61 @@ a {
   color: var(--muted);
   font-size: 0.85rem;
 }
+
+/* --- Deal tabs --- */
+.tabs-wrap {
+  margin-bottom: 1.5rem;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.25rem;
+}
+
+.tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.6rem 0.85rem;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tab-count {
+  display: inline-block;
+  min-width: 1.4em;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--panel-2);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+  margin-left: 0.15rem;
+}
+
+.tab.active .tab-count {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.range-note {
+  color: var(--muted);
+  font-size: 0.83rem;
+  margin: 1rem 0 0;
+}
