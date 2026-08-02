@@ -75,7 +75,21 @@ export default async function DashboardPage() {
       </p>
 
       <SearchSettings current={searchRange} />
-      {isAdmin && <ScanNowButton />}
+      {isAdmin ? (
+        <ScanNowButton />
+      ) : (
+        <div className="scan-now">
+          <button
+            className="btn"
+            type="button"
+            disabled
+            title="On-demand scans are coming soon for members."
+          >
+            Scan now
+          </button>
+          <span className="status-pill">Coming soon</span>
+        </div>
+      )}
 
       <div className="stats">
         <div className="stat">
