@@ -78,3 +78,82 @@ export async function upsertOAuthUser(
     db.close();
   }
 }
+
+export const nameSchema = z.string().trim().min(1, 'Name is required').max(80);
+export const newEmailSchema = z.string().email();
+export const newPasswordSchema = z.string().min(8, 'Password must be at least 8 characters');
+
+/** Updates the display name. */
+export async function updateName(userId: string, name: string): Promise<void> {
+  const parsed = nameSchema.parse(name);
+  const db = await openDatabaseFromEnv();
+  try {
+    await new LibsqlUserRepository(db).setName(userId, parsed);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Changes the login email for a password account. Requires the current
+ * password, and rejects an email already used by someone else. OAuth-only
+ * accounts (no password) can't change their email here.
+ */
+export async function changeEmail(
+  userId: string,
+  currentPassword: string,
+  newEmail: string,
+): Promise<void> {
+  const email = newEmailSchema.parse(newEmail);
+  const db = await openDatabaseFromEnv();
+  try {
+    const users = new LibsqlUserRepository(db);
+    const user = await users.findById(userId);
+    if (!user?.passwordHash) throw new Error('This account has no password set.');
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      throw new Error('Current password is incorrect.');
+    }
+    const existing = await users.findByEmail(email);
+    if (existing && existing.id !== userId) {
+      throw new Error('That email is already in use.');
+    }
+    await users.setEmail(userId, email);
+  } finally {
+    db.close();
+  }
+}
+
+/** Changes the password for a password account, verifying the current one first. */
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const next = newPasswordSchema.parse(newPassword);
+  const db = await openDatabaseFromEnv();
+  try {
+    const users = new LibsqlUserRepository(db);
+    const user = await users.findById(userId);
+    if (!user?.passwordHash) throw new Error('This account has no password set.');
+    if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      throw new Error('Current password is incorrect.');
+    }
+    await users.setPasswordHash(userId, await bcrypt.hash(next, BCRYPT_ROUNDS));
+  } finally {
+    db.close();
+  }
+}
+
+/** Loads a user's public profile fields for the settings UI. */
+export async function getAccount(
+  userId: string,
+): Promise<{ email: string; name: string | undefined; hasPassword: boolean } | null> {
+  const db = await openDatabaseFromEnv();
+  try {
+    const user = await new LibsqlUserRepository(db).findById(userId);
+    if (!user) return null;
+    return { email: user.email, name: user.name, hasPassword: Boolean(user.passwordHash) };
+  } finally {
+    db.close();
+  }
+}

@@ -65,4 +65,25 @@ export class LibsqlUserRepository implements UserRepository {
     if (!created) throw new Error('User creation failed');
     return created;
   }
+
+  async setName(userId: string, name: string | undefined): Promise<void> {
+    await this.client.execute({
+      sql: 'UPDATE users SET name = ? WHERE id = ?',
+      args: [name ?? null, userId],
+    });
+  }
+
+  async setEmail(userId: string, email: string): Promise<void> {
+    await this.client.execute({
+      sql: 'UPDATE users SET email = ? WHERE id = ?',
+      args: [normalizeEmail(email), userId],
+    });
+  }
+
+  async setPasswordHash(userId: string, passwordHash: string): Promise<void> {
+    await this.client.execute({
+      sql: 'UPDATE users SET password_hash = ? WHERE id = ?',
+      args: [passwordHash, userId],
+    });
+  }
 }

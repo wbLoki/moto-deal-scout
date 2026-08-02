@@ -62,4 +62,21 @@ describe('LibsqlUserRepository', () => {
       repo.create({ email: 'dup@example.com', name: undefined, passwordHash: 'h', role: 'user' }),
     ).rejects.toThrow();
   });
+
+  it('updates name, email (lowercased) and password hash', async () => {
+    const user = await repo.create({
+      email: 'edit@example.com',
+      name: 'Old',
+      passwordHash: 'oldhash',
+      role: 'user',
+    });
+    await repo.setName(user.id, 'New Name');
+    await repo.setEmail(user.id, 'New@Example.com');
+    await repo.setPasswordHash(user.id, 'newhash');
+
+    const updated = await repo.findById(user.id);
+    expect(updated?.name).toBe('New Name');
+    expect(updated?.email).toBe('new@example.com');
+    expect(updated?.passwordHash).toBe('newhash');
+  });
 });
