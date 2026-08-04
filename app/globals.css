@@ -856,3 +856,21 @@ a {
 .search-results button:hover {
   background: var(--panel);
 }
+
+/* --- Admin models list search --- */
+.model-list-search {
+  width: 100%;
+  max-width: 420px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.95rem;
+  margin-bottom: 0.4rem;
+}
+
+.model-list-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}

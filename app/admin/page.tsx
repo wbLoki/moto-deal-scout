@@ -1,78 +1,14 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../../auth.js';
-import type { StoredModel } from '../../src/domain/entities/Model.js';
 import { listAllModels } from '../../src/adminService.js';
 import { listPendingRequests } from '../../src/requestService.js';
+import { AddModelPicker } from '../AddModelPicker.js';
+import { ModelsList } from '../ModelsList.js';
 import { SiteHeader } from '../SiteHeader.js';
-import { deleteModelAction, saveModelAction } from '../admin-actions.js';
 import { approveRequestAction, rejectRequestAction } from '../request-actions.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-/** A create/edit form for one model. `model` undefined = the add-new row. */
-function ModelForm({ model }: { model?: StoredModel }) {
-  const isNew = !model;
-  return (
-    <form action={saveModelAction} className="model-form">
-      {model && <input type="hidden" name="id" value={model.id} />}
-      <div className="model-grid">
-        <label>
-          <span>Brand</span>
-          <input name="brand" defaultValue={model?.brand ?? ''} required />
-        </label>
-        <label>
-          <span>Model</span>
-          <input name="model" defaultValue={model?.model ?? ''} required />
-        </label>
-        <label className="wide">
-          <span>Aliases (comma-separated)</span>
-          <input name="aliases" defaultValue={model?.aliases.join(', ') ?? ''} />
-        </label>
-        <label>
-          <span>Price min</span>
-          <input
-            type="number"
-            name="priceMin"
-            defaultValue={model?.priceRangeMAD.min ?? 0}
-            required
-          />
-        </label>
-        <label>
-          <span>Price max</span>
-          <input
-            type="number"
-            name="priceMax"
-            defaultValue={model?.priceRangeMAD.max ?? 100000}
-            required
-          />
-        </label>
-        <label>
-          <span>Max mileage km</span>
-          <input
-            type="number"
-            name="maxMileageKm"
-            defaultValue={model?.maxMileageKm ?? 30000}
-            required
-          />
-        </label>
-        <label>
-          <span>Min year</span>
-          <input type="number" name="minYear" defaultValue={model?.minYear ?? 2015} required />
-        </label>
-        <label className="checkbox">
-          <input type="checkbox" name="enabled" defaultChecked={model?.enabled ?? true} />
-          <span>Enabled</span>
-        </label>
-      </div>
-      <div className="model-actions">
-        <button className="btn btn-primary" type="submit">
-          {isNew ? 'Add model' : 'Save'}
-        </button>
-      </div>
-    </form>
-  );
-}
 
 export default async function AdminPage() {
   const session = await auth();
@@ -123,7 +59,11 @@ export default async function AdminPage() {
 
       <section className="admin-section">
         <h2 className="settings-title">Add a model</h2>
-        <ModelForm />
+        <p className="settings-hint">
+          Pick a brand and model from the catalog (or type your own). Aliases are suggested
+          automatically.
+        </p>
+        <AddModelPicker />
       </section>
 
       <section className="admin-section">
@@ -131,25 +71,7 @@ export default async function AdminPage() {
         {models.length === 0 ? (
           <div className="empty">No models yet.</div>
         ) : (
-          models.map((model) => (
-            <div key={model.id} className="model-card">
-              <div className="model-card-head">
-                <strong>
-                  {model.brand} {model.model}
-                </strong>
-                <span className={model.enabled ? 'badge on' : 'badge'}>
-                  {model.enabled ? 'enabled' : 'disabled'}
-                </span>
-                <form action={deleteModelAction} className="inline-form">
-                  <input type="hidden" name="id" value={model.id} />
-                  <button className="btn btn-small" type="submit">
-                    Delete
-                  </button>
-                </form>
-              </div>
-              <ModelForm model={model} />
-            </div>
-          ))
+          <ModelsList models={models} />
         )}
       </section>
     </main>
