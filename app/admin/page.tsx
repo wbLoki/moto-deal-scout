@@ -3,6 +3,7 @@ import { auth } from '../../auth.js';
 import { listAllModels } from '../../src/adminService.js';
 import { listPendingRequests } from '../../src/requestService.js';
 import { AddModelPicker } from '../AddModelPicker.js';
+import { AdminNav } from '../AdminNav.js';
 import { ModelsList } from '../ModelsList.js';
 import { SiteHeader } from '../SiteHeader.js';
 import { approveRequestAction, rejectRequestAction } from '../request-actions.js';
@@ -21,6 +22,7 @@ export default async function AdminPage() {
     <main className="container">
       <SiteHeader />
       <h1 className="title">Admin · Models</h1>
+      <AdminNav active="models" />
       <p className="subtitle">
         These are the models the daily scan searches for. Disable one to stop tracking it without
         losing its settings. Price range and mileage/year here feed the deal <em>scoring</em>.

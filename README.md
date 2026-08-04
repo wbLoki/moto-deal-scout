@@ -76,10 +76,13 @@ and each signed-in user gets a personal view (logged-in users see their dashboar
 - **Your range (per user)** — the dashboard's **Your range** panel sets a personal budget and
   model-year window. It's a _view filter_: your dashboard shows only good deals inside it. Saving
   re-filters instantly (no scan needed); it doesn't affect anyone else or what gets scraped.
-- **Admin (`/admin`)** — manages the tracked **models** (brand, aliases, fair-value price range,
-  mileage/year used for _scoring_, enable/disable, delete) and runs **Scan now**. Models live in
-  the database, seeded once from [`defaultCriteria.ts`](src/config/defaultCriteria.ts); the daily
-  scan searches every enabled model and stores every match.
+- **Admin (`/admin`)** — a **Models** tab manages the tracked models (brand, aliases, fair-value
+  price range, mileage/year used for _scoring_, enable/disable, delete — with a catalog picker and
+  search) and runs **Scan now**. Models live in the database, seeded once from
+  [`defaultCriteria.ts`](src/config/defaultCriteria.ts). An **Analytics** tab
+  (`/admin/analytics`) shows metrics from the app's own database — user totals, sign-ups per day,
+  sign-up method, watchlists, model requests, and listings by source. Visitor traffic/geography
+  lives in Vercel Analytics (`@vercel/analytics`, wired into the layout).
 - **Model requests (`/requests`)** — any user can suggest a model. It lands in the admin's
   approval queue; approving creates an enabled model (with starter criteria the admin refines).
 
