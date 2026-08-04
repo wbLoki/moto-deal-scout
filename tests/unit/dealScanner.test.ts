@@ -65,6 +65,12 @@ class InMemoryRepository implements ListingRepository {
     return Promise.resolve(this.saved);
   }
 
+  getPricesForModel(modelId: string): Promise<number[]> {
+    return Promise.resolve(
+      this.saved.filter((s) => s.match.criteria.id === modelId).map((s) => s.listing.priceMAD),
+    );
+  }
+
   close(): Promise<void> {
     return Promise.resolve();
   }

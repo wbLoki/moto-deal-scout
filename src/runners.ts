@@ -1,3 +1,4 @@
+import { calibrateModels } from './calibration.js';
 import { buildContainer } from './container.js';
 import type { DailyReport } from './domain/entities/DailyReport.js';
 
@@ -5,8 +6,12 @@ import type { DailyReport } from './domain/entities/DailyReport.js';
  * Runs one full scan and dispatches notifications, then tears everything
  * down. Shared by the CLI `scan` command and the `/api/scan` cron route so
  * both behave identically.
+ *
+ * Calibration runs first so this scan scores against fair-value ranges
+ * refreshed from all prior market data.
  */
 export async function runScan(): Promise<DailyReport> {
+  await calibrateModels();
   const container = await buildContainer();
   try {
     const report = await container.scanner.scan();

@@ -24,6 +24,7 @@ export const modelFormSchema = z
     maxMileageKm: z.number().int().positive(),
     minYear: z.number().int().gte(1980).lte(2100),
     enabled: z.boolean().default(true),
+    autoCalibrate: z.boolean().default(true),
   })
   .refine((m) => m.priceMax >= m.priceMin, { message: 'Max price must be >= min price' });
 
@@ -39,6 +40,7 @@ function toStoredModel(input: ModelFormInput): StoredModel {
     maxMileageKm: input.maxMileageKm,
     minYear: input.minYear,
     enabled: input.enabled,
+    autoCalibrate: input.autoCalibrate,
   };
 }
 

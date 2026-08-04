@@ -25,6 +25,9 @@ export interface ListingRepository {
   /** All listings (any tier) stored since the given date, most recent first. */
   getListingsSince(sinceDate: Date): Promise<ScoredListing[]>;
 
+  /** Prices (MAD) of listings matched to a model and last seen since the date. For calibration. */
+  getPricesForModel(modelId: string, seenSince: Date): Promise<number[]>;
+
   /** Release the underlying connection. Safe to call multiple times. */
   close(): Promise<void>;
 }

@@ -5,6 +5,7 @@ import { listPendingRequests } from '../../src/requestService.js';
 import { AddModelPicker } from '../AddModelPicker.js';
 import { AdminNav } from '../AdminNav.js';
 import { ModelsList } from '../ModelsList.js';
+import { RecalibrateButton } from '../RecalibrateButton.js';
 import { SiteHeader } from '../SiteHeader.js';
 import { approveRequestAction, rejectRequestAction } from '../request-actions.js';
 
@@ -70,6 +71,11 @@ export default async function AdminPage() {
 
       <section className="admin-section">
         <h2 className="settings-title">Tracked models ({models.length})</h2>
+        <p className="settings-hint">
+          Price ranges auto-calibrate from recent market listings on each scan (p25–p75). Turn off
+          “Auto-calibrate” on a model to lock your own numbers.
+        </p>
+        <RecalibrateButton />
         {models.length === 0 ? (
           <div className="empty">No models yet.</div>
         ) : (

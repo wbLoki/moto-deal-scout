@@ -13,6 +13,9 @@ interface ModelRow {
   max_mileage_km: number;
   min_year: number;
   enabled: number;
+  auto_calibrate: number;
+  calibrated_at: string | null;
+  calibrated_samples: number | null;
 }
 
 function mapRow(row: ModelRow): StoredModel {
@@ -25,12 +28,17 @@ function mapRow(row: ModelRow): StoredModel {
     maxMileageKm: row.max_mileage_km,
     minYear: row.min_year,
     enabled: row.enabled === 1,
+    autoCalibrate: row.auto_calibrate === 1,
+    calibratedAt: row.calibrated_at ?? undefined,
+    calibratedSamples: row.calibrated_samples ?? undefined,
   };
 }
 
+// Admin fields only. calibrated_at/calibrated_samples are owned by
+// applyCalibration and deliberately preserved across an admin edit.
 const UPSERT_SQL = `
-  INSERT INTO models (id, brand, model, aliases, price_min, price_max, max_mileage_km, min_year, enabled)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO models (id, brand, model, aliases, price_min, price_max, max_mileage_km, min_year, enabled, auto_calibrate)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT (id) DO UPDATE SET
     brand = excluded.brand,
     model = excluded.model,
@@ -39,7 +47,8 @@ const UPSERT_SQL = `
     price_max = excluded.price_max,
     max_mileage_km = excluded.max_mileage_km,
     min_year = excluded.min_year,
-    enabled = excluded.enabled
+    enabled = excluded.enabled,
+    auto_calibrate = excluded.auto_calibrate
 `;
 
 export class LibsqlModelRepository implements ModelRepository {
@@ -47,7 +56,17 @@ export class LibsqlModelRepository implements ModelRepository {
 
   async listEnabledCriteria(): Promise<ModelCriteria[]> {
     const all = await this.listAll();
-    return all.filter((m) => m.enabled).map(({ enabled: _enabled, ...criteria }) => criteria);
+    return all
+      .filter((m) => m.enabled)
+      .map(
+        ({
+          enabled: _enabled,
+          autoCalibrate: _auto,
+          calibratedAt: _at,
+          calibratedSamples: _n,
+          ...criteria
+        }) => criteria,
+      );
   }
 
   async listAll(): Promise<StoredModel[]> {
@@ -68,6 +87,7 @@ export class LibsqlModelRepository implements ModelRepository {
         model.maxMileageKm,
         model.minYear,
         model.enabled ? 1 : 0,
+        model.autoCalibrate ? 1 : 0,
       ],
     });
   }
@@ -83,12 +103,22 @@ export class LibsqlModelRepository implements ModelRepository {
     await this.client.execute({ sql: 'DELETE FROM models WHERE id = ?', args: [id] });
   }
 
+  async applyCalibration(id: string, min: number, max: number, samples: number): Promise<void> {
+    await this.client.execute({
+      sql: `UPDATE models
+               SET price_min = ?, price_max = ?, calibrated_samples = ?,
+                   calibrated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+             WHERE id = ? AND auto_calibrate = 1`,
+      args: [min, max, samples, id],
+    });
+  }
+
   async seedIfEmpty(models: readonly ModelCriteria[]): Promise<void> {
     const existing = await this.client.execute('SELECT COUNT(*) AS n FROM models');
     const count = Number((existing.rows[0] as unknown as { n: number }).n);
     if (count > 0) return;
     for (const m of models) {
-      await this.upsert({ ...m, enabled: true });
+      await this.upsert({ ...m, enabled: true, autoCalibrate: true });
     }
   }
 }

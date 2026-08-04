@@ -4,6 +4,13 @@ import { useMemo, useState } from 'react';
 import type { StoredModel } from '../src/domain/entities/Model.js';
 import { deleteModelAction, saveModelAction } from './admin-actions.js';
 
+function calibrationTitle(model: StoredModel): string {
+  if (!model.calibratedAt) return 'Auto-calibrated; awaiting enough market data.';
+  const when = new Date(model.calibratedAt);
+  const date = Number.isNaN(when.getTime()) ? model.calibratedAt : when.toISOString().slice(0, 10);
+  return `Auto-calibrated ${date} from ${model.calibratedSamples ?? 0} listings.`;
+}
+
 function EditModelCard({ model }: { model: StoredModel }) {
   return (
     <div className="model-card">
@@ -14,6 +21,13 @@ function EditModelCard({ model }: { model: StoredModel }) {
         <span className={model.enabled ? 'badge on' : 'badge'}>
           {model.enabled ? 'enabled' : 'disabled'}
         </span>
+        {model.autoCalibrate ? (
+          <span className="badge on" title={calibrationTitle(model)}>
+            auto{model.calibratedSamples ? ` · ${model.calibratedSamples}` : ''}
+          </span>
+        ) : (
+          <span className="badge">manual</span>
+        )}
         <form action={deleteModelAction} className="inline-form">
           <input type="hidden" name="id" value={model.id} />
           <button className="btn btn-small" type="submit">
@@ -56,6 +70,10 @@ function EditModelCard({ model }: { model: StoredModel }) {
           <label className="checkbox">
             <input type="checkbox" name="enabled" defaultChecked={model.enabled} />
             <span>Enabled</span>
+          </label>
+          <label className="checkbox">
+            <input type="checkbox" name="autoCalibrate" defaultChecked={model.autoCalibrate} />
+            <span>Auto-calibrate price</span>
           </label>
         </div>
         <div className="model-actions">

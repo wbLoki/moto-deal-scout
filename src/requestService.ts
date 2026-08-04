@@ -73,6 +73,7 @@ export async function approveModelRequest(requestId: string, adminId: string): P
       maxMileageKm: APPROVAL_DEFAULTS.maxMileageKm,
       minYear: APPROVAL_DEFAULTS.minYear,
       enabled: true,
+      autoCalibrate: true,
     });
     await requests.setStatus(requestId, 'approved', adminId);
   } finally {

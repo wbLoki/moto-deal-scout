@@ -69,6 +69,14 @@ export class LibsqlListingRepository implements ListingRepository {
     return this.mapRows(result.rows);
   }
 
+  async getPricesForModel(modelId: string, seenSince: Date): Promise<number[]> {
+    const result = await this.client.execute({
+      sql: 'SELECT price_mad FROM listings WHERE matched_model_id = ? AND scraped_at >= ?',
+      args: [modelId, seenSince.toISOString()],
+    });
+    return (result.rows as unknown as { price_mad: number }[]).map((r) => Number(r.price_mad));
+  }
+
   close(): Promise<void> {
     this.client.close();
     return Promise.resolve();

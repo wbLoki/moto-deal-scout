@@ -77,6 +77,9 @@ export const MIGRATIONS: readonly string[] = [
     max_mileage_km INTEGER NOT NULL,
     min_year       INTEGER NOT NULL,
     enabled        INTEGER NOT NULL DEFAULT 1,
+    auto_calibrate INTEGER NOT NULL DEFAULT 1,
+    calibrated_at      TEXT,
+    calibrated_samples INTEGER,
     created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   )`,
   // User-submitted model suggestions awaiting admin approval.
@@ -92,6 +95,7 @@ export const MIGRATIONS: readonly string[] = [
     decided_by  TEXT    REFERENCES users(id)
   )`,
   `CREATE INDEX IF NOT EXISTS idx_model_requests_status ON model_requests (status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_listings_model_scraped ON listings (matched_model_id, scraped_at)`,
   // Models a user has chosen to follow (picked at onboarding, edited on profile).
   `CREATE TABLE IF NOT EXISTS user_watched_models (
     user_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -104,6 +108,22 @@ export const MIGRATIONS: readonly string[] = [
     user_id      TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     onboarded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   )`,
+];
+
+/**
+ * Columns added to existing tables after they first shipped. `ALTER TABLE
+ * ADD COLUMN` isn't idempotent, so {@link ensureColumns} only runs the ones
+ * a database is actually missing. New databases get them via CREATE above;
+ * this backfills already-deployed ones (e.g. Turso).
+ */
+export const ADDITIVE_COLUMNS: ReadonlyArray<{
+  table: string;
+  column: string;
+  definition: string;
+}> = [
+  { table: 'models', column: 'auto_calibrate', definition: 'INTEGER NOT NULL DEFAULT 1' },
+  { table: 'models', column: 'calibrated_at', definition: 'TEXT' },
+  { table: 'models', column: 'calibrated_samples', definition: 'INTEGER' },
 ];
 
 /**

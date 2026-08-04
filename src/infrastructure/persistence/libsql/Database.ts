@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { createClient, type Client } from '@libsql/client';
 import type { Env } from '../../../config/env.js';
 import { loadEnv } from '../../../config/env.js';
-import { MIGRATIONS } from './schema.js';
+import { ADDITIVE_COLUMNS, MIGRATIONS } from './schema.js';
 
 export interface DatabaseConfig {
   /**
@@ -30,8 +30,20 @@ export async function openDatabase(config: DatabaseConfig): Promise<Client> {
   for (const statement of MIGRATIONS) {
     await client.execute(statement);
   }
+  await ensureColumns(client);
 
   return client;
+}
+
+/** Adds any {@link ADDITIVE_COLUMNS} a table is missing (idempotent). */
+async function ensureColumns(client: Client): Promise<void> {
+  for (const { table, column, definition } of ADDITIVE_COLUMNS) {
+    const info = await client.execute(`PRAGMA table_info(${table})`);
+    const exists = info.rows.some((r) => (r as unknown as { name: string }).name === column);
+    if (!exists) {
+      await client.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
+  }
 }
 
 /** Chooses the Turso database when configured, else a local SQLite file. */

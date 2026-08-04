@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { auth } from '../auth.js';
 import { removeModel, saveModel, setModelEnabled } from '../src/adminService.js';
+import { calibrateModels } from '../src/calibration.js';
 
 async function requireAdmin(): Promise<void> {
   const session = await auth();
@@ -31,6 +32,7 @@ function modelInputFrom(formData: FormData) {
     maxMileageKm: num(formData, 'maxMileageKm'),
     minYear: num(formData, 'minYear'),
     enabled: formData.get('enabled') === 'on',
+    autoCalibrate: formData.get('autoCalibrate') === 'on',
   };
 }
 
@@ -77,4 +79,21 @@ export async function deleteModelAction(formData: FormData): Promise<void> {
   await removeModel(str(formData, 'id'));
   revalidatePath('/admin');
   revalidatePath('/');
+}
+
+/** Recomputes fair-value ranges from market data now (admin-only). */
+export async function recalibrateAction(): Promise<AdminModelState> {
+  const session = await auth();
+  if (session?.user?.role !== 'admin') return { message: 'Forbidden: admin only.' };
+  try {
+    const { calibrated, skipped } = await calibrateModels();
+    revalidatePath('/admin');
+    revalidatePath('/');
+    return {
+      ok: true,
+      message: `Calibrated ${calibrated} model(s); ${skipped} skipped (not enough data).`,
+    };
+  } catch (err) {
+    return { message: err instanceof Error ? err.message : 'Recalibration failed.' };
+  }
 }

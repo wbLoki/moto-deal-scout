@@ -104,6 +104,10 @@ export function AddModelPicker() {
           <input type="checkbox" name="enabled" defaultChecked />
           <span>Enabled</span>
         </label>
+        <label className="checkbox">
+          <input type="checkbox" name="autoCalibrate" defaultChecked />
+          <span>Auto-calibrate price</span>
+        </label>
       </div>
 
       <div className="model-actions">

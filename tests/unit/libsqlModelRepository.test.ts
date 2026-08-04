@@ -30,8 +30,8 @@ describe('LibsqlModelRepository', () => {
   });
 
   it('lists only enabled models as criteria (dropping the enabled flag)', async () => {
-    await repo.upsert({ ...makeModelCriteria({ id: 'on' }), enabled: true });
-    await repo.upsert({ ...makeModelCriteria({ id: 'off' }), enabled: false });
+    await repo.upsert({ ...makeModelCriteria({ id: 'on' }), enabled: true, autoCalibrate: true });
+    await repo.upsert({ ...makeModelCriteria({ id: 'off' }), enabled: false, autoCalibrate: true });
     const criteria = await repo.listEnabledCriteria();
     expect(criteria).toHaveLength(1);
     expect(criteria[0]?.id).toBe('on');
@@ -39,10 +39,11 @@ describe('LibsqlModelRepository', () => {
   });
 
   it('upsert updates an existing model in place', async () => {
-    await repo.upsert({ ...makeModelCriteria({ id: 'x' }), enabled: true });
+    await repo.upsert({ ...makeModelCriteria({ id: 'x' }), enabled: true, autoCalibrate: true });
     await repo.upsert({
       ...makeModelCriteria({ id: 'x', priceRangeMAD: { min: 1, max: 2 } }),
       enabled: true,
+      autoCalibrate: true,
     });
     const all = await repo.listAll();
     expect(all).toHaveLength(1);
@@ -50,10 +51,38 @@ describe('LibsqlModelRepository', () => {
   });
 
   it('setEnabled toggles and delete removes', async () => {
-    await repo.upsert({ ...makeModelCriteria({ id: 'y' }), enabled: true });
+    await repo.upsert({ ...makeModelCriteria({ id: 'y' }), enabled: true, autoCalibrate: true });
     await repo.setEnabled('y', false);
     expect((await repo.listAll())[0]?.enabled).toBe(false);
     await repo.delete('y');
     expect(await repo.listAll()).toHaveLength(0);
+  });
+
+  it('applyCalibration overwrites the range only when auto-calibrate is on', async () => {
+    await repo.upsert({
+      ...makeModelCriteria({ id: 'auto', priceRangeMAD: { min: 10, max: 20 } }),
+      enabled: true,
+      autoCalibrate: true,
+    });
+    await repo.upsert({
+      ...makeModelCriteria({ id: 'manual', priceRangeMAD: { min: 10, max: 20 } }),
+      enabled: true,
+      autoCalibrate: false,
+    });
+
+    await repo.applyCalibration('auto', 5000, 9000, 42);
+    await repo.applyCalibration('manual', 5000, 9000, 42);
+
+    const byId = new Map((await repo.listAll()).map((m) => [m.id, m]));
+    const auto = byId.get('auto')!;
+    const manual = byId.get('manual')!;
+
+    expect(auto.priceRangeMAD).toEqual({ min: 5000, max: 9000 });
+    expect(auto.calibratedSamples).toBe(42);
+    expect(auto.calibratedAt).toBeTruthy();
+
+    // manual override is untouched
+    expect(manual.priceRangeMAD).toEqual({ min: 10, max: 20 });
+    expect(manual.calibratedAt).toBeUndefined();
   });
 });
