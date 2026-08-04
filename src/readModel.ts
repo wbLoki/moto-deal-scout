@@ -15,21 +15,25 @@ import { DEFAULT_SEARCH_RANGE } from './settingsModel.js';
 export interface DashboardData {
   readonly criteria: SearchCriteria;
   readonly onboarded: boolean;
-  /** Good deals within the user's range, newest first. */
+  /** All listings within the user's range, best deal first. */
   readonly allDeals: readonly ScoredListing[];
-  /** Range-filtered deals first found today (the latest scan). */
+  /** Range-filtered listings first found today, best deal first. */
   readonly dailyDeals: readonly ScoredListing[];
-  /** Range-filtered deals for the models the user follows. */
+  /** Range-filtered listings for the models the user follows, best deal first. */
   readonly watchedDeals: readonly ScoredListing[];
   readonly watchedModelIds: readonly string[];
   readonly searchRange: SearchRange;
-  /** Good deals stored before the user's range filter was applied. */
+  /** Listings stored before the user's range filter was applied. */
   readonly totalBeforeFilter: number;
 }
 
-// The shared scan can store more good deals than we show; fetch a generous
-// page, filter by the user's range, then cap at `limit`.
+// The scan stores more listings than we show; fetch a generous page, filter
+// by the user's range, sort best-first, then cap at `limit`.
 const FETCH_MULTIPLIER = 5;
+
+function byScoreDesc(a: ScoredListing, b: ScoredListing): number {
+  return b.score.total - a.score.total;
+}
 
 function startOfToday(): Date {
   const d = new Date();
@@ -72,11 +76,15 @@ export async function getDashboardData(userId: string, limit = 60): Promise<Dash
         config.global.minPriceFactor,
       );
 
-    const recent = (await listings.getRecentGoodDeals(limit * FETCH_MULTIPLIER)).filter(plausible);
-    const recentInRange = recent.filter((d) => listingWithinRange(d.listing, searchRange));
+    const recent = (await listings.getRecentListings(limit * FETCH_MULTIPLIER)).filter(plausible);
+    const recentInRange = recent
+      .filter((d) => listingWithinRange(d.listing, searchRange))
+      .sort(byScoreDesc);
 
-    const today = (await listings.getGoodDealsSince(startOfToday())).filter(plausible);
-    const todayInRange = today.filter((d) => listingWithinRange(d.listing, searchRange));
+    const today = (await listings.getListingsSince(startOfToday())).filter(plausible);
+    const todayInRange = today
+      .filter((d) => listingWithinRange(d.listing, searchRange))
+      .sort(byScoreDesc);
 
     const watchedSet = new Set(watchedModelIds);
     const watchedDeals = recentInRange.filter((d) => watchedSet.has(d.match.criteria.id));

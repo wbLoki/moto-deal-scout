@@ -16,8 +16,14 @@ export interface ListingRepository {
   /** Good deals stored since the given date, most recent first. Used for report regeneration. */
   getGoodDealsSince(sinceDate: Date): Promise<ScoredListing[]>;
 
-  /** The most recent good deals, most recent first. Powers the web dashboard. */
+  /** The most recent good deals, most recent first. Used by the daily report/notifications. */
   getRecentGoodDeals(limit: number): Promise<ScoredListing[]>;
+
+  /** The most recent listings of any tier, most recent first. Powers the dashboard. */
+  getRecentListings(limit: number): Promise<ScoredListing[]>;
+
+  /** All listings (any tier) stored since the given date, most recent first. */
+  getListingsSince(sinceDate: Date): Promise<ScoredListing[]>;
 
   /** Release the underlying connection. Safe to call multiple times. */
   close(): Promise<void>;

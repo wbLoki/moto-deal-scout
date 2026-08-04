@@ -67,6 +67,27 @@ describe('LibsqlListingRepository', () => {
     expect(goodDeals).toHaveLength(0);
   });
 
+  it('getRecentListings returns listings of any tier', async () => {
+    await repo.save(
+      buildScored({ listing: makeListing({ externalId: 'good' }), isGoodDeal: true }),
+    );
+    await repo.save(
+      buildScored({ listing: makeListing({ externalId: 'meh' }), isGoodDeal: false }),
+    );
+
+    const all = await repo.getRecentListings(50);
+    const good = await repo.getRecentGoodDeals(50);
+
+    expect(all.map((d) => d.listing.externalId).sort()).toEqual(['good', 'meh']);
+    expect(good.map((d) => d.listing.externalId)).toEqual(['good']);
+  });
+
+  it('getListingsSince returns any-tier listings since the date', async () => {
+    await repo.save(buildScored({ listing: makeListing({ externalId: 'x' }), isGoodDeal: false }));
+    await expect(repo.getListingsSince(new Date('2000-01-01'))).resolves.toHaveLength(1);
+    await expect(repo.getListingsSince(new Date(Date.now() + 86_400_000))).resolves.toHaveLength(0);
+  });
+
   it('getRecentGoodDeals returns only good deals, capped at the limit', async () => {
     await repo.save(buildScored({ listing: makeListing({ externalId: 'g1' }), isGoodDeal: true }));
     await repo.save(buildScored({ listing: makeListing({ externalId: 'g2' }), isGoodDeal: true }));

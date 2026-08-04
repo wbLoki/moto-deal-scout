@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '../auth.js';
 import { getDashboardData } from '../src/readModel.js';
 import type { ScoredListing } from '../src/domain/entities/ScoredListing.js';
+import { dealTier } from '../src/domain/services/dealTier.js';
 import { SearchSettings } from './SearchSettings.js';
 import { ScanNowButton } from './ScanNowButton.js';
 import { SiteHeader } from './SiteHeader.js';
@@ -15,6 +16,7 @@ export const maxDuration = 60;
 
 function toView(scored: ScoredListing): DealView {
   const { listing, score, match } = scored;
+  const tier = dealTier(score.total);
   return {
     key: `${listing.sourceId}:${listing.externalId}`,
     brand: match.criteria.brand,
@@ -28,6 +30,8 @@ function toView(scored: ScoredListing): DealView {
     imageUrl: listing.imageUrl ?? null,
     matchConfidence: match.confidence,
     score: score.total,
+    tierLabel: tier.label,
+    tierLevel: tier.level,
   };
 }
 
@@ -47,9 +51,9 @@ export default async function DashboardPage() {
       <SiteHeader />
 
       <p className="subtitle">
-        Good deals across {criteria.models.length} tracked model
-        {criteria.models.length === 1 ? '' : 's'}, scored on price, mileage, year and city.
-        Threshold: {criteria.global.minScoreForGoodDeal}/100.
+        Listings across {criteria.models.length} tracked model
+        {criteria.models.length === 1 ? '' : 's'}, tagged by how good the deal is (price, mileage,
+        year and city). Best deals first.
       </p>
 
       <SearchSettings current={searchRange} />

@@ -17,6 +17,8 @@ export interface DealView {
   imageUrl: string | null;
   matchConfidence: number;
   score: number;
+  tierLabel: string;
+  tierLevel: string;
 }
 
 const madFmt = new Intl.NumberFormat('fr-MA');
@@ -39,7 +41,9 @@ function DealCard({ deal }: { deal: DealView }) {
           <h3 className="card-title">
             {deal.brand} {deal.model}
           </h3>
-          <span className="score">{deal.score}/100</span>
+          <span className={`tag tag-${deal.tierLevel}`} title={`Score ${deal.score}/100`}>
+            {deal.tierLabel}
+          </span>
         </div>
         <div className="price">{madFmt.format(deal.priceMAD)} MAD</div>
         <div className="meta">
@@ -86,10 +90,10 @@ export function DealTabs({
   const currentDeals = active === 'daily' ? daily : active === 'watched' ? watched : all;
 
   const emptyNote = (id: TabId) => {
-    if (id === 'daily') return 'No new deals found today yet — the daily scan runs each morning.';
+    if (id === 'daily') return 'No new listings today yet — the daily scan runs each morning.';
     if (id === 'watched') {
       return followsAnyModel ? (
-        'No deals for your followed models in range right now.'
+        'No listings for your followed models in range right now.'
       ) : (
         <>
           You&apos;re not following any models yet. Pick some on your{' '}
@@ -100,7 +104,7 @@ export function DealTabs({
         </>
       );
     }
-    return 'No good deals in your range yet. Widen your budget/year above, or wait for the next daily scan.';
+    return 'No listings in your range yet. Widen your budget/year above, or wait for the next daily scan.';
   };
 
   return (
@@ -132,8 +136,8 @@ export function DealTabs({
 
       {hiddenByRange > 0 && (
         <p className="range-note">
-          {hiddenByRange} more good deal{hiddenByRange === 1 ? '' : 's'} are outside your
-          budget/year range.
+          {hiddenByRange} more listing{hiddenByRange === 1 ? '' : 's'} outside your budget/year
+          range.
         </p>
       )}
     </div>

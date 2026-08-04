@@ -53,6 +53,22 @@ export class LibsqlListingRepository implements ListingRepository {
     return this.mapRows(result.rows);
   }
 
+  async getRecentListings(limit: number): Promise<ScoredListing[]> {
+    const result = await this.client.execute({
+      sql: 'SELECT * FROM listings ORDER BY created_at DESC LIMIT ?',
+      args: [limit],
+    });
+    return this.mapRows(result.rows);
+  }
+
+  async getListingsSince(sinceDate: Date): Promise<ScoredListing[]> {
+    const result = await this.client.execute({
+      sql: 'SELECT * FROM listings WHERE created_at >= ? ORDER BY created_at DESC',
+      args: [sinceDate.toISOString()],
+    });
+    return this.mapRows(result.rows);
+  }
+
   close(): Promise<void> {
     this.client.close();
     return Promise.resolve();
