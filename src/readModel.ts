@@ -19,8 +19,6 @@ export interface DashboardData {
   readonly allDeals: readonly ScoredListing[];
   /** Range-filtered listings first found today, best deal first. */
   readonly dailyDeals: readonly ScoredListing[];
-  /** Range-filtered listings for the models the user follows, best deal first. */
-  readonly watchedDeals: readonly ScoredListing[];
   readonly watchedModelIds: readonly string[];
   readonly searchRange: SearchRange;
   /** Listings stored before the user's range filter was applied. */
@@ -86,15 +84,11 @@ export async function getDashboardData(userId: string, limit = 60): Promise<Dash
       .filter((d) => listingWithinRange(d.listing, searchRange))
       .sort(byScoreDesc);
 
-    const watchedSet = new Set(watchedModelIds);
-    const watchedDeals = recentInRange.filter((d) => watchedSet.has(d.match.criteria.id));
-
     return {
       criteria: { models: enabledModels, global: config.global },
       onboarded,
       allDeals: recentInRange.slice(0, limit),
       dailyDeals: todayInRange.slice(0, limit),
-      watchedDeals: watchedDeals.slice(0, limit),
       watchedModelIds,
       searchRange,
       totalBeforeFilter: recent.length,

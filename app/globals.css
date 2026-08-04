@@ -916,3 +916,47 @@ a {
   color: var(--muted);
   border-color: var(--border);
 }
+
+/* --- Watch (eye) toggle on deal cards --- */
+.card {
+  position: relative;
+}
+
+.watch-eye {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(10, 12, 15, 0.55);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.watch-eye:hover {
+  border-color: var(--accent);
+}
+
+.watch-eye.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+@media (prefers-color-scheme: light) {
+  .watch-eye {
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--muted);
+  }
+}

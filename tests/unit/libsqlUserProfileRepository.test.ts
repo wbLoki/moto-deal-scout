@@ -44,6 +44,20 @@ describe('LibsqlUserProfileRepository', () => {
     await expect(repo.getWatchedModelIds(userId)).resolves.toEqual([]);
   });
 
+  it('adds and removes a single watched model (idempotent add)', async () => {
+    await repo.addWatchedModel(userId, 'yamaha-mt07');
+    await repo.addWatchedModel(userId, 'yamaha-mt07'); // no-op
+    await repo.addWatchedModel(userId, 'kawasaki-z650');
+    await expect(repo.getWatchedModelIds(userId)).resolves.toEqual([
+      'kawasaki-z650',
+      'yamaha-mt07',
+    ]);
+
+    await repo.removeWatchedModel(userId, 'yamaha-mt07');
+    await repo.removeWatchedModel(userId, 'not-there'); // no-op
+    await expect(repo.getWatchedModelIds(userId)).resolves.toEqual(['kawasaki-z650']);
+  });
+
   it('marks onboarded idempotently', async () => {
     await repo.markOnboarded(userId);
     await repo.markOnboarded(userId);

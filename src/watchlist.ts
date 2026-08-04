@@ -60,6 +60,22 @@ export async function saveWatchedModels(
   }
 }
 
+/** Follows or unfollows a single model (used by the eye toggle on deal cards). */
+export async function setWatchedModel(
+  userId: string,
+  modelId: string,
+  watch: boolean,
+): Promise<void> {
+  const db = await openDatabaseFromEnv();
+  try {
+    const repo = new LibsqlUserProfileRepository(db);
+    if (watch) await repo.addWatchedModel(userId, modelId);
+    else await repo.removeWatchedModel(userId, modelId);
+  } finally {
+    db.close();
+  }
+}
+
 /** Marks onboarding complete without changing followed models (the "Skip" path). */
 export async function completeOnboarding(userId: string): Promise<void> {
   const db = await openDatabaseFromEnv();

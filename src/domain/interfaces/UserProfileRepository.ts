@@ -7,6 +7,10 @@ export interface UserProfileRepository {
   getWatchedModelIds(userId: string): Promise<string[]>;
   /** Replaces the user's followed models with exactly this set. */
   setWatchedModelIds(userId: string, modelIds: readonly string[]): Promise<void>;
+  /** Follows a single model (no-op if already followed). */
+  addWatchedModel(userId: string, modelId: string): Promise<void>;
+  /** Unfollows a single model (no-op if not followed). */
+  removeWatchedModel(userId: string, modelId: string): Promise<void>;
 
   isOnboarded(userId: string): Promise<boolean>;
   markOnboarded(userId: string): Promise<void>;

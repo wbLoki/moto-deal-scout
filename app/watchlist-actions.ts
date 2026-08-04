@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { auth } from '../auth.js';
-import { completeOnboarding, saveWatchedModels } from '../src/watchlist.js';
+import { completeOnboarding, saveWatchedModels, setWatchedModel } from '../src/watchlist.js';
 
 export interface WatchlistState {
   ok?: boolean;
@@ -35,4 +35,20 @@ export async function skipOnboardingAction(): Promise<void> {
     await completeOnboarding(session.user.id);
   }
   redirect('/');
+}
+
+/** Toggles following a single model (the eye button on deal cards). */
+export async function setWatchedModelAction(
+  modelId: string,
+  watch: boolean,
+): Promise<{ ok: boolean }> {
+  const session = await auth();
+  if (!session?.user?.id) return { ok: false };
+  try {
+    await setWatchedModel(session.user.id, modelId, watch);
+    revalidatePath('/');
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
 }

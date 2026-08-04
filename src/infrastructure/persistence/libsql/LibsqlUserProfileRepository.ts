@@ -24,6 +24,20 @@ export class LibsqlUserProfileRepository implements UserProfileRepository {
     await this.client.batch(statements, 'write');
   }
 
+  async addWatchedModel(userId: string, modelId: string): Promise<void> {
+    await this.client.execute({
+      sql: 'INSERT INTO user_watched_models (user_id, model_id) VALUES (?, ?) ON CONFLICT DO NOTHING',
+      args: [userId, modelId],
+    });
+  }
+
+  async removeWatchedModel(userId: string, modelId: string): Promise<void> {
+    await this.client.execute({
+      sql: 'DELETE FROM user_watched_models WHERE user_id = ? AND model_id = ?',
+      args: [userId, modelId],
+    });
+  }
+
   async isOnboarded(userId: string): Promise<boolean> {
     const result = await this.client.execute({
       sql: 'SELECT 1 FROM user_onboarding WHERE user_id = ? LIMIT 1',

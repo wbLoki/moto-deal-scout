@@ -19,6 +19,7 @@ function toView(scored: ScoredListing): DealView {
   const tier = dealTier(score.total);
   return {
     key: `${listing.sourceId}:${listing.externalId}`,
+    modelId: match.criteria.id,
     brand: match.criteria.brand,
     model: match.criteria.model,
     priceMAD: listing.priceMAD,
@@ -43,7 +44,7 @@ export default async function DashboardPage() {
   const data = await getDashboardData(session.user.id);
   if (!data.onboarded) redirect('/onboarding');
 
-  const { criteria, allDeals, dailyDeals, watchedDeals, watchedModelIds, searchRange } = data;
+  const { criteria, allDeals, dailyDeals, watchedModelIds, searchRange } = data;
   const hiddenByRange = data.totalBeforeFilter - allDeals.length;
 
   return (
@@ -75,9 +76,8 @@ export default async function DashboardPage() {
 
       <DealTabs
         daily={dailyDeals.map(toView)}
-        watched={watchedDeals.map(toView)}
         all={allDeals.map(toView)}
-        followsAnyModel={watchedModelIds.length > 0}
+        watchedModelIds={watchedModelIds}
         hiddenByRange={hiddenByRange}
       />
 
