@@ -11,6 +11,18 @@ export interface LabeledCount {
   readonly count: number;
 }
 
+export interface AdminUser {
+  readonly id: string;
+  readonly email: string;
+  readonly name: string | null;
+  readonly role: string;
+  readonly method: 'password' | 'social';
+  readonly watchedCount: number;
+  readonly onboarded: boolean;
+  readonly hasRange: boolean;
+  readonly createdAt: string;
+}
+
 export interface AdminMetrics {
   readonly users: {
     readonly total: number;
@@ -130,6 +142,47 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
       },
       listings: { total: totalListings, goodDeals, bySource },
     };
+  } finally {
+    db.close();
+  }
+}
+
+interface UserRow {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  has_password: number;
+  watched_count: number;
+  onboarded: number | null;
+  has_range: number | null;
+  created_at: string;
+}
+
+/** Every account with the at-a-glance info shown on the admin Users tab. */
+export async function listUsers(): Promise<AdminUser[]> {
+  const db = await openDatabaseFromEnv();
+  try {
+    const result = await db.execute(
+      `SELECT u.id, u.email, u.name, u.role, u.created_at,
+              (u.password_hash IS NOT NULL) AS has_password,
+              (SELECT COUNT(*) FROM user_watched_models w WHERE w.user_id = u.id) AS watched_count,
+              (SELECT 1 FROM user_onboarding o WHERE o.user_id = u.id) AS onboarded,
+              (SELECT 1 FROM user_search_ranges r WHERE r.user_id = u.id) AS has_range
+         FROM users u
+        ORDER BY u.created_at DESC`,
+    );
+    return (result.rows as unknown as UserRow[]).map((r) => ({
+      id: r.id,
+      email: r.email,
+      name: r.name,
+      role: r.role,
+      method: r.has_password ? 'password' : 'social',
+      watchedCount: Number(r.watched_count),
+      onboarded: Boolean(r.onboarded),
+      hasRange: Boolean(r.has_range),
+      createdAt: r.created_at,
+    }));
   } finally {
     db.close();
   }

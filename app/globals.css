@@ -1130,3 +1130,34 @@ a {
   min-width: 2ch;
   text-align: right;
 }
+
+/* --- Admin users table --- */
+.table-wrap {
+  overflow-x: auto;
+}
+
+.user-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.user-table th,
+.user-table td {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.user-table th {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.user-table tbody tr:hover {
+  background: var(--panel-2);
+}
