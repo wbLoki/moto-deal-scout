@@ -14,7 +14,7 @@ if (process.env['AUTH_GITHUB_ID'] && process.env['AUTH_GITHUB_SECRET']) {
   oauthProviders.push(GitHub);
 }
 
-const PUBLIC_PATHS = ['/login', '/signup'];
+const PUBLIC_PATHS = ['/', '/login', '/signup'];
 
 // Auth.js auto-reads AUTH_SECRET from the environment, but we also wire it in
 // explicitly (when present) so both the middleware and server share the same

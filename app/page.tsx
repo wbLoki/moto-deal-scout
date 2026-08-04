@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../auth.js';
-import { getDashboardData } from '../src/readModel.js';
+import { getDashboardData, getHotDeals } from '../src/readModel.js';
 import type { ScoredListing } from '../src/domain/entities/ScoredListing.js';
 import { dealTier } from '../src/domain/services/dealTier.js';
+import { Landing, type PublicDeal } from './Landing.js';
 import { SearchSettings } from './SearchSettings.js';
 import { ScanNowButton } from './ScanNowButton.js';
 import { SiteHeader } from './SiteHeader.js';
@@ -36,9 +37,32 @@ function toView(scored: ScoredListing): DealView {
   };
 }
 
+function toPublicDeal(scored: ScoredListing): PublicDeal {
+  const { listing, score, match } = scored;
+  const tier = dealTier(score.total);
+  return {
+    key: `${listing.sourceId}:${listing.externalId}`,
+    brand: match.criteria.brand,
+    model: match.criteria.model,
+    priceMAD: listing.priceMAD,
+    year: listing.year ?? null,
+    mileageKm: listing.mileageKm ?? null,
+    city: listing.city,
+    sourceId: listing.sourceId,
+    url: listing.url,
+    imageUrl: listing.imageUrl ?? null,
+    tierLabel: tier.label,
+    tierLevel: tier.level,
+  };
+}
+
 export default async function DashboardPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect('/login');
+  // Anonymous visitors get the public landing page (with a teaser of hot deals).
+  if (!session?.user?.id) {
+    const hot = await getHotDeals(6);
+    return <Landing hotDeals={hot.map(toPublicDeal)} />;
+  }
   const isAdmin = session.user.role === 'admin';
 
   const data = await getDashboardData(session.user.id);

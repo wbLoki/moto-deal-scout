@@ -62,8 +62,9 @@ protected in production.)
 
 ## Accounts, roles, and requests (multi-user)
 
-The web app requires sign-in. It's multi-tenant: one shared daily scan feeds everyone, and
-each user gets a personal view.
+The root `/` is a public landing page (what the app does + a teaser of the hottest deals);
+everything else requires sign-in. It's multi-tenant: one shared daily scan feeds everyone,
+and each signed-in user gets a personal view (logged-in users see their dashboard at `/`).
 
 - **Sign-in** — email+password ([Auth.js](https://authjs.dev) with bcrypt), plus optional
   Google/GitHub OAuth that light up only when their env vars are set. Set `AUTH_SECRET` (required

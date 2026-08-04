@@ -97,3 +97,34 @@ export async function getDashboardData(userId: string, limit = 60): Promise<Dash
     db.close();
   }
 }
+
+/**
+ * The globally hottest deals for the public landing page: top-scored recent
+ * listings across all models, no login or per-user range — just plausibly
+ * priced and sorted best-first.
+ */
+export async function getHotDeals(limit = 6): Promise<ScoredListing[]> {
+  const env = loadEnv();
+  const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
+  const db = await openDatabase(resolveDatabaseConfig(env));
+  try {
+    const modelRepo = new LibsqlModelRepository(db);
+    await modelRepo.seedIfEmpty(config.models);
+    const allModels = await modelRepo.listAll();
+
+    const listings = new LibsqlListingRepository(db, allModels);
+    const recent = await listings.getRecentListings(limit * 20);
+    return recent
+      .filter((d) =>
+        priceIsPlausible(
+          d.listing.priceMAD,
+          d.match.criteria.priceRangeMAD.min,
+          config.global.minPriceFactor,
+        ),
+      )
+      .sort(byScoreDesc)
+      .slice(0, limit);
+  } finally {
+    db.close();
+  }
+}
