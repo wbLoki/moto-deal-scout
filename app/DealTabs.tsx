@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { setWatchedModelAction } from './watchlist-actions.js';
 import { setSavedListingAction } from './saved-actions.js';
 import { DealCardShell, type DealCardData } from './DealCardShell.js';
+import { DealSearchBar, matchesQuery } from './DealSearchBar.js';
 import { BookmarkIcon } from './icons.js';
 
 /** Flat, fully-serializable view of a scored listing for the client. */
@@ -174,7 +175,12 @@ export function DealTabs({
 
   const initial: TabId = tabs.find((t) => t.deals.length > 0)?.id ?? 'all';
   const [active, setActive] = useState<TabId>(initial);
-  const currentDeals = tabs.find((t) => t.id === active)?.deals ?? all;
+  const [query, setQuery] = useState('');
+  const activeDeals = tabs.find((t) => t.id === active)?.deals ?? all;
+  const currentDeals = useMemo(
+    () => activeDeals.filter((d) => matchesQuery(d, query)),
+    [activeDeals, query],
+  );
 
   const emptyNote = (id: TabId) => {
     if (id === 'daily') return 'No new listings today yet — the daily scan runs each morning.';
@@ -214,8 +220,14 @@ export function DealTabs({
         ))}
       </div>
 
+      <DealSearchBar value={query} onChange={setQuery} />
+
       {currentDeals.length === 0 ? (
-        <div className="empty">{emptyNote(active)}</div>
+        <div className="empty">
+          {query.trim() && activeDeals.length > 0
+            ? `No deals match “${query}”.`
+            : emptyNote(active)}
+        </div>
       ) : (
         <div className="grid">
           {currentDeals.map((deal) => (
