@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { FlameIcon, MotoIcon } from './icons.js';
 
 export interface PublicDeal {
   key: string;
@@ -70,7 +71,10 @@ export function Landing({ hotDeals }: { hotDeals: readonly PublicDeal[] }) {
   return (
     <main className="landing">
       <header className="landing-nav">
-        <span className="brand">🏍️ Moto Deal Scout</span>
+        <span className="brand">
+          <MotoIcon size={22} />
+          Moto Deal Scout
+        </span>
         <div className="landing-nav-actions">
           <Link href="/login" className="btn btn-small">
             Sign in
@@ -108,7 +112,10 @@ export function Landing({ hotDeals }: { hotDeals: readonly PublicDeal[] }) {
 
       <section className="landing-deals">
         <div className="deal-section-head">
-          <h2>🔥 Hottest deals right now</h2>
+          <h2>
+            <FlameIcon className="icon-lead" />
+            Hottest deals right now
+          </h2>
         </div>
         {hotDeals.length === 0 ? (
           <div className="empty">No deals to show yet — check back after the next scan.</div>

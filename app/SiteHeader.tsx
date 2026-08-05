@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { auth } from '../auth.js';
 import { signOutAction } from './auth-actions.js';
+import { MotoIcon } from './icons.js';
 
 /** Top bar: brand, nav (Admin link for admins), the signed-in email, and logout. */
 export async function SiteHeader() {
@@ -10,7 +11,8 @@ export async function SiteHeader() {
   return (
     <header className="site-header">
       <Link href="/" className="brand">
-        🏍️ Moto Deal Scout
+        <MotoIcon size={22} />
+        Moto Deal Scout
       </Link>
       <nav className="site-nav">
         <Link href="/profile">Profile</Link>

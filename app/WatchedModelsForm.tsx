@@ -8,6 +8,7 @@ import {
   skipOnboardingAction,
   type WatchlistState,
 } from './watchlist-actions.js';
+import { CloseIcon } from './icons.js';
 
 export interface PickableModel {
   id: string;
@@ -78,7 +79,7 @@ export function WatchedModelsForm({
                   <span key={id} className="chip">
                     {m ? `${m.brand} ${m.model}` : id}
                     <button type="button" onClick={() => remove(id)} aria-label="Remove">
-                      ×
+                      <CloseIcon size={14} />
                     </button>
                   </span>
                 );

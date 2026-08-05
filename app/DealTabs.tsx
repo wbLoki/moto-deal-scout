@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { setWatchedModelAction } from './watchlist-actions.js';
+import { ExternalLinkIcon } from './icons.js';
 
 /** Flat, fully-serializable view of a scored listing for the client. */
 export interface DealView {
@@ -111,7 +112,8 @@ function DealCard({
           <span className="badge">match {Math.round(deal.matchConfidence * 100)}%</span>
         </div>
         <a className="card-link" href={deal.url} target="_blank" rel="noopener noreferrer">
-          View listing →
+          View listing
+          <ExternalLinkIcon className="icon-trail" size={15} />
         </a>
       </div>
     </article>

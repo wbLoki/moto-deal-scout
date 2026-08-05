@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '../../auth.js';
 import { getUserProfile, listTrackedModels } from '../../src/watchlist.js';
 import { WatchedModelsForm } from '../WatchedModelsForm.js';
+import { SparklesIcon } from '../icons.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,10 @@ export default async function OnboardingPage() {
   return (
     <main className="auth-container">
       <div className="auth-card wide">
-        <h1 className="auth-title">Welcome 👋</h1>
+        <h1 className="auth-title">
+          Welcome
+          <SparklesIcon className="icon-trail" />
+        </h1>
         <p className="auth-subtitle">
           Pick the motorcycles you want to follow. You&apos;ll get a focused feed for these, and you
           can change them anytime on your profile.
