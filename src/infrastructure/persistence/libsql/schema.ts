@@ -108,6 +108,29 @@ export const MIGRATIONS: readonly string[] = [
     user_id      TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     onboarded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   )`,
+  // Per-user alerts (watched-model new deals, price drops). One row feeds both
+  // the in-app bell (read_at) and the email digest (emailed_at). The unique
+  // index is the "already alerted" guard: inserts use ON CONFLICT DO NOTHING.
+  `CREATE TABLE IF NOT EXISTS notifications (
+    id            TEXT PRIMARY KEY,
+    user_id       TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type          TEXT    NOT NULL,
+    source_id     TEXT    NOT NULL,
+    external_id   TEXT    NOT NULL,
+    model_id      TEXT,
+    price_mad     INTEGER,
+    old_price_mad INTEGER,
+    url           TEXT    NOT NULL,
+    image_url     TEXT,
+    title         TEXT    NOT NULL,
+    created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    read_at       TEXT,
+    emailed_at    TEXT
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedup
+     ON notifications (user_id, type, source_id, external_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+     ON notifications (user_id, created_at)`,
 ];
 
 /**

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { auth } from '../auth.js';
+import { countUnreadNotifications } from '../src/notificationsModel.js';
 import { signOutAction } from './auth-actions.js';
 import { BellIcon, MotoIcon } from './icons.js';
 
@@ -7,6 +8,7 @@ import { BellIcon, MotoIcon } from './icons.js';
 export async function SiteHeader() {
   const session = await auth();
   const user = session?.user;
+  const unread = user?.id ? await countUnreadNotifications(user.id) : 0;
 
   return (
     <header className="site-header">
@@ -17,8 +19,14 @@ export async function SiteHeader() {
       <nav className="site-nav">
         {user ? (
           <>
-            <Link href="/notifications" aria-label="Notifications" title="Notifications">
+            <Link
+              href="/notifications"
+              className="notif-bell"
+              aria-label={unread > 0 ? `Notifications (${unread} unread)` : 'Notifications'}
+              title="Notifications"
+            >
               <BellIcon size={18} />
+              {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
             </Link>
             <Link href="/profile">Profile</Link>
             <Link href="/requests">Model requests</Link>
