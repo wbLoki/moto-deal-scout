@@ -8,6 +8,7 @@ import { priceIsPlausible } from './domain/services/priceFilter.js';
 import { openDatabase } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
+import { LibsqlSavedListingRepository } from './infrastructure/persistence/libsql/LibsqlSavedListingRepository.js';
 import { LibsqlUserProfileRepository } from './infrastructure/persistence/libsql/LibsqlUserProfileRepository.js';
 import { LibsqlUserSearchRangeRepository } from './infrastructure/persistence/libsql/LibsqlUserSearchRangeRepository.js';
 import { DEFAULT_SEARCH_RANGE } from './settingsModel.js';
@@ -20,6 +21,8 @@ export interface DashboardData {
   /** Range-filtered listings first found today, best deal first. */
   readonly dailyDeals: readonly ScoredListing[];
   readonly watchedModelIds: readonly string[];
+  /** The user's bookmarked listings as full deals, most recently saved first. */
+  readonly savedDeals: readonly ScoredListing[];
   readonly searchRange: SearchRange;
   /** Listings stored before the user's range filter was applied. */
   readonly totalBeforeFilter: number;
@@ -84,12 +87,18 @@ export async function getDashboardData(userId: string, limit = 60): Promise<Dash
       .filter((d) => listingWithinRange(d.listing, searchRange))
       .sort(byScoreDesc);
 
+    // Saved deals are shown regardless of the user's range (they chose them).
+    const savedDeals = (
+      await new LibsqlSavedListingRepository(db, allModels).listSavedDeals(userId)
+    ).filter(plausible);
+
     return {
       criteria: { models: enabledModels, global: config.global },
       onboarded,
       allDeals: recentInRange.slice(0, limit),
       dailyDeals: todayInRange.slice(0, limit),
       watchedModelIds,
+      savedDeals,
       searchRange,
       totalBeforeFilter: recent.length,
     };

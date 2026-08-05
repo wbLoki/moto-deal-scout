@@ -131,6 +131,15 @@ export const MIGRATIONS: readonly string[] = [
      ON notifications (user_id, type, source_id, external_id)`,
   `CREATE INDEX IF NOT EXISTS idx_notifications_user_created
      ON notifications (user_id, created_at)`,
+  // Individual listings a user bookmarked. Keyed by the listing's (source,
+  // external) id so it survives re-scrapes; price-drop alerts also target these.
+  `CREATE TABLE IF NOT EXISTS user_saved_listings (
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source_id   TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    saved_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (user_id, source_id, external_id)
+  )`,
 ];
 
 /**

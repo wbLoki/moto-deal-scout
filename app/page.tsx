@@ -69,8 +69,9 @@ export default async function DashboardPage() {
   const data = await getDashboardData(session.user.id);
   if (!data.onboarded) redirect('/onboarding');
 
-  const { criteria, allDeals, dailyDeals, watchedModelIds, searchRange } = data;
+  const { criteria, allDeals, dailyDeals, watchedModelIds, savedDeals, searchRange } = data;
   const hiddenByRange = data.totalBeforeFilter - allDeals.length;
+  const savedKeys = savedDeals.map((d) => `${d.listing.sourceId}:${d.listing.externalId}`);
 
   return (
     <main className="container">
@@ -102,7 +103,9 @@ export default async function DashboardPage() {
       <DealTabs
         daily={dailyDeals.map(toView)}
         all={allDeals.map(toView)}
+        saved={savedDeals.map(toView)}
         watchedModelIds={watchedModelIds}
+        savedKeys={savedKeys}
         hiddenByRange={hiddenByRange}
       />
 

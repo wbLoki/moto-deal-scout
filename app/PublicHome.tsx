@@ -81,7 +81,15 @@ export function PublicHome({ deals }: { deals: readonly DealCardData[] }) {
         ) : (
           <div className="grid">
             {deals.map((deal) => (
-              <DealCardShell key={deal.key} data={deal} topRight={<SignInToFollow />} />
+              <DealCardShell
+                key={deal.key}
+                data={deal}
+                topRight={
+                  <div className="card-actions">
+                    <SignInToFollow />
+                  </div>
+                }
+              />
             ))}
           </div>
         )}

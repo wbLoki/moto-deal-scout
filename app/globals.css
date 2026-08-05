@@ -943,11 +943,17 @@ a {
   position: relative;
 }
 
-.watch-eye {
+/* Top-right overlay holding the watch/save controls on a deal card. */
+.card-actions {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
   z-index: 2;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.watch-eye {
   display: inline-flex;
   align-items: center;
   justify-content: center;
