@@ -43,6 +43,35 @@ export function MotoIcon(props: IconProps) {
   );
 }
 
+/** Eye — the follow/watch affordance. */
+export function EyeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </Icon>
+  );
+}
+
+/** Bell — notifications. */
+export function BellIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </Icon>
+  );
+}
+
+/** Bookmark — save a listing. */
+export function BookmarkIcon({ filled, ...props }: IconProps & { filled?: boolean }) {
+  return (
+    <Icon {...props} {...(filled ? { fill: 'currentColor' } : {})}>
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+    </Icon>
+  );
+}
+
 /** Flame — hot / hottest deals. */
 export function FlameIcon(props: IconProps) {
   return (

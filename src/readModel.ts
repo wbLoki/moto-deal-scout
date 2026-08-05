@@ -99,11 +99,12 @@ export async function getDashboardData(userId: string, limit = 60): Promise<Dash
 }
 
 /**
- * The globally hottest deals for the public landing page: top-scored recent
- * listings across all models, no login or per-user range — just plausibly
- * priced and sorted best-first.
+ * Public, no-login read: the top-scored recent listings across all models,
+ * with no per-user range filter — just plausibly priced and sorted best-first.
+ * Shared by the public homepage feed (`getPublicDeals`) and the smaller landing
+ * teaser (`getHotDeals`); the only difference is how many deals are returned.
  */
-export async function getHotDeals(limit = 6): Promise<ScoredListing[]> {
+async function readPublicDeals(limit: number): Promise<ScoredListing[]> {
   const env = loadEnv();
   const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
@@ -113,7 +114,7 @@ export async function getHotDeals(limit = 6): Promise<ScoredListing[]> {
     const allModels = await modelRepo.listAll();
 
     const listings = new LibsqlListingRepository(db, allModels);
-    const recent = await listings.getRecentListings(limit * 20);
+    const recent = await listings.getRecentListings(limit * FETCH_MULTIPLIER);
     return recent
       .filter((d) =>
         priceIsPlausible(
@@ -127,4 +128,17 @@ export async function getHotDeals(limit = 6): Promise<ScoredListing[]> {
   } finally {
     db.close();
   }
+}
+
+/**
+ * The full public deal feed shown to anonymous visitors on the homepage. Same
+ * shape and scoring as the member feed, minus the per-user budget/year filter.
+ */
+export function getPublicDeals(limit = 60): Promise<ScoredListing[]> {
+  return readPublicDeals(limit);
+}
+
+/** A small teaser of the globally hottest deals (e.g. for marketing sections). */
+export function getHotDeals(limit = 6): Promise<ScoredListing[]> {
+  return readPublicDeals(limit);
 }

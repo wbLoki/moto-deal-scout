@@ -1009,6 +1009,11 @@ a {
   margin: 0 auto;
 }
 
+/* Slimmer hero for the public homepage, which sits above the full deal feed. */
+.hero-compact {
+  padding: 1.5rem 1rem 1rem;
+}
+
 .hero-title {
   font-size: clamp(1.8rem, 4vw, 2.9rem);
   font-weight: 800;

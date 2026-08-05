@@ -14,7 +14,18 @@ if (process.env['AUTH_GITHUB_ID'] && process.env['AUTH_GITHUB_SECRET']) {
   oauthProviders.push(GitHub);
 }
 
-const PUBLIC_PATHS = ['/', '/login', '/signup'];
+// Anyone can browse the deal feed and marketing pages without an account. Only
+// these prefixes require a logged-in user; everything else (incl. `/`) is
+// public. This is the inverse of the old deny-by-default gate — it lets
+// anonymous visitors use the app while keeping member-only areas protected.
+const PROTECTED_PREFIXES = [
+  '/onboarding',
+  '/profile',
+  '/requests',
+  '/notifications',
+  '/saved',
+  '/admin',
+];
 
 // Auth.js auto-reads AUTH_SECRET from the environment, but we also wire it in
 // explicitly (when present) so both the middleware and server share the same
@@ -34,18 +45,13 @@ export const authConfig = {
   session: { strategy: 'jwt' },
   providers: oauthProviders,
   callbacks: {
-    /** Route protection for middleware: everything requires login except the auth pages/API. */
+    /** Route protection for middleware: public by default, login required only for member/admin areas. */
     authorized({ auth, request }) {
       const { pathname } = request.nextUrl;
-      if (PUBLIC_PATHS.includes(pathname)) return true;
-      // These have their own CRON_SECRET / Auth.js guards.
-      if (
-        pathname.startsWith('/api/auth') ||
-        pathname.startsWith('/api/scan') ||
-        pathname.startsWith('/api/report')
-      ) {
-        return true;
-      }
+      const isProtected = PROTECTED_PREFIXES.some(
+        (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+      );
+      if (!isProtected) return true;
       return Boolean(auth?.user);
     },
     /** Maps token fields onto the session (no DB access — safe on the edge). */

@@ -3,28 +3,14 @@
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { setWatchedModelAction } from './watchlist-actions.js';
-import { ExternalLinkIcon } from './icons.js';
+import { DealCardShell, type DealCardData } from './DealCardShell.js';
 
 /** Flat, fully-serializable view of a scored listing for the client. */
-export interface DealView {
-  key: string;
+export interface DealView extends DealCardData {
   modelId: string;
-  brand: string;
-  model: string;
-  priceMAD: number;
-  year: number | null;
-  mileageKm: number | null;
-  city: string;
-  sourceId: string;
-  url: string;
-  imageUrl: string | null;
   matchConfidence: number;
   score: number;
-  tierLabel: string;
-  tierLevel: string;
 }
-
-const madFmt = new Intl.NumberFormat('fr-MA');
 
 /** Eye toggle to follow/unfollow the card's model. */
 function WatchEye({
@@ -76,47 +62,18 @@ function DealCard({
   onToggleWatch: (modelId: string) => void;
 }) {
   return (
-    <article className="card">
-      <WatchEye
-        watching={watching}
-        label={`${deal.brand} ${deal.model}`}
-        onToggle={() => onToggleWatch(deal.modelId)}
-      />
-      {deal.imageUrl ? (
-        <img
-          className="card-media"
-          src={deal.imageUrl}
-          alt={`${deal.brand} ${deal.model}`}
-          loading="lazy"
+    <DealCardShell
+      data={deal}
+      scoreTitle={`Score ${deal.score}/100`}
+      matchPct={Math.round(deal.matchConfidence * 100)}
+      topRight={
+        <WatchEye
+          watching={watching}
+          label={`${deal.brand} ${deal.model}`}
+          onToggle={() => onToggleWatch(deal.modelId)}
         />
-      ) : (
-        <div className="card-media-empty">No image</div>
-      )}
-      <div className="card-body">
-        <div className="card-top">
-          <h3 className="card-title">
-            {deal.brand} {deal.model}
-          </h3>
-          <span className={`tag tag-${deal.tierLevel}`} title={`Score ${deal.score}/100`}>
-            {deal.tierLabel}
-          </span>
-        </div>
-        <div className="price">{madFmt.format(deal.priceMAD)} MAD</div>
-        <div className="meta">
-          <span>{deal.year ?? 'Year n/a'}</span>
-          <span>{deal.mileageKm !== null ? `${deal.mileageKm} km` : 'km n/a'}</span>
-          <span>{deal.city}</span>
-        </div>
-        <div className="badges">
-          <span className="badge">{deal.sourceId}</span>
-          <span className="badge">match {Math.round(deal.matchConfidence * 100)}%</span>
-        </div>
-        <a className="card-link" href={deal.url} target="_blank" rel="noopener noreferrer">
-          View listing
-          <ExternalLinkIcon className="icon-trail" size={15} />
-        </a>
-      </div>
-    </article>
+      }
+    />
   );
 }
 

@@ -1,13 +1,14 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../auth.js';
-import { getDashboardData, getHotDeals } from '../src/readModel.js';
+import { getDashboardData, getPublicDeals } from '../src/readModel.js';
 import type { ScoredListing } from '../src/domain/entities/ScoredListing.js';
 import { dealTier } from '../src/domain/services/dealTier.js';
-import { Landing, type PublicDeal } from './Landing.js';
+import { PublicHome } from './PublicHome.js';
 import { SearchSettings } from './SearchSettings.js';
 import { ScanNowButton } from './ScanNowButton.js';
 import { SiteHeader } from './SiteHeader.js';
 import { DealTabs, type DealView } from './DealTabs.js';
+import type { DealCardData } from './DealCardShell.js';
 
 // Reads the database on each request, so it must run on the Node runtime
 // and never be statically cached. maxDuration covers the admin "Scan now".
@@ -37,7 +38,7 @@ function toView(scored: ScoredListing): DealView {
   };
 }
 
-function toPublicDeal(scored: ScoredListing): PublicDeal {
+function toPublicDeal(scored: ScoredListing): DealCardData {
   const { listing, score, match } = scored;
   const tier = dealTier(score.total);
   return {
@@ -58,10 +59,10 @@ function toPublicDeal(scored: ScoredListing): PublicDeal {
 
 export default async function DashboardPage() {
   const session = await auth();
-  // Anonymous visitors get the public landing page (with a teaser of hot deals).
+  // Anonymous visitors can browse the full public deal feed (no login required).
   if (!session?.user?.id) {
-    const hot = await getHotDeals(6);
-    return <Landing hotDeals={hot.map(toPublicDeal)} />;
+    const deals = await getPublicDeals();
+    return <PublicHome deals={deals.map(toPublicDeal)} />;
   }
   const isAdmin = session.user.role === 'admin';
 
