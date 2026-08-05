@@ -6,10 +6,15 @@ import type { NewNotification } from './domain/entities/Notification.js';
 import type { ScoredListing } from './domain/entities/ScoredListing.js';
 import type { SearchRange } from './domain/entities/SearchCriteria.js';
 import { listingWithinRange } from './domain/services/rangeFilter.js';
+import {
+  EmailAlertProvider,
+  type DigestItem,
+} from './infrastructure/notifications/EmailAlertProvider.js';
 import { openDatabase } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlNotificationRepository } from './infrastructure/persistence/libsql/LibsqlNotificationRepository.js';
 import { LibsqlUserSearchRangeRepository } from './infrastructure/persistence/libsql/LibsqlUserSearchRangeRepository.js';
 import { DEFAULT_SEARCH_RANGE } from './settingsModel.js';
+import type { Env } from './config/env.js';
 
 const madFmt = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
 
@@ -86,10 +91,62 @@ export async function runUserAlerts(report: DailyReport): Promise<AlertOutcome> 
       (userId) => rangeByUser.get(userId) ?? DEFAULT_SEARCH_RANGE,
     );
     await notifications.insertMany(rows);
+    await sendPendingDigests(db, env, notifications);
     return { candidates: rows.length };
   } finally {
     db.close();
   }
+}
+
+/**
+ * Emails any not-yet-emailed notifications as one digest per user. No-ops when
+ * email isn't configured (in-app alerts stand alone). A failed send is logged
+ * and the rows stay pending, so the next scan retries them rather than losing
+ * the alert or crashing the scan.
+ */
+async function sendPendingDigests(
+  db: Client,
+  env: Env,
+  notifications: LibsqlNotificationRepository,
+): Promise<void> {
+  const provider = EmailAlertProvider.fromEnv(env);
+  if (!provider) return;
+
+  const grouped = await notifications.listUnemailedGroupedByUser();
+  if (grouped.size === 0) return;
+
+  const emails = await emailsFor(db, [...grouped.keys()]);
+  const items: DigestItem[] = [];
+  const sentIds: string[] = [];
+  for (const [userId, list] of grouped) {
+    const email = emails.get(userId);
+    if (!email) continue;
+    items.push({ email, notifications: list });
+    for (const n of list) sentIds.push(n.id);
+  }
+  if (items.length === 0) return;
+
+  try {
+    await provider.sendDigests(items);
+    await notifications.markEmailed(sentIds);
+  } catch (err) {
+    console.error('[alerts] failed to send email digests:', err);
+  }
+}
+
+/** userId -> email, for the given users. */
+async function emailsFor(db: Client, userIds: readonly string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (userIds.length === 0) return map;
+  const placeholders = userIds.map(() => '?').join(', ');
+  const result = await db.execute({
+    sql: `SELECT id, email FROM users WHERE id IN (${placeholders})`,
+    args: [...userIds],
+  });
+  for (const row of result.rows as unknown as { id: string; email: string }[]) {
+    map.set(row.id, row.email);
+  }
+  return map;
 }
 
 /** modelId -> userIds following it, for the given models. */
