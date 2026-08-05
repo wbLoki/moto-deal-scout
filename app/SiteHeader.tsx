@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { auth } from '../auth.js';
 import { countUnreadNotifications } from '../src/notificationsModel.js';
 import { signOutAction } from './auth-actions.js';
+import { ThemeToggle } from './ThemeToggle.js';
 import { BellIcon, MotoIcon } from './icons.js';
 
 /** Top bar: brand, nav (Admin link for admins), the signed-in email, and logout. */
@@ -17,6 +18,7 @@ export async function SiteHeader() {
         Moto Deal Scout
       </Link>
       <nav className="site-nav">
+        <ThemeToggle />
         {user ? (
           <>
             <Link
