@@ -1,11 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { MonitorIcon, MoonIcon, SunIcon } from './icons.js';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  MonitorIcon,
+  MoonIcon,
+  SunIcon,
+  type IconProps,
+} from './icons.js';
 
 type Theme = 'system' | 'light' | 'dark';
-const ORDER: Theme[] = ['system', 'light', 'dark'];
-const LABEL: Record<Theme, string> = { system: 'System', light: 'Light', dark: 'Dark' };
+
+const OPTIONS: { value: Theme; label: string; Icon: (p: IconProps) => ReactElement }[] = [
+  { value: 'system', label: 'System', Icon: MonitorIcon },
+  { value: 'light', label: 'Light', Icon: SunIcon },
+  { value: 'dark', label: 'Dark', Icon: MoonIcon },
+];
 
 /**
  * Applies a theme choice: "system" removes the override so the CSS
@@ -34,40 +45,78 @@ function readTheme(): Theme {
   return 'system';
 }
 
-/** Header button cycling System → Light → Dark. Default is System. */
+/** Header dropdown to choose System / Light / Dark. Default is System. */
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>('system');
   const [mounted, setMounted] = useState(false);
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
     setTheme(readTheme());
   }, []);
 
-  const cycle = () => {
-    const next = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length] ?? 'system';
-    setTheme(next);
-    applyTheme(next);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const select = (value: Theme) => {
+    setTheme(value);
+    applyTheme(value);
+    setOpen(false);
   };
 
-  // Render a stable icon until mounted so server and first client render match.
-  const Icon = !mounted
-    ? MonitorIcon
-    : theme === 'light'
-      ? SunIcon
-      : theme === 'dark'
-        ? MoonIcon
-        : MonitorIcon;
+  // Stable icon/label until mounted so server and first client render match.
+  const current = OPTIONS.find((o) => o.value === theme) ?? OPTIONS[0]!;
+  const CurrentIcon = mounted ? current.Icon : MonitorIcon;
+  const currentLabel = mounted ? current.label : 'System';
 
   return (
-    <button
-      type="button"
-      className="theme-toggle"
-      onClick={cycle}
-      title={`Theme: ${LABEL[theme]} (click to change)`}
-      aria-label={`Theme: ${LABEL[theme]}. Click to change.`}
-    >
-      <Icon size={18} />
-    </button>
+    <div className="theme-menu-wrap" ref={wrapRef}>
+      <button
+        type="button"
+        className="theme-toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Theme: ${currentLabel}`}
+        title={`Theme: ${currentLabel}`}
+      >
+        <CurrentIcon size={18} />
+        <ChevronDownIcon size={14} />
+      </button>
+
+      {open && (
+        <div className="theme-menu" role="menu">
+          {OPTIONS.map(({ value, label, Icon }) => (
+            <button
+              key={value}
+              type="button"
+              role="menuitemradio"
+              aria-checked={theme === value}
+              className="theme-menu-item"
+              onClick={() => select(value)}
+            >
+              <Icon size={16} />
+              <span>{label}</span>
+              {theme === value && <CheckIcon size={15} className="check" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

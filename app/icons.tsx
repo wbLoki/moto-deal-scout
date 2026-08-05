@@ -6,7 +6,7 @@
  */
 import type { ReactNode, SVGProps } from 'react';
 
-type IconProps = SVGProps<SVGSVGElement> & { size?: number | string };
+export type IconProps = SVGProps<SVGSVGElement> & { size?: number | string };
 
 function Icon({ size = '1em', className, children, ...rest }: IconProps & { children: ReactNode }) {
   return (
@@ -39,6 +39,24 @@ export function MotoIcon(props: IconProps) {
       <path d="M8 14l1.5-4H14l2 3" />
       <path d="M14 10l2-2h2.5" />
       <path d="M16 13l3 3" />
+    </Icon>
+  );
+}
+
+/** Chevron down — dropdown affordance. */
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </Icon>
+  );
+}
+
+/** Check — selected menu item. */
+export function CheckIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M20 6 9 17l-5-5" />
     </Icon>
   );
 }

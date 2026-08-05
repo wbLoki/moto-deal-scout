@@ -1415,13 +1415,18 @@ a {
   gap: 0.6rem;
 }
 
-/* Theme (dark/light/system) toggle */
+/* Theme (dark/light/system) dropdown */
+.theme-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
 .theme-toggle {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 34px;
+  gap: 0.2rem;
   height: 34px;
+  padding: 0 0.45rem;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--panel);
@@ -1435,4 +1440,48 @@ a {
 .theme-toggle:hover {
   color: var(--text);
   border-color: var(--accent);
+}
+
+.theme-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 150px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.3rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+}
+
+.theme-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.theme-menu-item:hover {
+  background: var(--panel-2);
+}
+
+.theme-menu-item[aria-checked='true'] {
+  color: var(--accent);
+}
+
+.theme-menu-item .check {
+  margin-left: auto;
+  color: var(--accent);
 }
