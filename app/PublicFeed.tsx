@@ -1,25 +1,38 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import { DealCardShell, type DealCardData } from './DealCardShell.js';
 import { DealSearchBar, matchesQuery } from './DealSearchBar.js';
-import { EyeIcon } from './icons.js';
+import { SignInModal } from './SignInModal.js';
+import { BookmarkIcon, EyeIcon } from './icons.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-/** Anonymous stand-in for the watch eye: nudges the visitor to sign up. */
-function SignInToFollow() {
+/**
+ * The members-only controls as they appear for anonymous visitors: clicking
+ * either prompts sign-in rather than navigating away.
+ */
+function PublicCardActions({ onNeedSignIn }: { onNeedSignIn: (feature: string) => void }) {
   return (
     <div className="card-actions">
-      <Link
-        href="/signup"
+      <button
+        type="button"
         className="watch-eye"
-        title="Sign in to follow this model and get deal alerts"
-        aria-label="Sign in to follow this model"
+        title="Follow this model"
+        aria-label="Follow this model"
+        onClick={() => onNeedSignIn('follow models')}
       >
         <EyeIcon size={18} />
-      </Link>
+      </button>
+      <button
+        type="button"
+        className="watch-eye"
+        title="Save this bike"
+        aria-label="Save this bike"
+        onClick={() => onNeedSignIn('save bikes')}
+      >
+        <BookmarkIcon size={16} />
+      </button>
     </div>
   );
 }
@@ -39,6 +52,7 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
     [deals],
   );
 
+  const [signInFeature, setSignInFeature] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [budgetMin, setBudgetMin] = useState(0);
   const [budgetMax, setBudgetMax] = useState(priceCap);
@@ -128,10 +142,16 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
       ) : (
         <div className="grid">
           {filtered.map((deal) => (
-            <DealCardShell key={deal.key} data={deal} topRight={<SignInToFollow />} />
+            <DealCardShell
+              key={deal.key}
+              data={deal}
+              topRight={<PublicCardActions onNeedSignIn={setSignInFeature} />}
+            />
           ))}
         </div>
       )}
+
+      <SignInModal feature={signInFeature} onClose={() => setSignInFeature(null)} />
     </>
   );
 }
