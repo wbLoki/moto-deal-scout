@@ -46,6 +46,7 @@ describe('ConsoleNotificationProvider', () => {
       totalListingsScanned: 0,
       newListingsSeen: 0,
       goodDeals: [],
+      priceDrops: [],
     };
     await provider.sendDailyReport(report);
     expect(logSpy).toHaveBeenCalled();

@@ -69,6 +69,7 @@ describe('DiscordNotificationProvider', () => {
       totalListingsScanned: 10,
       newListingsSeen: 2,
       goodDeals: [],
+      priceDrops: [],
     };
     await provider.sendDailyReport(report);
     expect(fetchMock).toHaveBeenCalledTimes(1);

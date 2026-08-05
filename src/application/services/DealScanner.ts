@@ -1,5 +1,9 @@
 import type { Logger } from 'pino';
-import type { DailyReport, SourceRunSummary } from '../../domain/entities/DailyReport.js';
+import type {
+  DailyReport,
+  PriceDrop,
+  SourceRunSummary,
+} from '../../domain/entities/DailyReport.js';
 import type { Listing } from '../../domain/entities/Listing.js';
 import type { ScoredListing } from '../../domain/entities/ScoredListing.js';
 import type { SearchCriteria } from '../../domain/entities/SearchCriteria.js';
@@ -44,9 +48,13 @@ export class DealScanner {
     this.scorer = deps.scorer ?? new ListingScorer();
   }
 
+  /** Price drops found on already-seen listings during the current scan. */
+  private priceDrops: PriceDrop[] = [];
+
   async scan(): Promise<DailyReport> {
     const sourceSummaries: SourceRunSummary[] = [];
     const newlyScored: ScoredListing[] = [];
+    this.priceDrops = [];
     let totalScanned = 0;
 
     for (const source of this.sources) {
@@ -58,7 +66,12 @@ export class DealScanner {
 
     const goodDeals = newlyScored.filter((s) => s.isGoodDeal);
     this.logger.info(
-      { totalScanned, newListings: newlyScored.length, goodDeals: goodDeals.length },
+      {
+        totalScanned,
+        newListings: newlyScored.length,
+        goodDeals: goodDeals.length,
+        priceDrops: this.priceDrops.length,
+      },
       'scan complete',
     );
 
@@ -68,6 +81,7 @@ export class DealScanner {
       totalListingsScanned: totalScanned,
       newListingsSeen: newlyScored.length,
       goodDeals,
+      priceDrops: this.priceDrops,
     };
   }
 
@@ -115,7 +129,10 @@ export class DealScanner {
     if (!this.isPlausiblePrice(listing, model)) return undefined;
 
     const alreadySeen = await this.repository.hasSeen(listing.sourceId, listing.externalId);
-    if (alreadySeen) return undefined;
+    if (alreadySeen) {
+      await this.checkPriceDrop(listing, model);
+      return undefined;
+    }
 
     const confidence = this.matcher.matchAgainst(listing.title, model);
     if (confidence < this.criteria.global.minModelMatchConfidence) return undefined;
@@ -130,6 +147,33 @@ export class DealScanner {
 
     await this.repository.save(result);
     return result;
+  }
+
+  /**
+   * For a listing we've already stored, note it if the seller lowered the
+   * price: update the stored row and record a PriceDrop for alerting. Only
+   * drops (new < old) are recorded; re-listings at the same or higher price
+   * are ignored.
+   */
+  private async checkPriceDrop(
+    listing: Listing,
+    model: SearchCriteria['models'][number],
+  ): Promise<void> {
+    const stored = await this.repository.getStoredPrice(listing.sourceId, listing.externalId);
+    if (stored === undefined || listing.priceMAD >= stored) return;
+
+    await this.repository.recordPriceDrop(
+      listing.sourceId,
+      listing.externalId,
+      listing.priceMAD,
+      stored,
+    );
+    this.priceDrops.push({
+      listing,
+      model,
+      oldPriceMAD: stored,
+      newPriceMAD: listing.priceMAD,
+    });
   }
 
   private isWithinAcceptableAge(listing: Listing): boolean {

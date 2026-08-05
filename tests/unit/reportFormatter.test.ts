@@ -34,6 +34,7 @@ describe('formatDailyReportText', () => {
       totalListingsScanned: 5,
       newListingsSeen: 0,
       goodDeals: [],
+      priceDrops: [],
     };
     const text = formatDailyReportText(report);
     expect(text).toContain('No good deals today.');
@@ -46,6 +47,7 @@ describe('formatDailyReportText', () => {
       totalListingsScanned: 3,
       newListingsSeen: 1,
       goodDeals: [buildScored()],
+      priceDrops: [],
     };
     const text = formatDailyReportText(report);
     expect(text).toContain('1 good deal(s)');

@@ -1,7 +1,7 @@
 import type { Client } from '@libsql/client';
 import { loadEnv } from './config/env.js';
 import { resolveDatabaseConfig } from './container.js';
-import type { DailyReport } from './domain/entities/DailyReport.js';
+import type { DailyReport, PriceDrop } from './domain/entities/DailyReport.js';
 import type { NewNotification } from './domain/entities/Notification.js';
 import type { ScoredListing } from './domain/entities/ScoredListing.js';
 import type { SearchRange } from './domain/entities/SearchCriteria.js';
@@ -20,6 +20,14 @@ const madFmt = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
 
 function dealTitle(d: ScoredListing): string {
   return `${d.match.criteria.brand} ${d.match.criteria.model} — ${madFmt.format(d.listing.priceMAD)} MAD`;
+}
+
+function dropTitle(d: PriceDrop): string {
+  return `${d.model.brand} ${d.model.model} — ${madFmt.format(d.newPriceMAD)} MAD`;
+}
+
+function listingKey(sourceId: string, externalId: string): string {
+  return `${sourceId}:${externalId}`;
 }
 
 /**
@@ -54,6 +62,42 @@ export function newDealNotifications(
   return rows;
 }
 
+/**
+ * Pure fan-out for price drops. Savers of the exact listing are always
+ * alerted (they explicitly bookmarked it); watchers of the model are alerted
+ * only when the (now cheaper) listing sits inside their saved range.
+ */
+export function priceDropNotifications(
+  drops: readonly PriceDrop[],
+  watchersByModel: ReadonlyMap<string, readonly string[]>,
+  saversByListing: ReadonlyMap<string, readonly string[]>,
+  rangeFor: (userId: string) => SearchRange,
+): NewNotification[] {
+  const rows: NewNotification[] = [];
+  for (const drop of drops) {
+    const key = listingKey(drop.listing.sourceId, drop.listing.externalId);
+    const recipients = new Set<string>(saversByListing.get(key) ?? []);
+    for (const userId of watchersByModel.get(drop.model.id) ?? []) {
+      if (listingWithinRange(drop.listing, rangeFor(userId))) recipients.add(userId);
+    }
+    for (const userId of recipients) {
+      rows.push({
+        userId,
+        type: 'price_drop',
+        sourceId: drop.listing.sourceId,
+        externalId: drop.listing.externalId,
+        modelId: drop.model.id,
+        priceMAD: drop.newPriceMAD,
+        oldPriceMAD: drop.oldPriceMAD,
+        url: drop.listing.url,
+        imageUrl: drop.listing.imageUrl ?? null,
+        title: dropTitle(drop),
+      });
+    }
+  }
+  return rows;
+}
+
 export interface AlertOutcome {
   /** Notification rows built and offered to the store (dedup may drop some). */
   readonly candidates: number;
@@ -66,7 +110,9 @@ export interface AlertOutcome {
  * layered on in a later phase.
  */
 export async function runUserAlerts(report: DailyReport): Promise<AlertOutcome> {
-  if (report.goodDeals.length === 0) return { candidates: 0 };
+  if (report.goodDeals.length === 0 && report.priceDrops.length === 0) {
+    return { candidates: 0 };
+  }
 
   const env = loadEnv();
   const db = await openDatabase(resolveDatabaseConfig(env));
@@ -74,8 +120,15 @@ export async function runUserAlerts(report: DailyReport): Promise<AlertOutcome> 
     const notifications = new LibsqlNotificationRepository(db);
     const rangeRepo = new LibsqlUserSearchRangeRepository(db);
 
-    const modelIds = [...new Set(report.goodDeals.map((d) => d.match.criteria.id))];
+    // Watchers of every model touched by a new deal or a price drop.
+    const modelIds = [
+      ...new Set([
+        ...report.goodDeals.map((d) => d.match.criteria.id),
+        ...report.priceDrops.map((d) => d.model.id),
+      ]),
+    ];
     const watchersByModel = await watchersOf(db, modelIds);
+    const saversByListing = await saversOf(db, report.priceDrops);
 
     // Resolve every involved watcher's range up front, then fan out purely.
     const userIds = new Set<string>();
@@ -84,12 +137,13 @@ export async function runUserAlerts(report: DailyReport): Promise<AlertOutcome> 
     for (const userId of userIds) {
       rangeByUser.set(userId, (await rangeRepo.get(userId)) ?? DEFAULT_SEARCH_RANGE);
     }
+    const rangeFor = (userId: string): SearchRange =>
+      rangeByUser.get(userId) ?? DEFAULT_SEARCH_RANGE;
 
-    const rows = newDealNotifications(
-      report.goodDeals,
-      watchersByModel,
-      (userId) => rangeByUser.get(userId) ?? DEFAULT_SEARCH_RANGE,
-    );
+    const rows = [
+      ...newDealNotifications(report.goodDeals, watchersByModel, rangeFor),
+      ...priceDropNotifications(report.priceDrops, watchersByModel, saversByListing, rangeFor),
+    ];
     await notifications.insertMany(rows);
     await sendPendingDigests(db, env, notifications);
     return { candidates: rows.length };
@@ -162,6 +216,29 @@ async function watchersOf(db: Client, modelIds: readonly string[]): Promise<Map<
     const list = map.get(row.model_id) ?? [];
     list.push(row.user_id);
     map.set(row.model_id, list);
+  }
+  return map;
+}
+
+/** "sourceId:externalId" -> userIds who saved that listing, for the dropped listings. */
+async function saversOf(db: Client, drops: readonly PriceDrop[]): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  if (drops.length === 0) return map;
+  const clauses = drops.map(() => '(source_id = ? AND external_id = ?)').join(' OR ');
+  const args = drops.flatMap((d) => [d.listing.sourceId, d.listing.externalId]);
+  const result = await db.execute({
+    sql: `SELECT user_id, source_id, external_id FROM user_saved_listings WHERE ${clauses}`,
+    args,
+  });
+  for (const row of result.rows as unknown as {
+    user_id: string;
+    source_id: string;
+    external_id: string;
+  }[]) {
+    const key = listingKey(row.source_id, row.external_id);
+    const list = map.get(key) ?? [];
+    list.push(row.user_id);
+    map.set(key, list);
   }
   return map;
 }

@@ -38,14 +38,26 @@ class FakeSource implements MarketplaceSource {
 class InMemoryRepository implements ListingRepository {
   readonly saved: ScoredListing[] = [];
   private readonly seen = new Set<string>();
+  private readonly prices = new Map<string, number>();
 
   hasSeen(sourceId: MarketplaceId, externalId: string): Promise<boolean> {
     return Promise.resolve(this.seen.has(`${sourceId}:${externalId}`));
   }
 
   save(scored: ScoredListing): Promise<void> {
-    this.seen.add(`${scored.listing.sourceId}:${scored.listing.externalId}`);
+    const key = `${scored.listing.sourceId}:${scored.listing.externalId}`;
+    this.seen.add(key);
+    this.prices.set(key, scored.listing.priceMAD);
     this.saved.push(scored);
+    return Promise.resolve();
+  }
+
+  getStoredPrice(sourceId: MarketplaceId, externalId: string): Promise<number | undefined> {
+    return Promise.resolve(this.prices.get(`${sourceId}:${externalId}`));
+  }
+
+  recordPriceDrop(sourceId: MarketplaceId, externalId: string, newPriceMAD: number): Promise<void> {
+    this.prices.set(`${sourceId}:${externalId}`, newPriceMAD);
     return Promise.resolve();
   }
 
@@ -134,6 +146,49 @@ describe('DealScanner', () => {
     const report = await scanner.scan();
 
     expect(report.newListingsSeen).toBe(0);
+  });
+
+  it('records a price drop when an already-seen listing gets cheaper', async () => {
+    const criteria = buildCriteria();
+    const source = new FakeSource('avito', 'Avito.ma', [
+      [makeListing({ externalId: '1', priceMAD: 70000 })],
+      [makeListing({ externalId: '1', priceMAD: 62000 })],
+    ]);
+    const scanner = new DealScanner({
+      sources: [source],
+      repository,
+      criteria,
+      logger: silentLogger,
+    });
+
+    const first = await scanner.scan();
+    expect(first.priceDrops).toHaveLength(0);
+
+    const second = await scanner.scan();
+    expect(second.newListingsSeen).toBe(0);
+    expect(second.priceDrops).toHaveLength(1);
+    expect(second.priceDrops[0]).toMatchObject({ oldPriceMAD: 70000, newPriceMAD: 62000 });
+    expect(await repository.getStoredPrice('avito', '1')).toBe(62000);
+  });
+
+  it('does not record a price drop when the price is unchanged or higher', async () => {
+    const criteria = buildCriteria();
+    const source = new FakeSource('avito', 'Avito.ma', [
+      [makeListing({ externalId: '1', priceMAD: 70000 })],
+      [makeListing({ externalId: '1', priceMAD: 75000 })],
+    ]);
+    const scanner = new DealScanner({
+      sources: [source],
+      repository,
+      criteria,
+      logger: silentLogger,
+    });
+
+    await scanner.scan();
+    const second = await scanner.scan();
+
+    expect(second.priceDrops).toHaveLength(0);
+    expect(await repository.getStoredPrice('avito', '1')).toBe(70000);
   });
 
   it('drops listings whose title does not plausibly match the wanted model', async () => {

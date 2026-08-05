@@ -18,6 +18,7 @@ export class DailyReportService {
       totalListingsScanned: 0,
       newListingsSeen: goodDeals.length,
       goodDeals,
+      priceDrops: [],
     };
   }
 }

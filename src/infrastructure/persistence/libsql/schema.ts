@@ -32,6 +32,7 @@ export const MIGRATIONS: readonly string[] = [
     score_total       INTEGER NOT NULL,
     score_reasons     TEXT    NOT NULL,
     is_good_deal      INTEGER NOT NULL,
+    previous_price_mad REAL,
     created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     PRIMARY KEY (source_id, external_id)
   )`,
@@ -156,6 +157,7 @@ export const ADDITIVE_COLUMNS: ReadonlyArray<{
   { table: 'models', column: 'auto_calibrate', definition: 'INTEGER NOT NULL DEFAULT 1' },
   { table: 'models', column: 'calibrated_at', definition: 'TEXT' },
   { table: 'models', column: 'calibrated_samples', definition: 'INTEGER' },
+  { table: 'listings', column: 'previous_price_mad', definition: 'REAL' },
 ];
 
 /**
