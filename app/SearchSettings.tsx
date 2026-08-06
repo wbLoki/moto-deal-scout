@@ -3,8 +3,9 @@
 import { useState, useTransition } from 'react';
 import type { SearchRange } from '../src/domain/entities/SearchCriteria.js';
 import { saveSearchRangeAction, type ActionResult } from './actions.js';
+import { yearOptions } from './dealFilters.js';
 
-const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = yearOptions();
 
 export function SearchSettings({ current }: { current: SearchRange }) {
   const [budgetMin, setBudgetMin] = useState(current.budgetMin);
@@ -62,23 +63,23 @@ export function SearchSettings({ current }: { current: SearchRange }) {
           <legend>Model year</legend>
           <label>
             <span>From</span>
-            <input
-              type="number"
-              min={1980}
-              max={CURRENT_YEAR + 1}
-              value={yearMin}
-              onChange={(e) => setYearMin(Number(e.target.value))}
-            />
+            <select value={yearMin} onChange={(e) => setYearMin(Number(e.target.value))}>
+              {YEARS.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             <span>To</span>
-            <input
-              type="number"
-              min={1980}
-              max={CURRENT_YEAR + 1}
-              value={yearMax}
-              onChange={(e) => setYearMax(Number(e.target.value))}
-            />
+            <select value={yearMax} onChange={(e) => setYearMax(Number(e.target.value))}>
+              {YEARS.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
           </label>
         </fieldset>
       </div>

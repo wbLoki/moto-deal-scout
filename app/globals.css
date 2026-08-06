@@ -182,7 +182,8 @@ a {
   color: var(--muted);
 }
 
-.field-group input {
+.field-group input,
+.field-group select {
   width: 8rem;
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -192,7 +193,8 @@ a {
   font-size: 0.95rem;
 }
 
-.field-group input:focus {
+.field-group input:focus,
+.field-group select:focus {
   outline: none;
   border-color: var(--accent);
 }
@@ -1572,6 +1574,39 @@ a {
   gap: 0.2rem;
   font-size: 0.78rem;
   color: var(--muted);
+}
+
+/* Filters header + reset */
+.filters-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.filters-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.filters-reset {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.2rem 0.3rem;
+  border-radius: 6px;
+}
+
+.filters-reset:hover {
+  text-decoration: underline;
 }
 
 /* Pagination */

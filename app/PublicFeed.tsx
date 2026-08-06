@@ -7,10 +7,21 @@ import { SortSelect } from './SortSelect.js';
 import { Pagination } from './Pagination.js';
 import { SignInModal } from './SignInModal.js';
 import { DEFAULT_SORT, PAGE_SIZE, sortDeals, type SortKey } from './dealSort.js';
-import { matchesCity, mileageCap, uniqueCities, withinKm } from './dealFilters.js';
+import {
+  MIN_YEAR,
+  matchesBrand,
+  matchesCity,
+  mileageCap,
+  uniqueBrands,
+  uniqueCities,
+  withinKm,
+  yearOptions,
+} from './dealFilters.js';
 import { BookmarkIcon, EyeIcon } from './icons.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
+const MAX_YEAR = CURRENT_YEAR + 1;
+const YEARS = yearOptions();
 
 /**
  * The members-only controls as they appear for anonymous visitors: clicking
@@ -57,20 +68,34 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
   );
   const kmCap = useMemo(() => mileageCap(deals), [deals]);
   const cities = useMemo(() => uniqueCities(deals), [deals]);
+  const brands = useMemo(() => uniqueBrands(deals), [deals]);
 
   const [signInFeature, setSignInFeature] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
   const [budgetMin, setBudgetMin] = useState(0);
   const [budgetMax, setBudgetMax] = useState(priceCap);
-  const [yearMin, setYearMin] = useState(2000);
-  const [yearMax, setYearMax] = useState(CURRENT_YEAR + 1);
+  const [yearMin, setYearMin] = useState(MIN_YEAR);
+  const [yearMax, setYearMax] = useState(MAX_YEAR);
   const [kmMin, setKmMin] = useState(0);
   const [kmMax, setKmMax] = useState(kmCap);
   const [city, setCity] = useState('');
+  const [brand, setBrand] = useState('');
   const [page, setPage] = useState(1);
 
   const invalid = budgetMax < budgetMin || yearMax < yearMin || kmMax < kmMin;
+
+  const resetFilters = () => {
+    setQuery('');
+    setBudgetMin(0);
+    setBudgetMax(priceCap);
+    setYearMin(MIN_YEAR);
+    setYearMax(MAX_YEAR);
+    setKmMin(0);
+    setKmMax(kmCap);
+    setCity('');
+    setBrand('');
+  };
 
   const visible = useMemo(() => {
     if (invalid) return [];
@@ -79,15 +104,29 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
       if (d.year !== null && (d.year < yearMin || d.year > yearMax)) return false;
       if (!withinKm(d.mileageKm, kmMin, kmMax)) return false;
       if (!matchesCity(d.city, city)) return false;
+      if (!matchesBrand(d.brand, brand)) return false;
       return matchesQuery(d, query);
     });
     return sortDeals(filtered, sort);
-  }, [deals, budgetMin, budgetMax, yearMin, yearMax, kmMin, kmMax, city, query, sort, invalid]);
+  }, [
+    deals,
+    budgetMin,
+    budgetMax,
+    yearMin,
+    yearMax,
+    kmMin,
+    kmMax,
+    city,
+    brand,
+    query,
+    sort,
+    invalid,
+  ]);
 
   // Any change to the result set or ordering returns to the first page.
   useEffect(() => {
     setPage(1);
-  }, [budgetMin, budgetMax, yearMin, yearMax, kmMin, kmMax, city, query, sort]);
+  }, [budgetMin, budgetMax, yearMin, yearMax, kmMin, kmMax, city, brand, query, sort]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const clampedPage = Math.min(page, pageCount);
@@ -98,6 +137,13 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
       <aside className="browse-sidebar">
         <DealSearchBar value={query} onChange={setQuery} />
         <SortSelect value={sort} onChange={setSort} />
+
+        <div className="filters-head">
+          <h3 className="filters-title">Filters</h3>
+          <button type="button" className="filters-reset" onClick={resetFilters}>
+            Reset
+          </button>
+        </div>
 
         <div className="sidebar-section">
           <h3 className="sidebar-title">Budget (MAD)</h3>
@@ -130,23 +176,23 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
           <div className="sidebar-row">
             <label>
               <span>From</span>
-              <input
-                type="number"
-                min={1980}
-                max={CURRENT_YEAR + 1}
-                value={yearMin}
-                onChange={(e) => setYearMin(Number(e.target.value))}
-              />
+              <select value={yearMin} onChange={(e) => setYearMin(Number(e.target.value))}>
+                {YEARS.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               <span>To</span>
-              <input
-                type="number"
-                min={1980}
-                max={CURRENT_YEAR + 1}
-                value={yearMax}
-                onChange={(e) => setYearMax(Number(e.target.value))}
-              />
+              <select value={yearMax} onChange={(e) => setYearMax(Number(e.target.value))}>
+                {YEARS.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         </div>
@@ -176,6 +222,18 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
             </label>
           </div>
         </div>
+
+        <label className="sidebar-select">
+          <span>Brand</span>
+          <select value={brand} onChange={(e) => setBrand(e.target.value)}>
+            <option value="">All brands</option>
+            {brands.map((b) => (
+              <option key={b.value} value={b.value}>
+                {b.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <label className="sidebar-select">
           <span>City</span>
