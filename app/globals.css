@@ -22,8 +22,10 @@
   --accent: #ff7a1a;
   --accent-2: #ff9a4d;
   --accent-strong: #ef6a10;
+  /* Deeper orange for FILLED surfaces (buttons, hot tag) so white text is crisp. */
+  --accent-solid: #e8620c;
   --accent-dim: rgba(255, 122, 26, 0.15);
-  --on-accent: #1c1206;
+  --on-accent: #ffffff;
 
   /* Semantic */
   --good: #35d07f;
@@ -62,6 +64,7 @@
     --accent: #ee6a0c;
     --accent-2: #ff8a3a;
     --accent-strong: #d85e08;
+    --accent-solid: #d35a08;
     --accent-dim: rgba(238, 106, 12, 0.12);
     --good: #12a150;
     --info: #2f6fed;
@@ -88,6 +91,7 @@
   --accent: #ee6a0c;
   --accent-2: #ff8a3a;
   --accent-strong: #d85e08;
+  --accent-solid: #d35a08;
   --accent-dim: rgba(238, 106, 12, 0.12);
   --good: #12a150;
   --info: #2f6fed;
@@ -202,7 +206,7 @@ textarea:focus-visible,
   gap: 0.4rem;
   background: var(--panel-2);
   color: var(--text);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: 0.6rem 1.1rem;
   font-size: 0.9rem;
@@ -216,7 +220,7 @@ textarea:focus-visible,
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--border-strong);
+  border-color: var(--accent);
   background: var(--elev);
 }
 
@@ -230,17 +234,19 @@ textarea:focus-visible,
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--accent-solid);
   border-color: transparent;
-  color: var(--on-accent);
-  box-shadow: 0 6px 16px rgba(255, 122, 26, 0.28);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 6px 16px rgba(232, 98, 12, 0.3);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-2);
+  background: var(--accent-strong);
   border-color: transparent;
+  filter: brightness(1.06);
   transform: translateY(-1px);
-  box-shadow: 0 10px 22px rgba(255, 122, 26, 0.34);
+  box-shadow: 0 10px 22px rgba(232, 98, 12, 0.38);
 }
 
 .btn-small {
@@ -615,9 +621,9 @@ textarea:focus-visible,
 }
 
 .tag-hot {
-  background: var(--accent);
-  color: var(--on-accent);
-  box-shadow: 0 3px 10px rgba(255, 122, 26, 0.3);
+  background: var(--accent-solid);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(232, 98, 12, 0.32);
 }
 
 .tag-great {
@@ -918,9 +924,9 @@ textarea:focus-visible,
 }
 
 .page-btn.active {
-  background: var(--accent);
+  background: var(--accent-solid);
   border-color: transparent;
-  color: var(--on-accent);
+  color: #fff;
 }
 
 .page-btn:disabled {
@@ -1219,8 +1225,8 @@ textarea:focus-visible,
   height: 17px;
   padding: 0 4px;
   border-radius: var(--pill);
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--accent-solid);
+  color: #fff;
   font-size: 0.65rem;
   font-weight: 800;
   line-height: 17px;
