@@ -10,13 +10,16 @@ import { SortSelect } from './SortSelect.js';
 import { Pagination } from './Pagination.js';
 import { DEFAULT_SORT, PAGE_SIZE, sortDeals, type SortKey } from './dealSort.js';
 import {
+  RATING_OPTIONS,
   matchesBrand,
   matchesCity,
+  matchesRating,
   mileageCap,
   uniqueBrands,
   uniqueCities,
   withinKm,
 } from './dealFilters.js';
+import { MultiSelect } from './MultiSelect.js';
 import { BookmarkIcon } from './icons.js';
 
 /** Flat, fully-serializable view of a scored listing for the client. */
@@ -151,19 +154,21 @@ export function DealTabs({
   const [page, setPage] = useState(1);
 
   const kmCap = useMemo(() => mileageCap(all), [all]);
-  const cities = useMemo(() => uniqueCities(all), [all]);
-  const brands = useMemo(() => uniqueBrands(all), [all]);
+  const cityOptions = useMemo(() => uniqueCities(all), [all]);
+  const brandOptions = useMemo(() => uniqueBrands(all), [all]);
   const [kmMin, setKmMin] = useState(0);
   const [kmMax, setKmMax] = useState(kmCap);
-  const [city, setCity] = useState('');
-  const [brand, setBrand] = useState('');
+  const [ratings, setRatings] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [brandsSel, setBrandsSel] = useState<string[]>([]);
 
   const resetFilters = () => {
     setQuery('');
     setKmMin(0);
     setKmMax(kmCap);
-    setCity('');
-    setBrand('');
+    setRatings([]);
+    setCities([]);
+    setBrandsSel([]);
   };
 
   const watchedDeals = useMemo(() => all.filter((d) => watched.has(d.modelId)), [all, watched]);
@@ -216,16 +221,17 @@ export function DealTabs({
       (d) =>
         matchesQuery(d, query) &&
         withinKm(d.mileageKm, kmMin, kmMax) &&
-        matchesCity(d.city, city) &&
-        matchesBrand(d.brand, brand),
+        matchesRating(d.tierLevel, ratings) &&
+        matchesCity(d.city, cities) &&
+        matchesBrand(d.brand, brandsSel),
     );
     return sortDeals(filtered, sort);
-  }, [activeDeals, query, sort, kmMin, kmMax, city, brand, kmInvalid]);
+  }, [activeDeals, query, sort, kmMin, kmMax, ratings, cities, brandsSel, kmInvalid]);
 
   // Return to page 1 whenever the tab, search, ordering or filters change.
   useEffect(() => {
     setPage(1);
-  }, [active, query, sort, kmMin, kmMax, city, brand]);
+  }, [active, query, sort, kmMin, kmMax, ratings, cities, brandsSel]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const clampedPage = Math.min(page, pageCount);
@@ -292,29 +298,29 @@ export function DealTabs({
           </div>
         </div>
 
-        <label className="sidebar-select">
-          <span>Brand</span>
-          <select value={brand} onChange={(e) => setBrand(e.target.value)}>
-            <option value="">All brands</option>
-            {brands.map((b) => (
-              <option key={b.value} value={b.value}>
-                {b.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <MultiSelect
+          label="Deal rating"
+          options={RATING_OPTIONS}
+          selected={ratings}
+          onChange={setRatings}
+          allLabel="All ratings"
+        />
 
-        <label className="sidebar-select">
-          <span>City</span>
-          <select value={city} onChange={(e) => setCity(e.target.value)}>
-            <option value="">All cities</option>
-            {cities.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <MultiSelect
+          label="Brand"
+          options={brandOptions}
+          selected={brandsSel}
+          onChange={setBrandsSel}
+          allLabel="All brands"
+        />
+
+        <MultiSelect
+          label="City"
+          options={cityOptions}
+          selected={cities}
+          onChange={setCities}
+          allLabel="All cities"
+        />
 
         {kmInvalid && <p className="settings-error">Max must be greater than or equal to min.</p>}
       </aside>

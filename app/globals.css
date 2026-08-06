@@ -755,12 +755,14 @@ textarea:focus-visible,
   margin: 0;
 }
 
+/* Stack the saved-range fieldsets and let each take the sidebar's full width. */
 .browse-sidebar .settings-grid {
-  grid-template-columns: 1fr;
+  flex-direction: column;
+  gap: 0.9rem;
 }
 
-/* Saved-range fields go fluid so they fit the narrow sidebar. */
 .browse-sidebar .field-group {
+  width: 100%;
   gap: 0.5rem;
   padding: 0.55rem 0.75rem 0.75rem;
 }
@@ -835,6 +837,95 @@ textarea:focus-visible,
   gap: 0.25rem;
   font-size: 0.75rem;
   color: var(--muted);
+}
+
+/* Multi-select dropdown (rating / brand / city) */
+.multiselect {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.multiselect-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.multiselect-btn:hover {
+  border-color: var(--border-strong);
+}
+
+.multiselect-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multiselect-value.on {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.multiselect-menu {
+  margin-top: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+
+.multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 0.4rem 0.45rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.multiselect-option:hover {
+  background: var(--panel);
+}
+
+.ms-check {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.ms-check.checked {
+  background: var(--accent-solid);
+  border-color: var(--accent-solid);
 }
 
 /* Filters header + reset */

@@ -9,14 +9,17 @@ import { SignInModal } from './SignInModal.js';
 import { DEFAULT_SORT, PAGE_SIZE, sortDeals, type SortKey } from './dealSort.js';
 import {
   MIN_YEAR,
+  RATING_OPTIONS,
   matchesBrand,
   matchesCity,
+  matchesRating,
   mileageCap,
   uniqueBrands,
   uniqueCities,
   withinKm,
   yearOptions,
 } from './dealFilters.js';
+import { MultiSelect } from './MultiSelect.js';
 import { BookmarkIcon, EyeIcon } from './icons.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -67,8 +70,6 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
     [deals],
   );
   const kmCap = useMemo(() => mileageCap(deals), [deals]);
-  const cities = useMemo(() => uniqueCities(deals), [deals]);
-  const brands = useMemo(() => uniqueBrands(deals), [deals]);
 
   const [signInFeature, setSignInFeature] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -79,9 +80,13 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
   const [yearMax, setYearMax] = useState(MAX_YEAR);
   const [kmMin, setKmMin] = useState(0);
   const [kmMax, setKmMax] = useState(kmCap);
-  const [city, setCity] = useState('');
-  const [brand, setBrand] = useState('');
+  const [ratings, setRatings] = useState<string[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [brandsSel, setBrandsSel] = useState<string[]>([]);
   const [page, setPage] = useState(1);
+
+  const cityOptions = useMemo(() => uniqueCities(deals), [deals]);
+  const brandOptions = useMemo(() => uniqueBrands(deals), [deals]);
 
   const invalid = budgetMax < budgetMin || yearMax < yearMin || kmMax < kmMin;
 
@@ -93,8 +98,9 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
     setYearMax(MAX_YEAR);
     setKmMin(0);
     setKmMax(kmCap);
-    setCity('');
-    setBrand('');
+    setRatings([]);
+    setCities([]);
+    setBrandsSel([]);
   };
 
   const visible = useMemo(() => {
@@ -103,8 +109,9 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
       if (d.priceMAD < budgetMin || d.priceMAD > budgetMax) return false;
       if (d.year !== null && (d.year < yearMin || d.year > yearMax)) return false;
       if (!withinKm(d.mileageKm, kmMin, kmMax)) return false;
-      if (!matchesCity(d.city, city)) return false;
-      if (!matchesBrand(d.brand, brand)) return false;
+      if (!matchesRating(d.tierLevel, ratings)) return false;
+      if (!matchesCity(d.city, cities)) return false;
+      if (!matchesBrand(d.brand, brandsSel)) return false;
       return matchesQuery(d, query);
     });
     return sortDeals(filtered, sort);
@@ -116,8 +123,9 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
     yearMax,
     kmMin,
     kmMax,
-    city,
-    brand,
+    ratings,
+    cities,
+    brandsSel,
     query,
     sort,
     invalid,
@@ -126,7 +134,19 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
   // Any change to the result set or ordering returns to the first page.
   useEffect(() => {
     setPage(1);
-  }, [budgetMin, budgetMax, yearMin, yearMax, kmMin, kmMax, city, brand, query, sort]);
+  }, [
+    budgetMin,
+    budgetMax,
+    yearMin,
+    yearMax,
+    kmMin,
+    kmMax,
+    ratings,
+    cities,
+    brandsSel,
+    query,
+    sort,
+  ]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const clampedPage = Math.min(page, pageCount);
@@ -223,29 +243,29 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
           </div>
         </div>
 
-        <label className="sidebar-select">
-          <span>Brand</span>
-          <select value={brand} onChange={(e) => setBrand(e.target.value)}>
-            <option value="">All brands</option>
-            {brands.map((b) => (
-              <option key={b.value} value={b.value}>
-                {b.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <MultiSelect
+          label="Deal rating"
+          options={RATING_OPTIONS}
+          selected={ratings}
+          onChange={setRatings}
+          allLabel="All ratings"
+        />
 
-        <label className="sidebar-select">
-          <span>City</span>
-          <select value={city} onChange={(e) => setCity(e.target.value)}>
-            <option value="">All cities</option>
-            {cities.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <MultiSelect
+          label="Brand"
+          options={brandOptions}
+          selected={brandsSel}
+          onChange={setBrandsSel}
+          allLabel="All brands"
+        />
+
+        <MultiSelect
+          label="City"
+          options={cityOptions}
+          selected={cities}
+          onChange={setCities}
+          allLabel="All cities"
+        />
 
         {invalid && <p className="settings-error">Max must be greater than or equal to min.</p>}
       </aside>

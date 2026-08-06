@@ -7,17 +7,31 @@ export function withinKm(mileageKm: number | null, min: number, max: number): bo
 }
 
 /**
- * City filter. The selected value is a lowercased key (or '' for all); matching
- * is case-insensitive so "Casablanca" and "CASABLANCA" are one city.
+ * City filter. `selected` is a list of lowercased city keys (empty = all);
+ * matching is case-insensitive so "Casablanca" and "CASABLANCA" are one city.
  */
-export function matchesCity(city: string, selected: string): boolean {
-  return selected === '' || city.trim().toLowerCase() === selected;
+export function matchesCity(city: string, selected: readonly string[]): boolean {
+  return selected.length === 0 || selected.includes(city.trim().toLowerCase());
 }
 
-/** Brand filter, matched case-insensitively against the lowercased key. */
-export function matchesBrand(brand: string, selected: string): boolean {
-  return selected === '' || brand.trim().toLowerCase() === selected;
+/** Brand filter against a list of lowercased brand keys (empty = all). */
+export function matchesBrand(brand: string, selected: readonly string[]): boolean {
+  return selected.length === 0 || selected.includes(brand.trim().toLowerCase());
 }
+
+/** Deal-rating (tier) filter against a list of tier levels (empty = all). */
+export function matchesRating(tierLevel: string, selected: readonly string[]): boolean {
+  return selected.length === 0 || selected.includes(tierLevel);
+}
+
+/** The deal-rating options, matching src/domain/services/dealTier.ts levels. */
+export const RATING_OPTIONS: readonly FilterOption[] = [
+  { value: 'hot', label: 'Hot deal' },
+  { value: 'great', label: 'Very good deal' },
+  { value: 'good', label: 'Good deal' },
+  { value: 'okay', label: 'Okay' },
+  { value: 'bad', label: 'Bad deal' },
+];
 
 export interface FilterOption {
   /** Lowercased key used for matching. */
