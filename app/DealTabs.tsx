@@ -9,6 +9,7 @@ import { DealSearchBar, matchesQuery } from './DealSearchBar.js';
 import { SortSelect } from './SortSelect.js';
 import { Pagination } from './Pagination.js';
 import { DEFAULT_SORT, PAGE_SIZE, sortDeals, type SortKey } from './dealSort.js';
+import { matchesCity, mileageCap, uniqueCities, withinKm } from './dealFilters.js';
 import { BookmarkIcon } from './icons.js';
 
 /** Flat, fully-serializable view of a scored listing for the client. */
@@ -142,6 +143,12 @@ export function DealTabs({
   const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
 
+  const kmCap = useMemo(() => mileageCap(all), [all]);
+  const cities = useMemo(() => uniqueCities(all), [all]);
+  const [kmMin, setKmMin] = useState(0);
+  const [kmMax, setKmMax] = useState(kmCap);
+  const [city, setCity] = useState('');
+
   const watchedDeals = useMemo(() => all.filter((d) => watched.has(d.modelId)), [all, watched]);
 
   // Pool every deal we know about (saved list + current feeds) so a card just
@@ -185,19 +192,20 @@ export function DealTabs({
   const [active, setActive] = useState<TabId>(initial);
   const activeDeals = tabs.find((t) => t.id === active)?.deals ?? all;
 
-  const visible = useMemo(
-    () =>
-      sortDeals(
-        activeDeals.filter((d) => matchesQuery(d, query)),
-        sort,
-      ),
-    [activeDeals, query, sort],
-  );
+  const kmInvalid = kmMax < kmMin;
+  const visible = useMemo(() => {
+    if (kmInvalid) return [];
+    const filtered = activeDeals.filter(
+      (d) =>
+        matchesQuery(d, query) && withinKm(d.mileageKm, kmMin, kmMax) && matchesCity(d.city, city),
+    );
+    return sortDeals(filtered, sort);
+  }, [activeDeals, query, sort, kmMin, kmMax, city, kmInvalid]);
 
-  // Return to page 1 whenever the tab, search or ordering changes.
+  // Return to page 1 whenever the tab, search, ordering or filters change.
   useEffect(() => {
     setPage(1);
-  }, [active, query, sort]);
+  }, [active, query, sort, kmMin, kmMax, city]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const clampedPage = Math.min(page, pageCount);
@@ -230,6 +238,46 @@ export function DealTabs({
         {sidebar}
         <DealSearchBar value={query} onChange={setQuery} />
         <SortSelect value={sort} onChange={setSort} />
+
+        <div className="sidebar-section">
+          <h3 className="sidebar-title">Mileage (km)</h3>
+          <div className="sidebar-row">
+            <label>
+              <span>Min</span>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={kmMin}
+                onChange={(e) => setKmMin(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              <span>Max</span>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={kmMax}
+                onChange={(e) => setKmMax(Number(e.target.value))}
+              />
+            </label>
+          </div>
+        </div>
+
+        <label className="sidebar-select">
+          <span>City</span>
+          <select value={city} onChange={(e) => setCity(e.target.value)}>
+            <option value="">All cities</option>
+            {cities.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {kmInvalid && <p className="settings-error">Max must be greater than or equal to min.</p>}
       </aside>
 
       <div className="browse-main">
