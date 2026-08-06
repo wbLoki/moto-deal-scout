@@ -15,6 +15,7 @@
     "build:cli": "tsc -p tsconfig.build.json",
     "cli": "tsx src/cli.ts",
     "scan": "tsx src/cli.ts scan",
+    "discover": "tsx src/cli.ts discover",
     "report": "tsx src/cli.ts report",
     "schedule": "tsx src/cli.ts schedule",
     "typecheck": "tsc --noEmit",

@@ -31,6 +31,24 @@ describe('LibsqlUserProfileRepository', () => {
     await expect(repo.isOnboarded(userId)).resolves.toBe(false);
   });
 
+  it('lists each watched model once however many users follow it', async () => {
+    // The daily scan drives its model list off this, so a popular model must
+    // not be scraped once per follower.
+    const users = new LibsqlUserRepository(db);
+    const others = await Promise.all(
+      ['a@x.com', 'b@x.com', 'c@x.com'].map((email) =>
+        users.create({ email, name: undefined, passwordHash: 'h', role: 'user' }),
+      ),
+    );
+    for (const u of others) await repo.setWatchedModelIds(u.id, ['yamaha-mt07']);
+    await repo.setWatchedModelIds(userId, ['yamaha-mt07', 'honda-cb500f']);
+
+    await expect(repo.listDistinctWatchedModelIds()).resolves.toEqual([
+      'honda-cb500f',
+      'yamaha-mt07',
+    ]);
+  });
+
   it('replaces the watched set atomically (dedupes and overwrites)', async () => {
     await repo.setWatchedModelIds(userId, ['a', 'b', 'b']);
     await expect(repo.getWatchedModelIds(userId)).resolves.toEqual(['a', 'b']);

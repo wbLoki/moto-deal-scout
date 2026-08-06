@@ -354,6 +354,20 @@ export function modelsForBrand(brand: string): readonly string[] {
 }
 
 /**
+ * Whether the reference catalog already lists this brand/model. Since the
+ * weekly crawl auto-creates any catalog model it finds, a listed model needs
+ * no request — it will appear on its own once one shows up for sale.
+ */
+export function catalogContains(brand: string, model: string): boolean {
+  const key = (s: string): string => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const brandKey = key(brand);
+  const modelKey = key(model);
+  return MOTORCYCLE_CATALOG.some(
+    (b) => key(b.brand) === brandKey && b.models.some((m) => key(m) === modelKey),
+  );
+}
+
+/**
  * Common spelling variants sellers use, generated from a model name so we
  * don't have to hand-maintain aliases per model. E.g. "MT-07" ->
  * ["MT07", "MT 07"], "GSX-R750" -> ["GSXR750", "GSX R750", ...]. The result

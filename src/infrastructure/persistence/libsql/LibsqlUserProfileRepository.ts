@@ -38,6 +38,13 @@ export class LibsqlUserProfileRepository implements UserProfileRepository {
     });
   }
 
+  async listDistinctWatchedModelIds(): Promise<string[]> {
+    const result = await this.client.execute(
+      'SELECT DISTINCT model_id FROM user_watched_models ORDER BY model_id',
+    );
+    return (result.rows as unknown as { model_id: string }[]).map((r) => r.model_id);
+  }
+
   async isOnboarded(userId: string): Promise<boolean> {
     const result = await this.client.execute({
       sql: 'SELECT 1 FROM user_onboarding WHERE user_id = ? LIMIT 1',

@@ -1,4 +1,8 @@
 import { runUserAlerts } from './alerts.js';
+import {
+  CatalogModelResolver,
+  MIN_DISCOVERY_CONFIDENCE,
+} from './application/services/CatalogModelResolver.js';
 import { calibrateModels } from './calibration.js';
 import { buildContainer } from './container.js';
 import type { DailyReport } from './domain/entities/DailyReport.js';
@@ -20,7 +24,10 @@ export async function runScan(): Promise<DailyReport> {
 }
 
 async function scanAndNotify(): Promise<DailyReport> {
-  const container = await buildContainer();
+  // Only models someone follows — this is the daily run, and it has to fit
+  // inside Vercel's function timeout. The weekly discovery crawl is what
+  // covers the rest of the market.
+  const container = await buildContainer({ onlyWatched: true });
   try {
     const report = await container.scanner.scan();
     await container.dispatcher.dispatch(report);
@@ -28,6 +35,111 @@ async function scanAndNotify(): Promise<DailyReport> {
   } finally {
     await container.shutdown();
   }
+}
+
+/**
+ * The weekly deep crawl: browse both marketplaces' whole motorcycle category,
+ * auto-create any catalog model we find, and score what turns up.
+ *
+ * Far too slow for a Vercel function (tens of pages per source at a couple of
+ * seconds each), so this runs from CI or a box you control.
+ *
+ * Calibration runs twice on purpose. The first pass refreshes existing fair
+ * ranges before anything is scored; the second lets a model discovered during
+ * *this* crawl, which has now collected enough listings, leave "Calibrating"
+ * immediately instead of waiting a week for the next run.
+ */
+export async function runDiscovery(maxPages?: number): Promise<DailyReport> {
+  assertRemoteDatabaseInCi();
+  await calibrateModels();
+
+  const container = await buildContainer({
+    discovery: maxPages === undefined ? {} : { maxPages },
+  });
+  let report: DailyReport;
+  try {
+    report = await container.scanner.discover();
+    await container.dispatcher.dispatch(report);
+  } finally {
+    await container.shutdown();
+  }
+
+  await calibrateModels();
+  await runUserAlerts(report);
+  return report;
+}
+
+/**
+ * Without DATABASE_URL the config falls back to a local SQLite file. On a CI
+ * runner that means a long crawl writes to a throwaway disk and is discarded
+ * with the container — silently, and only noticed when the dashboard stays
+ * empty. Fail loudly instead.
+ */
+function assertRemoteDatabaseInCi(): void {
+  if (process.env['CI'] && !process.env['DATABASE_URL']) {
+    throw new Error(
+      'DATABASE_URL is not set. Refusing to run a discovery crawl in CI that would write ' +
+        'to a local throwaway database — set the DATABASE_URL/DATABASE_AUTH_TOKEN secrets.',
+    );
+  }
+}
+
+export interface DryRunResult {
+  readonly scanned: number;
+  readonly resolved: number;
+  /** Model ids that would be created, with the titles that produced them. */
+  readonly wouldCreate: ReadonlyMap<string, string[]>;
+}
+
+/**
+ * Crawls exactly like {@link runDiscovery} but writes nothing — it prints how
+ * each title resolves and which models would be created.
+ *
+ * Worth running before the first real crawl: a wrong match here becomes a
+ * permanent model row that users can follow, and reading a couple of hundred
+ * `title -> id` lines is the cheapest way to catch that.
+ */
+export async function runDiscoveryDryRun(maxPages?: number): Promise<DryRunResult> {
+  const resolver = new CatalogModelResolver();
+  const container = await buildContainer();
+  const existing = new Set(container.criteria.models.map((m) => m.id));
+  const wouldCreate = new Map<string, string[]>();
+  let scanned = 0;
+  let resolved = 0;
+
+  try {
+    for (const source of container.sources) {
+      const listings = await source.fetchListings(
+        maxPages === undefined ? {} : { maxPages },
+      );
+      scanned += listings.length;
+
+      for (const listing of listings) {
+        const match = resolver.resolve(listing.title);
+        if (!match || match.confidence < MIN_DISCOVERY_CONFIDENCE) {
+          console.log(`  ${listing.title}`);
+          continue;
+        }
+        resolved += 1;
+        console.log(`✓ ${listing.title}\n    -> ${match.id} (confidence ${match.confidence})`);
+        if (!existing.has(match.id)) {
+          wouldCreate.set(match.id, [...(wouldCreate.get(match.id) ?? []), listing.title]);
+        }
+      }
+    }
+  } finally {
+    await container.shutdown();
+  }
+
+  console.log(
+    `\n${resolved}/${scanned} titles resolved; ${wouldCreate.size} new model(s) would be created:`,
+  );
+  for (const [id, titles] of [...wouldCreate].sort(([a], [b]) => a.localeCompare(b))) {
+    console.log(`  ${id}  (${titles.length} listing${titles.length === 1 ? '' : 's'})`);
+  }
+  console.log('\nDry run — nothing was written.');
+
+  return { scanned, resolved, wouldCreate };
 }
 
 /**

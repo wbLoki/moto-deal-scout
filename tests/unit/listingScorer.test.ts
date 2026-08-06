@@ -19,6 +19,16 @@ describe('ListingScorer', () => {
     expect(score.price).toBe(0);
   });
 
+  it('scores an uncalibrated model as average on price, not near-perfect', () => {
+    // Without this, the provisional 0–300 000 range makes a cheap listing look
+    // like a steal on price alone and fabricates "hot deals" for models the
+    // market hasn't told us anything about yet.
+    const uncalibrated = makeModelCriteria({ priceRangeMAD: { min: 0, max: 300000 } });
+    const score = scorer.score(makeListing({ priceMAD: 60000 }), uncalibrated, global);
+    expect(score.price).toBe(20);
+    expect(score.reasons.some((r) => r.includes('not calibrated'))).toBe(true);
+  });
+
   it('scores low mileage well and high mileage poorly', () => {
     const lowMileage = scorer.score(makeListing({ mileageKm: 1000 }), model, global);
     const highMileage = scorer.score(makeListing({ mileageKm: 40000 }), model, global);

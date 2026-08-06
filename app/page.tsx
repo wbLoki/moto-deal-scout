@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { auth } from '../auth.js';
 import { getDashboardData, getPublicDeals } from '../src/readModel.js';
 import type { ScoredListing } from '../src/domain/entities/ScoredListing.js';
-import { dealTier } from '../src/domain/services/dealTier.js';
+import { dealTierFor } from '../src/domain/services/dealTier.js';
+import { isCalibrated } from '../src/domain/services/calibrationState.js';
 import { PublicHome } from './PublicHome.js';
 import { SearchSettings } from './SearchSettings.js';
 import { ScanNowButton } from './ScanNowButton.js';
@@ -18,7 +19,7 @@ export const maxDuration = 60;
 
 function toView(scored: ScoredListing): DealView {
   const { listing, score, match } = scored;
-  const tier = dealTier(score.total);
+  const tier = dealTierFor(score.total, isCalibrated(match.criteria));
   return {
     key: `${listing.sourceId}:${listing.externalId}`,
     modelId: match.criteria.id,
@@ -41,7 +42,7 @@ function toView(scored: ScoredListing): DealView {
 
 function toPublicDeal(scored: ScoredListing): DealCardData {
   const { listing, score, match } = scored;
-  const tier = dealTier(score.total);
+  const tier = dealTierFor(score.total, isCalibrated(match.criteria));
   return {
     key: `${listing.sourceId}:${listing.externalId}`,
     brand: match.criteria.brand,

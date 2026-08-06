@@ -24,6 +24,7 @@ export function RequestForm() {
         <input name="note" placeholder="Why, or any detail for the admin" />
       </label>
       {state.error && <p className="settings-error">{state.error}</p>}
+      {state.message && <p className="settings-hint">{state.message}</p>}
       {state.ok && (
         <p className="settings-status ok">Request submitted — pending admin approval.</p>
       )}

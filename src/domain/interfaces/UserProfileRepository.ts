@@ -11,6 +11,11 @@ export interface UserProfileRepository {
   addWatchedModel(userId: string, modelId: string): Promise<void>;
   /** Unfollows a single model (no-op if not followed). */
   removeWatchedModel(userId: string, modelId: string): Promise<void>;
+  /**
+   * Every model followed by at least one user, listed once. The daily scan
+   * uses this so a model followed by fifty people is still scraped once.
+   */
+  listDistinctWatchedModelIds(): Promise<string[]>;
 
   isOnboarded(userId: string): Promise<boolean>;
   markOnboarded(userId: string): Promise<void>;

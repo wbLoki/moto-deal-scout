@@ -6,7 +6,7 @@ import type {
   SourceQuery,
 } from '../../../domain/interfaces/MarketplaceSource.js';
 import type { BrowserManager } from '../shared/BrowserManager.js';
-import { delay } from '../shared/throttle.js';
+import { crawlPages } from '../shared/crawl.js';
 import { parseNumber, parseYear, slugifyWithHyphens } from '../shared/textParsing.js';
 
 const BASE_URL = 'https://www.biker.ma';
@@ -29,6 +29,25 @@ export interface BikerSourceOptions {
 }
 
 /**
+ * Builds a Biker.ma search URL. Every filter except `modele` is already sent
+ * empty by design, so an empty `modele` too is simply an unfiltered browse of
+ * the whole used-motorcycle category — that's the discovery crawl.
+ */
+export function buildBikerUrl(model: string, page: number): string {
+  const params = new URLSearchParams({
+    marque: '',
+    modele: model,
+    prixmin: '',
+    prixmax: '',
+    ville: '',
+    page: String(page),
+    cylindreeMin: '',
+    cylindreeMax: '',
+  });
+  return `${BASE_URL}/annonce/moto?${params.toString()}`;
+}
+
+/**
  * Scrapes Biker.ma's used-motorcycle search (`/annonce/moto`), which
  * supports a `modele` query param that does real substring/full-text
  * matching against listing titles.
@@ -44,45 +63,27 @@ export class BikerSource implements MarketplaceSource {
   ) {}
 
   async fetchListings(query: SourceQuery): Promise<Listing[]> {
-    const model = query.criteria.model;
-    const maxPages = this.options.maxPages ?? DEFAULT_MAX_PAGES;
-    const listings: Listing[] = [];
+    // No model means browse the entire category (discovery crawl).
+    const model = query.criteria?.model ?? '';
+    const maxPages = query.maxPages ?? this.options.maxPages ?? DEFAULT_MAX_PAGES;
 
     const page = await this.browserManager.newPage();
     try {
-      for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
-        const url = this.buildUrl(model, pageNumber);
-        const pageListings = await this.scrapePage(page, url);
-        if (pageListings.length === 0) break;
-        listings.push(...pageListings);
-        if (pageNumber < maxPages) await delay(this.options.throttleMs);
-      }
-    } catch (err) {
-      this.logger.error({ err, model }, 'Biker.ma scrape failed');
+      return await crawlPages({
+        maxPages,
+        throttleMs: this.options.throttleMs,
+        fetchPage: (pageNumber) => this.scrapePage(page, buildBikerUrl(model, pageNumber)),
+        onError: (err, pageNumber) =>
+          this.logger.error({ err, model, pageNumber }, 'Biker.ma scrape failed'),
+      });
     } finally {
       await page.close();
     }
-
-    return listings;
   }
 
   dispose(): Promise<void> {
     // Browser lifecycle is owned by the shared PlaywrightBrowserManager.
     return Promise.resolve();
-  }
-
-  private buildUrl(model: string, page: number): string {
-    const params = new URLSearchParams({
-      marque: '',
-      modele: model,
-      prixmin: '',
-      prixmax: '',
-      ville: '',
-      page: String(page),
-      cylindreeMin: '',
-      cylindreeMax: '',
-    });
-    return `${BASE_URL}/annonce/moto?${params.toString()}`;
   }
 
   private async scrapePage(page: Page, url: string): Promise<Listing[]> {

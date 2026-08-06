@@ -4,7 +4,7 @@ import pino from 'pino';
 import { Command } from 'commander';
 import { loadEnv } from './config/env.js';
 import { CronScheduler } from './infrastructure/scheduler/CronScheduler.js';
-import { runReport, runScan } from './runners.js';
+import { runDiscovery, runDiscoveryDryRun, runReport, runScan } from './runners.js';
 
 const program = new Command();
 program
@@ -18,6 +18,21 @@ program
   .description('Run one scan immediately, persist results, and notify about any good deals found')
   .action(async () => {
     await runScan();
+  });
+
+program
+  .command('discover')
+  .description(
+    'Crawl both marketplaces end to end, auto-create any catalog models found, and score the listings',
+  )
+  .option('--max-pages <n>', 'How deep to paginate each source', (v) => Number.parseInt(v, 10))
+  .option('--dry-run', 'Only print how titles would resolve; write nothing to the database')
+  .action(async (opts: { maxPages?: number; dryRun?: boolean }) => {
+    if (opts.dryRun) {
+      await runDiscoveryDryRun(opts.maxPages);
+      return;
+    }
+    await runDiscovery(opts.maxPages);
   });
 
 program

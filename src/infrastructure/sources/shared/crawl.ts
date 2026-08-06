@@ -1,0 +1,84 @@
+import type { Listing } from '../../../domain/entities/Listing.js';
+import { delay } from './throttle.js';
+
+export interface CrawlOptions {
+  /** Hard cap on pages fetched, whatever the dedupe logic decides. */
+  readonly maxPages: number;
+  /** Pause between page fetches, to stay polite. */
+  readonly throttleMs: number;
+  /** Fetches one page of listings by 1-based page number. */
+  readonly fetchPage: (pageNumber: number) => Promise<Listing[]>;
+  /**
+   * Called when a page fetch throws, including on an attempt that is about to
+   * be retried. After the retries are used up the crawl stops and returns what
+   * it collected so far, so one bad page late in a long discovery crawl
+   * doesn't discard everything before it.
+   */
+  readonly onError?: (err: unknown, pageNumber: number) => void;
+  /**
+   * Extra attempts per page before giving up. Marketplaces intermittently
+   * stall on a single page under a long crawl, and losing the remaining
+   * pages to one 30s timeout is a poor trade.
+   */
+  readonly retries?: number;
+}
+
+/**
+ * Walks a paginated listing category, stopping at `maxPages` or as soon as a
+ * page contributes nothing we haven't already collected.
+ *
+ * "Contributed no new listings" is the end-of-category signal, deliberately —
+ * the two obvious alternatives are both wrong against the live sites. Avito
+ * pins the same three sponsored ads to the top of *every* page in rotating
+ * order, and past the last real page it serves those pinned ads *only*. So an
+ * empty page never arrives, and comparing the first card against the previous
+ * page's first card misfires on page 2 and truncates the crawl immediately.
+ *
+ * Deduping by `externalId` also stops those pinned ads (and Avito's habit of
+ * showing a promoted ad twice on one page, once in its natural position) from
+ * being processed once per page.
+ */
+/** One page, retried on failure. Undefined once every attempt has failed. */
+async function fetchWithRetries(
+  opts: CrawlOptions,
+  pageNumber: number,
+): Promise<Listing[] | undefined> {
+  const attempts = (opts.retries ?? 1) + 1;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await opts.fetchPage(pageNumber);
+    } catch (err) {
+      opts.onError?.(err, pageNumber);
+      // Back off before retrying; a stalled page is often busy, not broken.
+      if (attempt < attempts) await delay(opts.throttleMs);
+    }
+  }
+  return undefined;
+}
+
+export async function crawlPages(opts: CrawlOptions): Promise<Listing[]> {
+  const seen = new Set<string>();
+  const collected: Listing[] = [];
+
+  for (let pageNumber = 1; pageNumber <= opts.maxPages; pageNumber++) {
+    const pageListings = await fetchWithRetries(opts, pageNumber);
+    if (pageListings === undefined) break;
+
+    // Marking each id as seen inside the loop also collapses duplicates
+    // *within* a page — Avito shows a promoted ad both in its pinned slot and
+    // again in its natural position, so a 38-card page can carry 35 ads.
+    const fresh: Listing[] = [];
+    for (const listing of pageListings) {
+      if (seen.has(listing.externalId)) continue;
+      seen.add(listing.externalId);
+      fresh.push(listing);
+    }
+    if (fresh.length === 0) break;
+
+    collected.push(...fresh);
+
+    if (pageNumber < opts.maxPages) await delay(opts.throttleMs);
+  }
+
+  return collected;
+}

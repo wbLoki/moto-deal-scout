@@ -2,16 +2,9 @@ import { z } from 'zod';
 import { loadCriteria } from './config/loadCriteria.js';
 import { loadEnv } from './config/env.js';
 import type { StoredModel } from './domain/entities/Model.js';
+import { modelId } from './domain/services/provisionalModel.js';
 import { openDatabaseFromEnv } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
-
-function slugify(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
 
 export const modelFormSchema = z
   .object({
@@ -19,7 +12,10 @@ export const modelFormSchema = z
     brand: z.string().trim().min(1),
     model: z.string().trim().min(1),
     aliases: z.array(z.string().trim().min(1)).default([]),
-    priceMin: z.number().int().nonnegative(),
+    // Must be > 0: a zero min is the "not calibrated yet" sentinel, so
+    // accepting it here would silently flip a tuned model back to
+    // "Calibrating" and disable its implausible-price filter.
+    priceMin: z.number().int().positive(),
     priceMax: z.number().int().positive(),
     maxMileageKm: z.number().int().positive(),
     minYear: z.number().int().gte(1980).lte(2100),
@@ -32,7 +28,7 @@ export type ModelFormInput = z.infer<typeof modelFormSchema>;
 
 function toStoredModel(input: ModelFormInput): StoredModel {
   return {
-    id: input.id ?? slugify(`${input.brand}-${input.model}`),
+    id: input.id ?? modelId(input.brand, input.model),
     brand: input.brand,
     model: input.model,
     aliases: input.aliases,

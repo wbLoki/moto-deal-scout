@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { auth } from '../../auth.js';
 import { listAllModels } from '../../src/adminService.js';
 import { listPendingRequests } from '../../src/requestService.js';
-import { AddModelPicker } from '../AddModelPicker.js';
 import { AdminNav } from '../AdminNav.js';
 import { ModelsList } from '../ModelsList.js';
 import { RecalibrateButton } from '../RecalibrateButton.js';
@@ -25,8 +24,10 @@ export default async function AdminPage() {
       <h1 className="title">Admin · Models</h1>
       <AdminNav active="models" />
       <p className="subtitle">
-        These are the models the daily scan searches for. Disable one to stop tracking it without
-        losing its settings. Price range and mileage/year here feed the deal <em>scoring</em>.
+        Models are discovered automatically by the weekly crawl — you don&apos;t add them by hand.
+        This page is for overrides: disable one to stop tracking it, or lock your own price range
+        when the auto-calibrated one looks wrong. Price range and mileage/year feed the deal{' '}
+        <em>scoring</em>.
       </p>
 
       <section className="admin-section">
@@ -58,15 +59,6 @@ export default async function AdminPage() {
             </div>
           ))
         )}
-      </section>
-
-      <section className="admin-section">
-        <h2 className="settings-title">Add a model</h2>
-        <p className="settings-hint">
-          Pick a brand and model from the catalog (or type your own). Aliases are suggested
-          automatically.
-        </p>
-        <AddModelPicker />
       </section>
 
       <section className="admin-section">

@@ -49,24 +49,6 @@ export interface AdminModelState {
   message?: string;
 }
 
-/** State-returning action for the Add-model picker, so it can confirm/clear. */
-export async function addModelAction(
-  _prev: AdminModelState,
-  formData: FormData,
-): Promise<AdminModelState> {
-  const session = await auth();
-  if (session?.user?.role !== 'admin') return { message: 'Forbidden: admin only.' };
-  try {
-    const input = modelInputFrom(formData);
-    await saveModel({ ...input, id: undefined });
-    revalidatePath('/admin');
-    revalidatePath('/');
-    return { ok: true, message: `Added ${input.brand} ${input.model}.` };
-  } catch (err) {
-    return { message: err instanceof Error ? err.message : 'Failed to add model.' };
-  }
-}
-
 export async function toggleModelAction(formData: FormData): Promise<void> {
   await requireAdmin();
   await setModelEnabled(str(formData, 'id'), str(formData, 'enabled') === 'true');

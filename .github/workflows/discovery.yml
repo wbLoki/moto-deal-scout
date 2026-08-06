@@ -1,0 +1,49 @@
+name: Weekly model discovery
+
+# The deep crawl walks both marketplaces' entire motorcycle category — tens of
+# pages per source with a polite pause between each — which is far longer than
+# a Vercel function may run. So it lives here instead, and Vercel's daily cron
+# is left to re-check only the models users actually follow.
+on:
+  schedule:
+    - cron: '0 3 * * 1' # Mondays, 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      maxPages:
+        description: 'Pages to crawl per source'
+        required: false
+        default: '40'
+
+concurrency:
+  group: discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Crawl and discover models
+        run: npm run discover -- --max-pages "${{ inputs.maxPages || '40' }}"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          # A datacenter IP is a different traffic profile than a laptop, so
+          # back off further than the local default.
+          SCRAPE_THROTTLE_MS: '3000'
+          NODE_ENV: production
