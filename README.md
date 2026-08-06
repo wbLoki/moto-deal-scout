@@ -4,9 +4,7 @@ Scans Moroccan motorcycle marketplaces daily, scores listings against models you
 actually shopping for, and surfaces only the good deals — on a web dashboard and via
 notifications — not every listing that exists.
 
-Sources: [Avito.ma](https://www.avito.ma), [Biker.ma](https://www.biker.ma),
-[Moteur.ma](https://www.moteur.ma) (its `/fr/moto/achat-moto-occasion/` section, despite
-the site being car-focused otherwise).
+Sources: [Avito.ma](https://www.avito.ma), [Biker.ma](https://www.biker.ma).
 
 It runs two ways from one codebase:
 
@@ -19,9 +17,9 @@ It runs two ways from one codebase:
 
 1. For each model you're hunting for (`src/config/defaultCriteria.ts`), every source is
    queried using that marketplace's own search (Avito's slug search, Biker's `modele`
-   param, Moteur's `marque`/`modele` params).
+   param).
 2. Every listing's title is re-checked with a fuzzy matcher, since marketplace search is
-   sometimes loose or, for Biker/Moteur, may not fully understand model names — a listing
+   sometimes loose or, for Biker, may not fully understand model names — a listing
    only counts if the match confidence clears `minModelMatchConfidence`.
 3. New listings (not seen in a previous run) are scored 0-100 on price, mileage, year,
    and city, weighted 40/25/20/15.
@@ -272,14 +270,13 @@ development) — see the note below.
 
 ## A note on the scrapers
 
-All three marketplaces render listings client-side with framework-specific markup:
+Both marketplaces render listings client-side with framework-specific markup:
 
 - **Avito.ma** uses styled-components with hashed class names that churn across
   deploys, so `AvitoSource` deliberately avoids them, anchoring on `data-testid`
   prefixes, `title` attributes, and structural text patterns (e.g., the number
   immediately before a literal "DH" span) instead.
-- **Biker.ma** (Angular) and **Moteur.ma** (server-rendered, semantic class names) are
-  more stable but still selector-dependent.
+- **Biker.ma** (Angular) is more stable but still selector-dependent.
 
 Selectors were verified against live pages during development, but marketplaces change
 their markup without notice — if a source starts returning zero results, that's the

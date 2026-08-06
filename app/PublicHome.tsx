@@ -32,7 +32,7 @@ export function PublicHome({ deals }: { deals: readonly DealCardData[] }) {
       <PublicFeed deals={deals} />
 
       <div className="footer">
-        Data scraped from Avito.ma, Biker.ma and Moteur.ma. Prices can contain seller typos — always
+        Data scraped from Avito.ma and Biker.ma. Prices can contain seller typos — always
         verify on the listing before acting.
       </div>
     </main>

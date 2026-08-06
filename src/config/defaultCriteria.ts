@@ -7,7 +7,7 @@ import type { SearchCriteria } from '../domain/entities/SearchCriteria.js';
  * `priceRangeMAD` should reflect what you consider *fair* market value for
  * that model/condition in Morocco — it's the reference the scorer compares
  * listings against, not a hard filter. `aliases` should cover how sellers
- * actually write the model on Avito/Biker/Moteur (with/without dashes,
+ * actually write the model on Avito/Biker (with/without dashes,
  * common misspellings, etc.) since the fuzzy matcher uses them.
  *
  * To override this without editing code, set CRITERIA_CONFIG_PATH to a

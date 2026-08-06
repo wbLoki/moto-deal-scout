@@ -116,7 +116,7 @@ export default async function DashboardPage() {
       />
 
       <div className="footer">
-        Data scraped from Avito.ma, Biker.ma and Moteur.ma. Prices can contain seller typos — always
+        Data scraped from Avito.ma and Biker.ma. Prices can contain seller typos — always
         verify on the listing before acting.
       </div>
     </main>

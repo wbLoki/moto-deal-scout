@@ -18,7 +18,7 @@ function toConfidence(fuseScore: number): number {
 /**
  * Confirms whether a listing's free-text title actually refers to a model
  * we're hunting for. Marketplace search boxes are unreliable (and Biker.ma
- * / Moteur.ma may not support model-level search at all), so every listing
+ * may not support model-level search at all), so every listing
  * we keep gets its title checked here before it's scored.
  *
  * Fuse.js is built for "search a list of short items with a query", and

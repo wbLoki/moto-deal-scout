@@ -1,4 +1,8 @@
-/** Marketplace identifiers. Add new sources here as they're implemented. */
+/**
+ * Marketplace identifiers. Add new sources here as they're implemented.
+ * `moteur` is no longer scraped but is retained so historical rows stored
+ * under that source still read back cleanly.
+ */
 export type MarketplaceId = 'avito' | 'biker' | 'moteur';
 
 /**

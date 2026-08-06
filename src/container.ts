@@ -10,7 +10,6 @@ import type { MarketplaceSource } from './domain/interfaces/MarketplaceSource.js
 import type { NotificationProvider } from './domain/interfaces/NotificationProvider.js';
 import { AvitoSource } from './infrastructure/sources/avito/AvitoSource.js';
 import { BikerSource } from './infrastructure/sources/biker/BikerSource.js';
-import { MoteurSource } from './infrastructure/sources/moteur/MoteurSource.js';
 import { ConsoleNotificationProvider } from './infrastructure/notifications/ConsoleNotificationProvider.js';
 import { DiscordNotificationProvider } from './infrastructure/notifications/DiscordNotificationProvider.js';
 import {
@@ -70,7 +69,6 @@ export async function buildContainer(): Promise<Container> {
   const sources: MarketplaceSource[] = [
     new AvitoSource(browserManager, sourceOptions, logger.child({ source: 'avito' })),
     new BikerSource(browserManager, sourceOptions, logger.child({ source: 'biker' })),
-    new MoteurSource(browserManager, sourceOptions, logger.child({ source: 'moteur' })),
   ];
 
   const notifiers: NotificationProvider[] = [

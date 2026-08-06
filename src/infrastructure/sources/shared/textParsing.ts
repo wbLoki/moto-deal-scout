@@ -30,7 +30,7 @@ const FRENCH_RELATIVE_UNITS: ReadonlyArray<{ pattern: RegExp; toMs: (n: number) 
 ];
 
 /**
- * Parses Avito/Biker/Moteur-style French relative timestamps
+ * Parses Avito/Biker-style French relative timestamps
  * ("il y a 3 heures", "il y a 2 jours", "aujourd'hui", "hier") into a
  * Date. Returns undefined for unrecognized formats rather than guessing.
  */
