@@ -254,6 +254,7 @@ export interface ListingRow {
   score_total: number;
   score_reasons: string;
   is_good_deal: number;
+  created_at: string;
 }
 
 /**
@@ -289,6 +290,7 @@ export function mapRowToScoredListing(
     imageUrl: row.image_url ?? undefined,
     postedAt: row.posted_at ? new Date(row.posted_at) : undefined,
     scrapedAt: new Date(row.scraped_at),
+    firstSeenAt: row.created_at,
   };
 
   return {

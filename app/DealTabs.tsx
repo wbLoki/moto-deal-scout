@@ -1,18 +1,20 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react';
 import Link from 'next/link';
 import { setWatchedModelAction } from './watchlist-actions.js';
 import { setSavedListingAction } from './saved-actions.js';
 import { DealCardShell, type DealCardData } from './DealCardShell.js';
 import { DealSearchBar, matchesQuery } from './DealSearchBar.js';
+import { SortSelect } from './SortSelect.js';
+import { Pagination } from './Pagination.js';
+import { DEFAULT_SORT, PAGE_SIZE, sortDeals, type SortKey } from './dealSort.js';
 import { BookmarkIcon } from './icons.js';
 
 /** Flat, fully-serializable view of a scored listing for the client. */
 export interface DealView extends DealCardData {
   modelId: string;
   matchConfidence: number;
-  score: number;
 }
 
 /** Eye toggle to follow/unfollow the card's model. */
@@ -120,6 +122,7 @@ export function DealTabs({
   watchedModelIds,
   savedKeys,
   hiddenByRange,
+  sidebar,
 }: {
   daily: readonly DealView[];
   all: readonly DealView[];
@@ -127,12 +130,17 @@ export function DealTabs({
   watchedModelIds: readonly string[];
   savedKeys: readonly string[];
   hiddenByRange: number;
+  /** Injected sidebar content (saved range + scan control) shown above search/sort. */
+  sidebar?: ReactNode;
 }) {
   // Watched models and saved listings live in client state so toggles flip
   // instantly (optimistic) and the Watched/Saved tabs update without a reload.
   const [watched, setWatched] = useState<ReadonlySet<string>>(() => new Set(watchedModelIds));
   const [savedSet, setSavedSet] = useState<ReadonlySet<string>>(() => new Set(savedKeys));
   const [, startTransition] = useTransition();
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
+  const [page, setPage] = useState(1);
 
   const watchedDeals = useMemo(() => all.filter((d) => watched.has(d.modelId)), [all, watched]);
 
@@ -175,12 +183,25 @@ export function DealTabs({
 
   const initial: TabId = tabs.find((t) => t.deals.length > 0)?.id ?? 'all';
   const [active, setActive] = useState<TabId>(initial);
-  const [query, setQuery] = useState('');
   const activeDeals = tabs.find((t) => t.id === active)?.deals ?? all;
-  const currentDeals = useMemo(
-    () => activeDeals.filter((d) => matchesQuery(d, query)),
-    [activeDeals, query],
+
+  const visible = useMemo(
+    () =>
+      sortDeals(
+        activeDeals.filter((d) => matchesQuery(d, query)),
+        sort,
+      ),
+    [activeDeals, query, sort],
   );
+
+  // Return to page 1 whenever the tab, search or ordering changes.
+  useEffect(() => {
+    setPage(1);
+  }, [active, query, sort]);
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, pageCount);
+  const pageItems = visible.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
   const emptyNote = (id: TabId) => {
     if (id === 'daily') return 'No new listings today yet — the daily scan runs each morning.';
@@ -200,55 +221,67 @@ export function DealTabs({
         </>
       );
     }
-    return 'No listings in your range yet. Widen your budget/year above, or wait for the next daily scan.';
+    return 'No listings in your range yet. Widen your budget/year, or wait for the next daily scan.';
   };
 
   return (
-    <div className="tabs-wrap">
-      <div className="tabs" role="tablist">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={t.id === active}
-            className={t.id === active ? 'tab active' : 'tab'}
-            onClick={() => setActive(t.id)}
-            type="button"
-          >
-            {t.label} <span className="tab-count">{t.deals.length}</span>
-          </button>
-        ))}
-      </div>
+    <div className="browse">
+      <aside className="browse-sidebar">
+        {sidebar}
+        <DealSearchBar value={query} onChange={setQuery} />
+        <SortSelect value={sort} onChange={setSort} />
+      </aside>
 
-      <DealSearchBar value={query} onChange={setQuery} />
-
-      {currentDeals.length === 0 ? (
-        <div className="empty">
-          {query.trim() && activeDeals.length > 0
-            ? `No deals match “${query}”.`
-            : emptyNote(active)}
-        </div>
-      ) : (
-        <div className="grid">
-          {currentDeals.map((deal) => (
-            <DealCard
-              key={deal.key}
-              deal={deal}
-              watching={watched.has(deal.modelId)}
-              saved={savedSet.has(deal.key)}
-              onToggleWatch={toggleWatch}
-              onToggleSave={toggleSave}
-            />
+      <div className="browse-main">
+        <div className="tabs" role="tablist">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={t.id === active}
+              className={t.id === active ? 'tab active' : 'tab'}
+              onClick={() => setActive(t.id)}
+              type="button"
+            >
+              {t.label} <span className="tab-count">{t.deals.length}</span>
+            </button>
           ))}
         </div>
-      )}
 
-      {hiddenByRange > 0 && (
-        <p className="range-note">
-          {hiddenByRange} more listing{hiddenByRange === 1 ? '' : 's'} outside your budget/year
-          range.
-        </p>
-      )}
+        <div className="browse-count">
+          {visible.length} {visible.length === 1 ? 'listing' : 'listings'}
+        </div>
+
+        {pageItems.length === 0 ? (
+          <div className="empty">
+            {query.trim() && activeDeals.length > 0
+              ? `No deals match “${query}”.`
+              : emptyNote(active)}
+          </div>
+        ) : (
+          <div className="grid">
+            {pageItems.map((deal) => (
+              <DealCard
+                key={deal.key}
+                deal={deal}
+                watching={watched.has(deal.modelId)}
+                saved={savedSet.has(deal.key)}
+                onToggleWatch={toggleWatch}
+                onToggleSave={toggleSave}
+              />
+            ))}
+          </div>
+        )}
+
+        <Pagination page={clampedPage} pageCount={pageCount} onPage={setPage} />
+
+        {hiddenByRange > 0 && (
+          <p className="range-note">
+            {hiddenByRange} more listing{hiddenByRange === 1 ? '' : 's'} outside your budget/year
+            range.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -17,6 +17,10 @@ export interface DealCardData {
   readonly imageUrl: string | null;
   readonly tierLabel: string;
   readonly tierLevel: string;
+  /** Deal score 0-100 (for the "best deal" sort; not shown on public cards). */
+  readonly score: number;
+  /** ISO timestamp of when the listing was first seen (for the date sorts). */
+  readonly createdAt: string;
 }
 
 /**

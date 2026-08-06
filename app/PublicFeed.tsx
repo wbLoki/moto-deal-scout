@@ -1,9 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DealCardShell, type DealCardData } from './DealCardShell.js';
 import { DealSearchBar, matchesQuery } from './DealSearchBar.js';
+import { SortSelect } from './SortSelect.js';
+import { Pagination } from './Pagination.js';
 import { SignInModal } from './SignInModal.js';
+import { DEFAULT_SORT, PAGE_SIZE, sortDeals, type SortKey } from './dealSort.js';
 import { BookmarkIcon, EyeIcon } from './icons.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -42,9 +45,9 @@ function roundUp(value: number, step: number): number {
 }
 
 /**
- * The public deal feed: the same filter panel + search bar + card grid the
- * dashboard uses, but filtered entirely client-side (nothing is saved). Signing
- * in is what unlocks a persisted range, following, saving and alerts.
+ * The public deal feed: a sticky left sidebar (search, sort, budget/year
+ * filters) and a paginated grid. Everything is client-side (nothing saved) —
+ * signing in is what unlocks a persisted range, following, saving and alerts.
  */
 export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
   const priceCap = useMemo(
@@ -54,37 +57,43 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
 
   const [signInFeature, setSignInFeature] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
   const [budgetMin, setBudgetMin] = useState(0);
   const [budgetMax, setBudgetMax] = useState(priceCap);
   const [yearMin, setYearMin] = useState(2000);
   const [yearMax, setYearMax] = useState(CURRENT_YEAR + 1);
+  const [page, setPage] = useState(1);
 
   const invalid = budgetMax < budgetMin || yearMax < yearMin;
 
-  const filtered = useMemo(() => {
+  const visible = useMemo(() => {
     if (invalid) return [];
-    return deals.filter((d) => {
+    const filtered = deals.filter((d) => {
       if (d.priceMAD < budgetMin || d.priceMAD > budgetMax) return false;
       if (d.year !== null && (d.year < yearMin || d.year > yearMax)) return false;
       return matchesQuery(d, query);
     });
-  }, [deals, budgetMin, budgetMax, yearMin, yearMax, query, invalid]);
+    return sortDeals(filtered, sort);
+  }, [deals, budgetMin, budgetMax, yearMin, yearMax, query, sort, invalid]);
+
+  // Any change to the result set or ordering returns to the first page.
+  useEffect(() => {
+    setPage(1);
+  }, [budgetMin, budgetMax, yearMin, yearMax, query, sort]);
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, pageCount);
+  const pageItems = visible.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
   return (
-    <>
-      <section className="settings">
-        <div className="settings-head">
-          <h2 className="settings-title">Filter deals</h2>
-          <span className="settings-hint">
-            {filtered.length} of {deals.length} listings
-          </span>
-        </div>
-
+    <div className="browse">
+      <aside className="browse-sidebar">
         <DealSearchBar value={query} onChange={setQuery} />
+        <SortSelect value={sort} onChange={setSort} />
 
-        <div className="settings-grid">
-          <fieldset className="field-group">
-            <legend>Budget (MAD)</legend>
+        <div className="sidebar-section">
+          <h3 className="sidebar-title">Budget (MAD)</h3>
+          <div className="sidebar-row">
             <label>
               <span>Min</span>
               <input
@@ -105,10 +114,12 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
                 onChange={(e) => setBudgetMax(Number(e.target.value))}
               />
             </label>
-          </fieldset>
+          </div>
+        </div>
 
-          <fieldset className="field-group">
-            <legend>Model year</legend>
+        <div className="sidebar-section">
+          <h3 className="sidebar-title">Model year</h3>
+          <div className="sidebar-row">
             <label>
               <span>From</span>
               <input
@@ -129,29 +140,37 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
                 onChange={(e) => setYearMax(Number(e.target.value))}
               />
             </label>
-          </fieldset>
+          </div>
         </div>
 
         {invalid && <p className="settings-error">Max must be greater than or equal to min.</p>}
-      </section>
+      </aside>
 
-      {filtered.length === 0 ? (
-        <div className="empty">
-          {invalid ? 'Check your filter values.' : 'No deals match your filters.'}
+      <div className="browse-main">
+        <div className="browse-count">
+          {visible.length} {visible.length === 1 ? 'listing' : 'listings'}
         </div>
-      ) : (
-        <div className="grid">
-          {filtered.map((deal) => (
-            <DealCardShell
-              key={deal.key}
-              data={deal}
-              topRight={<PublicCardActions onNeedSignIn={setSignInFeature} />}
-            />
-          ))}
-        </div>
-      )}
+
+        {pageItems.length === 0 ? (
+          <div className="empty">
+            {invalid ? 'Check your filter values.' : 'No deals match your filters.'}
+          </div>
+        ) : (
+          <div className="grid">
+            {pageItems.map((deal) => (
+              <DealCardShell
+                key={deal.key}
+                data={deal}
+                topRight={<PublicCardActions onNeedSignIn={setSignInFeature} />}
+              />
+            ))}
+          </div>
+        )}
+
+        <Pagination page={clampedPage} pageCount={pageCount} onPage={setPage} />
+      </div>
 
       <SignInModal feature={signInFeature} onClose={() => setSignInFeature(null)} />
-    </>
+    </div>
   );
 }

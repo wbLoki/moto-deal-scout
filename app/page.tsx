@@ -33,6 +33,7 @@ function toView(scored: ScoredListing): DealView {
     imageUrl: listing.imageUrl ?? null,
     matchConfidence: match.confidence,
     score: score.total,
+    createdAt: listing.firstSeenAt ?? listing.scrapedAt.toISOString(),
     tierLabel: tier.label,
     tierLevel: tier.level,
   };
@@ -52,6 +53,8 @@ function toPublicDeal(scored: ScoredListing): DealCardData {
     sourceId: listing.sourceId,
     url: listing.url,
     imageUrl: listing.imageUrl ?? null,
+    score: score.total,
+    createdAt: listing.firstSeenAt ?? listing.scrapedAt.toISOString(),
     tierLabel: tier.label,
     tierLevel: tier.level,
   };
@@ -83,23 +86,6 @@ export default async function DashboardPage() {
         year and city). Best deals first.
       </p>
 
-      <SearchSettings current={searchRange} />
-      {isAdmin ? (
-        <ScanNowButton />
-      ) : (
-        <div className="scan-now">
-          <button
-            className="btn"
-            type="button"
-            disabled
-            title="On-demand scans are coming soon for members."
-          >
-            Scan now
-          </button>
-          <span className="status-pill">Coming soon</span>
-        </div>
-      )}
-
       <DealTabs
         daily={dailyDeals.map(toView)}
         all={allDeals.map(toView)}
@@ -107,6 +93,26 @@ export default async function DashboardPage() {
         watchedModelIds={watchedModelIds}
         savedKeys={savedKeys}
         hiddenByRange={hiddenByRange}
+        sidebar={
+          <>
+            <SearchSettings current={searchRange} />
+            {isAdmin ? (
+              <ScanNowButton />
+            ) : (
+              <div className="scan-now">
+                <button
+                  className="btn"
+                  type="button"
+                  disabled
+                  title="On-demand scans are coming soon for members."
+                >
+                  Scan now
+                </button>
+                <span className="status-pill">Coming soon</span>
+              </div>
+            )}
+          </>
+        }
       />
 
       <div className="footer">
