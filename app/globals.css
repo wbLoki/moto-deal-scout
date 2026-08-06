@@ -211,6 +211,7 @@ textarea:focus-visible,
   padding: 0.6rem 1.1rem;
   font-size: 0.9rem;
   font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
   transition:
     transform 0.12s ease,
@@ -293,7 +294,8 @@ textarea:focus-visible,
   flex-wrap: wrap;
 }
 
-.site-nav a {
+/* Plain nav links only — not the Sign in / Create account buttons. */
+.site-nav a:not(.btn) {
   color: var(--muted);
   text-decoration: none;
   font-size: 0.9rem;
@@ -301,7 +303,7 @@ textarea:focus-visible,
   transition: color 0.12s ease;
 }
 
-.site-nav a:hover {
+.site-nav a:not(.btn):hover {
   color: var(--text);
 }
 
