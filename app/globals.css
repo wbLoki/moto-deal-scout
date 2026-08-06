@@ -816,6 +816,7 @@ textarea:focus-visible,
 }
 
 .sidebar-row input,
+.sidebar-row select,
 .sort-select select,
 .sidebar-select select {
   width: 100%;
