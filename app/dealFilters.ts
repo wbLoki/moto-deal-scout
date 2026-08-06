@@ -31,6 +31,7 @@ export const RATING_OPTIONS: readonly FilterOption[] = [
   { value: 'good', label: 'Good deal' },
   { value: 'okay', label: 'Okay' },
   { value: 'bad', label: 'Bad deal' },
+  { value: 'calibrating', label: 'Calibrating' },
 ];
 
 export interface FilterOption {

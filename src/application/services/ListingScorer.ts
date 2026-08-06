@@ -1,6 +1,7 @@
 import type { Listing } from '../../domain/entities/Listing.js';
 import type { ScoreBreakdown } from '../../domain/entities/ScoredListing.js';
 import type { GlobalCriteria, ModelCriteria } from '../../domain/entities/SearchCriteria.js';
+import { isCalibrated } from '../../domain/services/calibrationState.js';
 
 /** Points available per factor. Must sum to 100. */
 const WEIGHTS = {
@@ -42,6 +43,15 @@ function normalizeCity(city: string): string {
 }
 
 function scorePrice(listing: Listing, model: ModelCriteria, reasons: string[]): number {
+  // A model we've only just discovered has no fair range yet. Scoring it
+  // against the provisional 0–300 000 band would hand almost full marks to
+  // every listing and manufacture fake hot deals, so award the same neutral
+  // half-marks used when a listing omits its mileage or year.
+  if (!isCalibrated(model)) {
+    reasons.push('Fair price range not calibrated yet — scored as average.');
+    return WEIGHTS.price * 0.5;
+  }
+
   const { min, max } = model.priceRangeMAD;
   const badAt = max * 1.2;
   const points = scoreLowerIsBetter(listing.priceMAD, min, badAt, WEIGHTS.price);

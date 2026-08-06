@@ -10,7 +10,18 @@ import type { ModelCriteria } from '../entities/SearchCriteria.js';
  * search parameters and normalize the raw HTML into `Listing` objects.
  */
 export interface SourceQuery {
-  readonly criteria: ModelCriteria;
+  /**
+   * The model to search for. Omit to browse the marketplace's whole
+   * motorcycle category unfiltered — that's the discovery crawl, which
+   * finds models nobody has told us about yet.
+   */
+  readonly criteria?: ModelCriteria;
+  /**
+   * Overrides the source's default page depth. Targeted per-model searches
+   * only need the first few pages; a discovery crawl walks the category to
+   * the end.
+   */
+  readonly maxPages?: number;
 }
 
 /**

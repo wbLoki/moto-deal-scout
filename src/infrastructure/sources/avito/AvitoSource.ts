@@ -6,7 +6,7 @@ import type {
   SourceQuery,
 } from '../../../domain/interfaces/MarketplaceSource.js';
 import type { BrowserManager } from '../shared/BrowserManager.js';
-import { delay } from '../shared/throttle.js';
+import { crawlPages } from '../shared/crawl.js';
 import {
   parseNumber,
   parseRelativeFrenchDate,
@@ -16,6 +16,12 @@ import {
 
 const BASE_URL = 'https://www.avito.ma';
 const DEFAULT_MAX_PAGES = 3;
+/**
+ * Avito's motorcycle category. It occupies the same path slot as a search
+ * slug, so browsing the whole category and searching for one model differ
+ * only in what goes here. Verified live: ~1400 listings, 38 cards per page.
+ */
+const CATEGORY_SLUG = 'motos_et_scooters';
 /**
  * Avito's listing cards are styled-components with hashed class names that
  * churn across deploys, so this is the one selector we depend on: it's a
@@ -39,11 +45,18 @@ export interface AvitoSourceOptions {
   readonly maxPages?: number;
 }
 
+/** Page 1 has no cursor; later pages carry `?o=N`. */
+export function buildAvitoUrl(slug: string, page: number): string {
+  return page === 1 ? `${BASE_URL}/fr/maroc/${slug}` : `${BASE_URL}/fr/maroc/${slug}?o=${page}`;
+}
+
 /**
- * Scrapes Avito.ma's "Motos & scooters" search. Avito's own search box
- * (`/fr/maroc/{slug}`) does real full-text matching, so we let it do the
- * heavy lifting and treat the {@link FuzzyModelMatcher} downstream as a
- * confirmation pass rather than the primary filter.
+ * Scrapes Avito.ma's "Motos & scooters" section. With a model it uses
+ * Avito's own search box (`/fr/maroc/{slug}`), which does real full-text
+ * matching, so we let it do the heavy lifting and treat the
+ * {@link FuzzyModelMatcher} downstream as a confirmation pass rather than
+ * the primary filter. Without a model it browses the whole category instead
+ * — that's the discovery crawl.
  */
 export class AvitoSource implements MarketplaceSource {
   readonly id = 'avito' as const;
@@ -56,29 +69,23 @@ export class AvitoSource implements MarketplaceSource {
   ) {}
 
   async fetchListings(query: SourceQuery): Promise<Listing[]> {
-    const slug = slugifyForAvito(`${query.criteria.brand} ${query.criteria.model}`);
-    const maxPages = this.options.maxPages ?? DEFAULT_MAX_PAGES;
-    const listings: Listing[] = [];
+    const slug = query.criteria
+      ? slugifyForAvito(`${query.criteria.brand} ${query.criteria.model}`)
+      : CATEGORY_SLUG;
+    const maxPages = query.maxPages ?? this.options.maxPages ?? DEFAULT_MAX_PAGES;
 
     const page = await this.browserManager.newPage();
     try {
-      for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
-        const url =
-          pageNumber === 1
-            ? `${BASE_URL}/fr/maroc/${slug}`
-            : `${BASE_URL}/fr/maroc/${slug}?o=${pageNumber}`;
-        const pageListings = await this.scrapePage(page, url);
-        if (pageListings.length === 0) break;
-        listings.push(...pageListings);
-        if (pageNumber < maxPages) await delay(this.options.throttleMs);
-      }
-    } catch (err) {
-      this.logger.error({ err, slug }, 'Avito scrape failed');
+      return await crawlPages({
+        maxPages,
+        throttleMs: this.options.throttleMs,
+        fetchPage: (pageNumber) => this.scrapePage(page, buildAvitoUrl(slug, pageNumber)),
+        onError: (err, pageNumber) =>
+          this.logger.error({ err, slug, pageNumber }, 'Avito scrape failed'),
+      });
     } finally {
       await page.close();
     }
-
-    return listings;
   }
 
   dispose(): Promise<void> {

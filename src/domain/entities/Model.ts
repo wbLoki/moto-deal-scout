@@ -9,4 +9,9 @@ export interface StoredModel extends ModelCriteria {
   readonly calibratedAt?: string | undefined;
   /** How many listings informed the last auto-calibration. */
   readonly calibratedSamples?: number | undefined;
+  /**
+   * ISO timestamp of when the scanner auto-discovered this model from a
+   * listing title. Undefined for admin-created and request-approved models.
+   */
+  readonly discoveredAt?: string | undefined;
 }

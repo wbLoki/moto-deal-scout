@@ -11,6 +11,8 @@ import {
 export interface RequestFormState {
   ok?: boolean;
   error?: string;
+  /** Neutral note — e.g. the model is already tracked, so no request was filed. */
+  message?: string;
 }
 
 function str(formData: FormData, key: string): string {
@@ -26,11 +28,12 @@ export async function submitRequestAction(
   const session = await auth();
   if (!session?.user?.id) return { error: 'Not signed in.' };
   try {
-    await submitModelRequest(session.user.id, {
+    const result = await submitModelRequest(session.user.id, {
       brand: str(formData, 'brand'),
       model: str(formData, 'model'),
       note: str(formData, 'note').trim() || undefined,
     });
+    if (result.status === 'duplicate') return { message: result.message };
     revalidatePath('/requests');
     return { ok: true };
   } catch (err) {

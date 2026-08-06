@@ -652,6 +652,14 @@ textarea:focus-visible,
   border-color: var(--border);
 }
 
+/* Newly discovered model: no fair price range yet, so no verdict to show. */
+.tag-calibrating {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--border-strong);
+  border-style: dashed;
+}
+
 /* --- Deal tabs (segmented control) --- */
 .tabs-wrap {
   margin-bottom: 1.5rem;

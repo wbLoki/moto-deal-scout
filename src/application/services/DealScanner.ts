@@ -6,11 +6,19 @@ import type {
 } from '../../domain/entities/DailyReport.js';
 import type { Listing } from '../../domain/entities/Listing.js';
 import type { ScoredListing } from '../../domain/entities/ScoredListing.js';
-import type { SearchCriteria } from '../../domain/entities/SearchCriteria.js';
+import type { ModelCriteria, SearchCriteria } from '../../domain/entities/SearchCriteria.js';
+import type { StoredModel } from '../../domain/entities/Model.js';
 import type { ListingRepository } from '../../domain/interfaces/ListingRepository.js';
-import type { MarketplaceSource } from '../../domain/interfaces/MarketplaceSource.js';
+import type {
+  MarketplaceSource,
+  SourceQuery,
+} from '../../domain/interfaces/MarketplaceSource.js';
+import { provisionalModel } from '../../domain/services/provisionalModel.js';
+import type { CatalogModelResolver } from './CatalogModelResolver.js';
+import { MIN_DISCOVERY_CONFIDENCE } from './CatalogModelResolver.js';
 import { listingWithinRange } from '../../domain/services/rangeFilter.js';
 import { priceIsPlausible } from '../../domain/services/priceFilter.js';
+import { isCalibrated } from '../../domain/services/calibrationState.js';
 import { FuzzyModelMatcher } from './FuzzyModelMatcher.js';
 import { ListingScorer } from './ListingScorer.js';
 
@@ -23,6 +31,17 @@ export interface DealScannerDeps {
   readonly logger: Logger;
   readonly matcher?: FuzzyModelMatcher;
   readonly scorer?: ListingScorer;
+  /** Resolves a raw listing title to a catalog model. Required by {@link DealScanner.discover}. */
+  readonly resolver?: CatalogModelResolver;
+  /**
+   * Persists a model the crawl just discovered. Must not overwrite an
+   * existing row (see `ModelRepository.insertIfAbsent`) — resetting a
+   * calibrated price range on every weekly crawl would undo all calibration.
+   * Returns true when the model was newly created.
+   */
+  readonly modelSink?: (model: StoredModel) => Promise<boolean>;
+  /** How deep the discovery crawl paginates. Ignored by {@link DealScanner.scan}. */
+  readonly discoveryMaxPages?: number;
 }
 
 /**
@@ -38,6 +57,9 @@ export class DealScanner {
   private readonly logger: Logger;
   private readonly matcher: FuzzyModelMatcher;
   private readonly scorer: ListingScorer;
+  private readonly resolver: CatalogModelResolver | undefined;
+  private readonly modelSink: ((model: StoredModel) => Promise<boolean>) | undefined;
+  private readonly discoveryMaxPages: number | undefined;
 
   constructor(deps: DealScannerDeps) {
     this.sources = deps.sources;
@@ -46,6 +68,9 @@ export class DealScanner {
     this.logger = deps.logger;
     this.matcher = deps.matcher ?? new FuzzyModelMatcher(deps.criteria.models);
     this.scorer = deps.scorer ?? new ListingScorer();
+    this.resolver = deps.resolver;
+    this.modelSink = deps.modelSink;
+    this.discoveryMaxPages = deps.discoveryMaxPages;
   }
 
   /** Price drops found on already-seen listings during the current scan. */
@@ -73,6 +98,99 @@ export class DealScanner {
         priceDrops: this.priceDrops.length,
       },
       'scan complete',
+    );
+
+    return {
+      runAt: new Date(),
+      sources: sourceSummaries,
+      totalListingsScanned: totalScanned,
+      newListingsSeen: newlyScored.length,
+      goodDeals,
+      priceDrops: this.priceDrops,
+    };
+  }
+
+  /**
+   * One discovery crawl: browse each marketplace's whole motorcycle category
+   * (no per-model search), resolve every title against the reference catalog,
+   * create any model we haven't seen before, then run the listing through the
+   * exact same pipeline `scan()` uses — age/city filters, already-seen
+   * dedupe, price-drop detection, scoring and persistence.
+   *
+   * Titles that don't resolve are skipped by design: discovery is restricted
+   * to the catalog so the long tail can't fill the model list with junk.
+   */
+  async discover(): Promise<DailyReport> {
+    const { resolver, modelSink } = this;
+    if (!resolver || !modelSink) {
+      throw new Error('discover() needs both a resolver and a modelSink');
+    }
+
+    const sourceSummaries: SourceRunSummary[] = [];
+    const newlyScored: ScoredListing[] = [];
+    this.priceDrops = [];
+    let totalScanned = 0;
+    let unmatched = 0;
+    const discovered = new Set<string>();
+    // Models resolved during this run, so a second listing for the same model
+    // reuses the criteria we already built rather than re-creating it.
+    const known = new Map<string, ModelCriteria>(this.criteria.models.map((m) => [m.id, m]));
+
+    for (const source of this.sources) {
+      let listingsFound = 0;
+      let error: string | undefined;
+      const scored: ScoredListing[] = [];
+
+      try {
+        const query: SourceQuery =
+          this.discoveryMaxPages === undefined ? {} : { maxPages: this.discoveryMaxPages };
+        const listings = await source.fetchListings(query);
+        listingsFound = listings.length;
+
+        for (const listing of listings) {
+          const match = resolver.resolve(listing.title);
+          if (!match || match.confidence < MIN_DISCOVERY_CONFIDENCE) {
+            unmatched += 1;
+            continue;
+          }
+
+          let criteria = known.get(match.id);
+          if (!criteria) {
+            const model = provisionalModel(match);
+            if (await modelSink(model)) discovered.add(match.id);
+            criteria = model;
+            known.set(match.id, criteria);
+          }
+
+          const result = await this.processListing(listing, criteria, match.confidence);
+          if (result) scored.push(result);
+        }
+      } catch (err) {
+        error = err instanceof Error ? err.message : String(err);
+        this.logger.error({ err, source: source.id }, 'discovery crawl failed');
+      }
+
+      sourceSummaries.push({
+        sourceId: source.id,
+        listingsFound,
+        newListings: scored.length,
+        error,
+      });
+      newlyScored.push(...scored);
+      totalScanned += listingsFound;
+    }
+
+    const goodDeals = newlyScored.filter((s) => s.isGoodDeal);
+    this.logger.info(
+      {
+        totalScanned,
+        newListings: newlyScored.length,
+        modelsDiscovered: discovered.size,
+        unmatchedTitles: unmatched,
+        goodDeals: goodDeals.length,
+        priceDrops: this.priceDrops.length,
+      },
+      'discovery complete',
     );
 
     return {
@@ -122,6 +240,8 @@ export class DealScanner {
   private async processListing(
     listing: Listing,
     model: SearchCriteria['models'][number],
+    /** Supplied by discovery, which already established the match itself. */
+    knownConfidence?: number,
   ): Promise<ScoredListing | undefined> {
     if (!this.isWithinAcceptableAge(listing)) return undefined;
     if (!this.isAcceptableCity(listing.city)) return undefined;
@@ -134,7 +254,7 @@ export class DealScanner {
       return undefined;
     }
 
-    const confidence = this.matcher.matchAgainst(listing.title, model);
+    const confidence = knownConfidence ?? this.matcher.matchAgainst(listing.title, model);
     if (confidence < this.criteria.global.minModelMatchConfidence) return undefined;
 
     const score = this.scorer.score(listing, model, this.criteria.global);
@@ -142,7 +262,11 @@ export class DealScanner {
       listing,
       match: { criteria: model, confidence },
       score,
-      isGoodDeal: score.total >= this.criteria.global.minScoreForGoodDeal,
+      // An uncalibrated model can't be judged a good deal — its price factor
+      // is a placeholder. Keeping this false is what stops alert emails going
+      // out for listings the dashboard is still showing as "Calibrating".
+      isGoodDeal:
+        isCalibrated(model) && score.total >= this.criteria.global.minScoreForGoodDeal,
     };
 
     await this.repository.save(result);

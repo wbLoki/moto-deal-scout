@@ -81,6 +81,10 @@ export const MIGRATIONS: readonly string[] = [
     auto_calibrate INTEGER NOT NULL DEFAULT 1,
     calibrated_at      TEXT,
     calibrated_samples INTEGER,
+    -- Set when the scanner auto-discovered this model from a listing title;
+    -- null for models an admin or an approved request created. Lets a bad
+    -- fuzzy match be found and removed after the fact.
+    discovered_at      TEXT,
     created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   )`,
   // User-submitted model suggestions awaiting admin approval.
@@ -157,6 +161,7 @@ export const ADDITIVE_COLUMNS: ReadonlyArray<{
   { table: 'models', column: 'auto_calibrate', definition: 'INTEGER NOT NULL DEFAULT 1' },
   { table: 'models', column: 'calibrated_at', definition: 'TEXT' },
   { table: 'models', column: 'calibrated_samples', definition: 'INTEGER' },
+  { table: 'models', column: 'discovered_at', definition: 'TEXT' },
   { table: 'listings', column: 'previous_price_mad', definition: 'REAL' },
 ];
 

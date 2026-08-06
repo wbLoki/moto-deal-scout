@@ -16,6 +16,7 @@ interface ModelRow {
   auto_calibrate: number;
   calibrated_at: string | null;
   calibrated_samples: number | null;
+  discovered_at: string | null;
 }
 
 function mapRow(row: ModelRow): StoredModel {
@@ -31,6 +32,7 @@ function mapRow(row: ModelRow): StoredModel {
     autoCalibrate: row.auto_calibrate === 1,
     calibratedAt: row.calibrated_at ?? undefined,
     calibratedSamples: row.calibrated_samples ?? undefined,
+    discoveredAt: row.discovered_at ?? undefined,
   };
 }
 
@@ -90,6 +92,29 @@ export class LibsqlModelRepository implements ModelRepository {
         model.autoCalibrate ? 1 : 0,
       ],
     });
+  }
+
+  async insertIfAbsent(model: StoredModel): Promise<boolean> {
+    const result = await this.client.execute({
+      sql: `INSERT INTO models
+              (id, brand, model, aliases, price_min, price_max, max_mileage_km, min_year,
+               enabled, auto_calibrate, discovered_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            ON CONFLICT (id) DO NOTHING`,
+      args: [
+        model.id,
+        model.brand,
+        model.model,
+        JSON.stringify(model.aliases),
+        model.priceRangeMAD.min,
+        model.priceRangeMAD.max,
+        model.maxMileageKm,
+        model.minYear,
+        model.enabled ? 1 : 0,
+        model.autoCalibrate ? 1 : 0,
+      ],
+    });
+    return result.rowsAffected > 0;
   }
 
   async setEnabled(id: string, enabled: boolean): Promise<void> {

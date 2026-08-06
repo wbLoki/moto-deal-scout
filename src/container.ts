@@ -18,6 +18,8 @@ import {
 } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
+import { LibsqlUserProfileRepository } from './infrastructure/persistence/libsql/LibsqlUserProfileRepository.js';
+import { CatalogModelResolver } from './application/services/CatalogModelResolver.js';
 import type { BrowserManager } from './infrastructure/sources/shared/BrowserManager.js';
 import { PlaywrightBrowserManager } from './infrastructure/sources/shared/PlaywrightBrowserManager.js';
 import { ServerlessPlaywrightBrowserManager } from './infrastructure/sources/shared/ServerlessPlaywrightBrowserManager.js';
@@ -41,7 +43,18 @@ export interface Container {
   shutdown(): Promise<void>;
 }
 
-export async function buildContainer(): Promise<Container> {
+export interface ContainerOptions {
+  /**
+   * Narrow the scan to models at least one user follows. The daily scan uses
+   * this to stay small enough for Vercel's function timeout; the weekly
+   * discovery crawl covers everything else.
+   */
+  readonly onlyWatched?: boolean;
+  /** Wires up discovery (catalog resolver + model sink) and sets crawl depth. */
+  readonly discovery?: { readonly maxPages?: number };
+}
+
+export async function buildContainer(options: ContainerOptions = {}): Promise<Container> {
   const env = loadEnv();
   const logger = pino({
     level: env.LOG_LEVEL,
@@ -58,7 +71,21 @@ export async function buildContainer(): Promise<Container> {
   await modelRepo.seedIfEmpty(config.models);
   const enabledModels = await modelRepo.listEnabledCriteria();
   const allModels = await modelRepo.listAll();
-  const criteria: SearchCriteria = { models: enabledModels, global: config.global };
+
+  // The daily scan only re-checks models someone actually follows. If nobody
+  // follows anything yet (fresh database, no users), fall back to every
+  // enabled model rather than silently scanning nothing.
+  let scanModels = enabledModels;
+  if (options.onlyWatched) {
+    const watched = new Set(await new LibsqlUserProfileRepository(db).listDistinctWatchedModelIds());
+    const narrowed = enabledModels.filter((m) => watched.has(m.id));
+    if (narrowed.length > 0) scanModels = narrowed;
+    logger.info(
+      { watched: watched.size, scanning: scanModels.length, enabled: enabledModels.length },
+      narrowed.length > 0 ? 'scanning watched models only' : 'no watched models — scanning all',
+    );
+  }
+  const criteria: SearchCriteria = { models: scanModels, global: config.global };
 
   // The listing repository needs every model (incl. disabled) to reconstruct
   // stored rows that may reference a model since turned off.
@@ -76,7 +103,23 @@ export async function buildContainer(): Promise<Container> {
     new DiscordNotificationProvider(env.DISCORD_WEBHOOK_URL, logger.child({ notifier: 'discord' })),
   ];
 
-  const scanner = new DealScanner({ sources, repository, criteria, logger });
+  const scanner = new DealScanner({
+    sources,
+    repository,
+    criteria,
+    logger,
+    ...(options.discovery
+      ? {
+          resolver: new CatalogModelResolver(),
+          // insertIfAbsent, never upsert: re-discovering an already-calibrated
+          // model must not reset its price range back to the provisional one.
+          modelSink: (model) => modelRepo.insertIfAbsent(model),
+          ...(options.discovery.maxPages === undefined
+            ? {}
+            : { discoveryMaxPages: options.discovery.maxPages }),
+        }
+      : {}),
+  });
   const reportService = new DailyReportService(repository);
   const dispatcher = new NotificationDispatcher(notifiers, logger);
 
