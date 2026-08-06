@@ -62,9 +62,11 @@ export class DiscordNotificationProvider implements NotificationProvider {
 
   async notifyGoodDeals(deals: readonly ScoredListing[]): Promise<void> {
     if (!this.isConfigured()) return;
-    for (const batch of chunk(deals, EMBEDS_PER_MESSAGE)) {
+    const hotDeals = deals.filter((d) => d.score.total >= 85);
+    if (hotDeals.length === 0) return;
+    for (const batch of chunk(hotDeals, EMBEDS_PER_MESSAGE)) {
       await this.post({
-        content: `🏍️ ${deals.length} good deal(s) found`,
+        content: `🔥 ${hotDeals.length} hot deal(s) found`,
         embeds: batch.map(toEmbed),
       });
     }
