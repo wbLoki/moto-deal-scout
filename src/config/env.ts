@@ -34,6 +34,17 @@ const envSchema = z.object({
   DISCORD_WEBHOOK_URL: z.string().url().optional(),
 
   /**
+   * Resend API key for emailing watchlist alert digests. When unset, email
+   * delivery is skipped (in-app notifications still work). Get one at
+   * resend.com and verify a sender domain.
+   */
+  RESEND_API_KEY: z.string().min(1).optional(),
+  /** From address for alert emails. Must be on a domain verified in Resend. */
+  ALERT_FROM_EMAIL: z.string().min(1).default('Moto Deal Scout <alerts@motosnipe.com>'),
+  /** Public base URL used to build links in emails (e.g. the /notifications page). */
+  APP_BASE_URL: z.string().url().default('https://motosnipe.com'),
+
+  /**
    * Shared secret protecting the /api/scan and /api/report routes. Vercel
    * Cron sends it as `Authorization: Bearer <CRON_SECRET>`. If unset, the
    * routes are unprotected — always set it in production.

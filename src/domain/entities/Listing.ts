@@ -20,6 +20,12 @@ export interface Listing {
   /** Publish date reported by the marketplace, when available. */
   readonly postedAt: Date | undefined;
   readonly scrapedAt: Date;
+  /**
+   * When we first stored this listing (DB `created_at`), as an ISO string.
+   * Populated when read back from the database; undefined for a listing
+   * freshly scraped in-memory. Drives the "newest first" sort.
+   */
+  readonly firstSeenAt?: string;
 }
 
 /** Stable key used for dedupe and "have we seen this before" lookups. */

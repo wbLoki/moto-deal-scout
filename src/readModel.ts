@@ -8,6 +8,7 @@ import { priceIsPlausible } from './domain/services/priceFilter.js';
 import { openDatabase } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
+import { LibsqlSavedListingRepository } from './infrastructure/persistence/libsql/LibsqlSavedListingRepository.js';
 import { LibsqlUserProfileRepository } from './infrastructure/persistence/libsql/LibsqlUserProfileRepository.js';
 import { LibsqlUserSearchRangeRepository } from './infrastructure/persistence/libsql/LibsqlUserSearchRangeRepository.js';
 import { DEFAULT_SEARCH_RANGE } from './settingsModel.js';
@@ -20,6 +21,8 @@ export interface DashboardData {
   /** Range-filtered listings first found today, best deal first. */
   readonly dailyDeals: readonly ScoredListing[];
   readonly watchedModelIds: readonly string[];
+  /** The user's bookmarked listings as full deals, most recently saved first. */
+  readonly savedDeals: readonly ScoredListing[];
   readonly searchRange: SearchRange;
   /** Listings stored before the user's range filter was applied. */
   readonly totalBeforeFilter: number;
@@ -84,12 +87,18 @@ export async function getDashboardData(userId: string, limit = 60): Promise<Dash
       .filter((d) => listingWithinRange(d.listing, searchRange))
       .sort(byScoreDesc);
 
+    // Saved deals are shown regardless of the user's range (they chose them).
+    const savedDeals = (
+      await new LibsqlSavedListingRepository(db, allModels).listSavedDeals(userId)
+    ).filter(plausible);
+
     return {
       criteria: { models: enabledModels, global: config.global },
       onboarded,
       allDeals: recentInRange.slice(0, limit),
       dailyDeals: todayInRange.slice(0, limit),
       watchedModelIds,
+      savedDeals,
       searchRange,
       totalBeforeFilter: recent.length,
     };
@@ -99,11 +108,12 @@ export async function getDashboardData(userId: string, limit = 60): Promise<Dash
 }
 
 /**
- * The globally hottest deals for the public landing page: top-scored recent
- * listings across all models, no login or per-user range — just plausibly
- * priced and sorted best-first.
+ * Public, no-login read: the top-scored recent listings across all models,
+ * with no per-user range filter — just plausibly priced and sorted best-first.
+ * Shared by the public homepage feed (`getPublicDeals`) and the smaller landing
+ * teaser (`getHotDeals`); the only difference is how many deals are returned.
  */
-export async function getHotDeals(limit = 6): Promise<ScoredListing[]> {
+async function readPublicDeals(limit: number): Promise<ScoredListing[]> {
   const env = loadEnv();
   const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
@@ -113,7 +123,7 @@ export async function getHotDeals(limit = 6): Promise<ScoredListing[]> {
     const allModels = await modelRepo.listAll();
 
     const listings = new LibsqlListingRepository(db, allModels);
-    const recent = await listings.getRecentListings(limit * 20);
+    const recent = await listings.getRecentListings(limit * FETCH_MULTIPLIER);
     return recent
       .filter((d) =>
         priceIsPlausible(
@@ -127,4 +137,17 @@ export async function getHotDeals(limit = 6): Promise<ScoredListing[]> {
   } finally {
     db.close();
   }
+}
+
+/**
+ * The full public deal feed shown to anonymous visitors on the homepage. Same
+ * shape and scoring as the member feed, minus the per-user budget/year filter.
+ */
+export function getPublicDeals(limit = 60): Promise<ScoredListing[]> {
+  return readPublicDeals(limit);
+}
+
+/** A small teaser of the globally hottest deals (e.g. for marketing sections). */
+export function getHotDeals(limit = 6): Promise<ScoredListing[]> {
+  return readPublicDeals(limit);
 }

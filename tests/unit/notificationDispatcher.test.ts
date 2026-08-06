@@ -15,6 +15,7 @@ function buildReport(goodDeals: ScoredListing[]): DailyReport {
     totalListingsScanned: 0,
     newListingsSeen: goodDeals.length,
     goodDeals,
+    priceDrops: [],
   };
 }
 

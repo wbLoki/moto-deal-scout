@@ -1,30 +1,29 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react';
 import Link from 'next/link';
 import { setWatchedModelAction } from './watchlist-actions.js';
-import { ExternalLinkIcon } from './icons.js';
+import { setSavedListingAction } from './saved-actions.js';
+import { DealCardShell, type DealCardData } from './DealCardShell.js';
+import { DealSearchBar, matchesQuery } from './DealSearchBar.js';
+import { SortSelect } from './SortSelect.js';
+import { Pagination } from './Pagination.js';
+import { DEFAULT_SORT, PAGE_SIZE, sortDeals, type SortKey } from './dealSort.js';
+import {
+  matchesBrand,
+  matchesCity,
+  mileageCap,
+  uniqueBrands,
+  uniqueCities,
+  withinKm,
+} from './dealFilters.js';
+import { BookmarkIcon } from './icons.js';
 
 /** Flat, fully-serializable view of a scored listing for the client. */
-export interface DealView {
-  key: string;
+export interface DealView extends DealCardData {
   modelId: string;
-  brand: string;
-  model: string;
-  priceMAD: number;
-  year: number | null;
-  mileageKm: number | null;
-  city: string;
-  sourceId: string;
-  url: string;
-  imageUrl: string | null;
   matchConfidence: number;
-  score: number;
-  tierLabel: string;
-  tierLevel: string;
 }
-
-const madFmt = new Intl.NumberFormat('fr-MA');
 
 /** Eye toggle to follow/unfollow the card's model. */
 function WatchEye({
@@ -66,112 +65,177 @@ function WatchEye({
   );
 }
 
-function DealCard({
-  deal,
-  watching,
-  onToggleWatch,
+/** Bookmark toggle to save/unsave the individual listing. */
+function SaveButton({
+  saved,
+  label,
+  onToggle,
 }: {
-  deal: DealView;
-  watching: boolean;
-  onToggleWatch: (modelId: string) => void;
+  saved: boolean;
+  label: string;
+  onToggle: () => void;
 }) {
   return (
-    <article className="card">
-      <WatchEye
-        watching={watching}
-        label={`${deal.brand} ${deal.model}`}
-        onToggle={() => onToggleWatch(deal.modelId)}
-      />
-      {deal.imageUrl ? (
-        <img
-          className="card-media"
-          src={deal.imageUrl}
-          alt={`${deal.brand} ${deal.model}`}
-          loading="lazy"
-        />
-      ) : (
-        <div className="card-media-empty">No image</div>
-      )}
-      <div className="card-body">
-        <div className="card-top">
-          <h3 className="card-title">
-            {deal.brand} {deal.model}
-          </h3>
-          <span className={`tag tag-${deal.tierLevel}`} title={`Score ${deal.score}/100`}>
-            {deal.tierLabel}
-          </span>
-        </div>
-        <div className="price">{madFmt.format(deal.priceMAD)} MAD</div>
-        <div className="meta">
-          <span>{deal.year ?? 'Year n/a'}</span>
-          <span>{deal.mileageKm !== null ? `${deal.mileageKm} km` : 'km n/a'}</span>
-          <span>{deal.city}</span>
-        </div>
-        <div className="badges">
-          <span className="badge">{deal.sourceId}</span>
-          <span className="badge">match {Math.round(deal.matchConfidence * 100)}%</span>
-        </div>
-        <a className="card-link" href={deal.url} target="_blank" rel="noopener noreferrer">
-          View listing
-          <ExternalLinkIcon className="icon-trail" size={15} />
-        </a>
-      </div>
-    </article>
+    <button
+      type="button"
+      className={saved ? 'watch-eye on' : 'watch-eye'}
+      aria-pressed={saved}
+      title={saved ? `Unsave ${label}` : `Save ${label}`}
+      onClick={onToggle}
+    >
+      <BookmarkIcon size={16} filled={saved} />
+    </button>
   );
 }
 
-type TabId = 'daily' | 'watched' | 'all';
+function DealCard({
+  deal,
+  watching,
+  saved,
+  onToggleWatch,
+  onToggleSave,
+}: {
+  deal: DealView;
+  watching: boolean;
+  saved: boolean;
+  onToggleWatch: (modelId: string) => void;
+  onToggleSave: (key: string) => void;
+}) {
+  const label = `${deal.brand} ${deal.model}`;
+  return (
+    <DealCardShell
+      data={deal}
+      scoreTitle={`Score ${deal.score}/100`}
+      matchPct={Math.round(deal.matchConfidence * 100)}
+      topRight={
+        <div className="card-actions">
+          <WatchEye
+            watching={watching}
+            label={label}
+            onToggle={() => onToggleWatch(deal.modelId)}
+          />
+          <SaveButton saved={saved} label={label} onToggle={() => onToggleSave(deal.key)} />
+        </div>
+      }
+    />
+  );
+}
+
+type TabId = 'daily' | 'watched' | 'saved' | 'all';
 
 export function DealTabs({
   daily,
   all,
+  saved,
   watchedModelIds,
+  savedKeys,
   hiddenByRange,
+  sidebar,
 }: {
   daily: readonly DealView[];
   all: readonly DealView[];
+  saved: readonly DealView[];
   watchedModelIds: readonly string[];
+  savedKeys: readonly string[];
   hiddenByRange: number;
+  /** Injected sidebar content (saved range + scan control) shown above search/sort. */
+  sidebar?: ReactNode;
 }) {
-  // Watched models live in client state so the eye toggles flip every card of
-  // that model at once and the Watched tab updates instantly (optimistic).
+  // Watched models and saved listings live in client state so toggles flip
+  // instantly (optimistic) and the Watched/Saved tabs update without a reload.
   const [watched, setWatched] = useState<ReadonlySet<string>>(() => new Set(watchedModelIds));
-  const [, startToggle] = useTransition();
+  const [savedSet, setSavedSet] = useState<ReadonlySet<string>>(() => new Set(savedKeys));
+  const [, startTransition] = useTransition();
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
+  const [page, setPage] = useState(1);
+
+  const kmCap = useMemo(() => mileageCap(all), [all]);
+  const cities = useMemo(() => uniqueCities(all), [all]);
+  const brands = useMemo(() => uniqueBrands(all), [all]);
+  const [kmMin, setKmMin] = useState(0);
+  const [kmMax, setKmMax] = useState(kmCap);
+  const [city, setCity] = useState('');
+  const [brand, setBrand] = useState('');
+
+  const resetFilters = () => {
+    setQuery('');
+    setKmMin(0);
+    setKmMax(kmCap);
+    setCity('');
+    setBrand('');
+  };
 
   const watchedDeals = useMemo(() => all.filter((d) => watched.has(d.modelId)), [all, watched]);
 
+  // Pool every deal we know about (saved list + current feeds) so a card just
+  // saved from the All tab still appears under Saved.
+  const dealsByKey = useMemo(() => {
+    const m = new Map<string, DealView>();
+    for (const d of [...saved, ...all, ...daily]) if (!m.has(d.key)) m.set(d.key, d);
+    return m;
+  }, [saved, all, daily]);
+  const savedDeals = useMemo(
+    () => [...savedSet].map((k) => dealsByKey.get(k)).filter((d): d is DealView => d !== undefined),
+    [savedSet, dealsByKey],
+  );
+
   const toggleWatch = (modelId: string) => {
     const willWatch = !watched.has(modelId);
-    const next = new Set(watched);
-    if (willWatch) next.add(modelId);
-    else next.delete(modelId);
-    setWatched(next);
-    startToggle(async () => {
+    setWatched(withToggle(watched, modelId, willWatch));
+    startTransition(async () => {
       const res = await setWatchedModelAction(modelId, willWatch);
-      if (!res.ok) {
-        // Revert on failure.
-        setWatched((prev) => {
-          const reverted = new Set(prev);
-          if (willWatch) reverted.delete(modelId);
-          else reverted.add(modelId);
-          return reverted;
-        });
-      }
+      if (!res.ok) setWatched((prev) => withToggle(prev, modelId, !willWatch));
+    });
+  };
+
+  const toggleSave = (key: string) => {
+    const willSave = !savedSet.has(key);
+    setSavedSet(withToggle(savedSet, key, willSave));
+    startTransition(async () => {
+      const res = await setSavedListingAction(key, willSave);
+      if (!res.ok) setSavedSet((prev) => withToggle(prev, key, !willSave));
     });
   };
 
   const tabs: { id: TabId; label: string; deals: readonly DealView[] }[] = [
     { id: 'daily', label: 'Daily deals', deals: daily },
     { id: 'watched', label: 'Your watched models', deals: watchedDeals },
+    { id: 'saved', label: 'Saved', deals: savedDeals },
     { id: 'all', label: 'All deals', deals: all },
   ];
 
   const initial: TabId = tabs.find((t) => t.deals.length > 0)?.id ?? 'all';
   const [active, setActive] = useState<TabId>(initial);
-  const currentDeals = tabs.find((t) => t.id === active)?.deals ?? all;
+  const activeDeals = tabs.find((t) => t.id === active)?.deals ?? all;
+
+  const kmInvalid = kmMax < kmMin;
+  const visible = useMemo(() => {
+    if (kmInvalid) return [];
+    const filtered = activeDeals.filter(
+      (d) =>
+        matchesQuery(d, query) &&
+        withinKm(d.mileageKm, kmMin, kmMax) &&
+        matchesCity(d.city, city) &&
+        matchesBrand(d.brand, brand),
+    );
+    return sortDeals(filtered, sort);
+  }, [activeDeals, query, sort, kmMin, kmMax, city, brand, kmInvalid]);
+
+  // Return to page 1 whenever the tab, search, ordering or filters change.
+  useEffect(() => {
+    setPage(1);
+  }, [active, query, sort, kmMin, kmMax, city, brand]);
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const clampedPage = Math.min(page, pageCount);
+  const pageItems = visible.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
   const emptyNote = (id: TabId) => {
     if (id === 'daily') return 'No new listings today yet — the daily scan runs each morning.';
+    if (id === 'saved') {
+      return 'No saved bikes yet — tap the bookmark on any card to save it here.';
+    }
     if (id === 'watched') {
       return watched.size > 0 ? (
         'No listings for your followed models in range right now.'
@@ -185,47 +249,134 @@ export function DealTabs({
         </>
       );
     }
-    return 'No listings in your range yet. Widen your budget/year above, or wait for the next daily scan.';
+    return 'No listings in your range yet. Widen your budget/year, or wait for the next daily scan.';
   };
 
   return (
-    <div className="tabs-wrap">
-      <div className="tabs" role="tablist">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={t.id === active}
-            className={t.id === active ? 'tab active' : 'tab'}
-            onClick={() => setActive(t.id)}
-            type="button"
-          >
-            {t.label} <span className="tab-count">{t.deals.length}</span>
-          </button>
-        ))}
-      </div>
+    <div className="browse">
+      <aside className="browse-sidebar">
+        {sidebar}
+        <DealSearchBar value={query} onChange={setQuery} />
+        <SortSelect value={sort} onChange={setSort} />
 
-      {currentDeals.length === 0 ? (
-        <div className="empty">{emptyNote(active)}</div>
-      ) : (
-        <div className="grid">
-          {currentDeals.map((deal) => (
-            <DealCard
-              key={deal.key}
-              deal={deal}
-              watching={watched.has(deal.modelId)}
-              onToggleWatch={toggleWatch}
-            />
+        <div className="filters-head">
+          <h3 className="filters-title">Filters</h3>
+          <button type="button" className="filters-reset" onClick={resetFilters}>
+            Reset
+          </button>
+        </div>
+
+        <div className="sidebar-section">
+          <h3 className="sidebar-title">Mileage (km)</h3>
+          <div className="sidebar-row">
+            <label>
+              <span>Min</span>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={kmMin}
+                onChange={(e) => setKmMin(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              <span>Max</span>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={kmMax}
+                onChange={(e) => setKmMax(Number(e.target.value))}
+              />
+            </label>
+          </div>
+        </div>
+
+        <label className="sidebar-select">
+          <span>Brand</span>
+          <select value={brand} onChange={(e) => setBrand(e.target.value)}>
+            <option value="">All brands</option>
+            {brands.map((b) => (
+              <option key={b.value} value={b.value}>
+                {b.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="sidebar-select">
+          <span>City</span>
+          <select value={city} onChange={(e) => setCity(e.target.value)}>
+            <option value="">All cities</option>
+            {cities.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {kmInvalid && <p className="settings-error">Max must be greater than or equal to min.</p>}
+      </aside>
+
+      <div className="browse-main">
+        <div className="tabs" role="tablist">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={t.id === active}
+              className={t.id === active ? 'tab active' : 'tab'}
+              onClick={() => setActive(t.id)}
+              type="button"
+            >
+              {t.label} <span className="tab-count">{t.deals.length}</span>
+            </button>
           ))}
         </div>
-      )}
 
-      {hiddenByRange > 0 && (
-        <p className="range-note">
-          {hiddenByRange} more listing{hiddenByRange === 1 ? '' : 's'} outside your budget/year
-          range.
-        </p>
-      )}
+        <div className="browse-count">
+          {visible.length} {visible.length === 1 ? 'listing' : 'listings'}
+        </div>
+
+        {pageItems.length === 0 ? (
+          <div className="empty">
+            {query.trim() && activeDeals.length > 0
+              ? `No deals match “${query}”.`
+              : emptyNote(active)}
+          </div>
+        ) : (
+          <div className="grid">
+            {pageItems.map((deal) => (
+              <DealCard
+                key={deal.key}
+                deal={deal}
+                watching={watched.has(deal.modelId)}
+                saved={savedSet.has(deal.key)}
+                onToggleWatch={toggleWatch}
+                onToggleSave={toggleSave}
+              />
+            ))}
+          </div>
+        )}
+
+        <Pagination page={clampedPage} pageCount={pageCount} onPage={setPage} />
+
+        {hiddenByRange > 0 && (
+          <p className="range-note">
+            {hiddenByRange} more listing{hiddenByRange === 1 ? '' : 's'} outside your budget/year
+            range.
+          </p>
+        )}
+      </div>
     </div>
   );
+}
+
+/** Returns a new set with `item` added or removed. */
+function withToggle(set: ReadonlySet<string>, item: string, present: boolean): Set<string> {
+  const next = new Set(set);
+  if (present) next.add(item);
+  else next.delete(item);
+  return next;
 }

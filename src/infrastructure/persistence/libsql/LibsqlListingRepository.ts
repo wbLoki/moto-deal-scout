@@ -77,6 +77,29 @@ export class LibsqlListingRepository implements ListingRepository {
     return (result.rows as unknown as { price_mad: number }[]).map((r) => Number(r.price_mad));
   }
 
+  async getStoredPrice(sourceId: MarketplaceId, externalId: string): Promise<number | undefined> {
+    const result = await this.client.execute({
+      sql: 'SELECT price_mad FROM listings WHERE source_id = ? AND external_id = ?',
+      args: [sourceId, externalId],
+    });
+    const row = result.rows[0] as unknown as { price_mad: number } | undefined;
+    return row ? Number(row.price_mad) : undefined;
+  }
+
+  async recordPriceDrop(
+    sourceId: MarketplaceId,
+    externalId: string,
+    newPriceMAD: number,
+    oldPriceMAD: number,
+  ): Promise<void> {
+    await this.client.execute({
+      sql: `UPDATE listings
+            SET price_mad = ?, previous_price_mad = ?, scraped_at = ?
+            WHERE source_id = ? AND external_id = ?`,
+      args: [newPriceMAD, oldPriceMAD, new Date().toISOString(), sourceId, externalId],
+    });
+  }
+
   close(): Promise<void> {
     this.client.close();
     return Promise.resolve();

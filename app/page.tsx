@@ -1,13 +1,14 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../auth.js';
-import { getDashboardData, getHotDeals } from '../src/readModel.js';
+import { getDashboardData, getPublicDeals } from '../src/readModel.js';
 import type { ScoredListing } from '../src/domain/entities/ScoredListing.js';
 import { dealTier } from '../src/domain/services/dealTier.js';
-import { Landing, type PublicDeal } from './Landing.js';
+import { PublicHome } from './PublicHome.js';
 import { SearchSettings } from './SearchSettings.js';
 import { ScanNowButton } from './ScanNowButton.js';
 import { SiteHeader } from './SiteHeader.js';
 import { DealTabs, type DealView } from './DealTabs.js';
+import type { DealCardData } from './DealCardShell.js';
 
 // Reads the database on each request, so it must run on the Node runtime
 // and never be statically cached. maxDuration covers the admin "Scan now".
@@ -32,12 +33,13 @@ function toView(scored: ScoredListing): DealView {
     imageUrl: listing.imageUrl ?? null,
     matchConfidence: match.confidence,
     score: score.total,
+    createdAt: listing.firstSeenAt ?? listing.scrapedAt.toISOString(),
     tierLabel: tier.label,
     tierLevel: tier.level,
   };
 }
 
-function toPublicDeal(scored: ScoredListing): PublicDeal {
+function toPublicDeal(scored: ScoredListing): DealCardData {
   const { listing, score, match } = scored;
   const tier = dealTier(score.total);
   return {
@@ -51,6 +53,8 @@ function toPublicDeal(scored: ScoredListing): PublicDeal {
     sourceId: listing.sourceId,
     url: listing.url,
     imageUrl: listing.imageUrl ?? null,
+    score: score.total,
+    createdAt: listing.firstSeenAt ?? listing.scrapedAt.toISOString(),
     tierLabel: tier.label,
     tierLevel: tier.level,
   };
@@ -58,18 +62,19 @@ function toPublicDeal(scored: ScoredListing): PublicDeal {
 
 export default async function DashboardPage() {
   const session = await auth();
-  // Anonymous visitors get the public landing page (with a teaser of hot deals).
+  // Anonymous visitors can browse the full public deal feed (no login required).
   if (!session?.user?.id) {
-    const hot = await getHotDeals(6);
-    return <Landing hotDeals={hot.map(toPublicDeal)} />;
+    const deals = await getPublicDeals();
+    return <PublicHome deals={deals.map(toPublicDeal)} />;
   }
   const isAdmin = session.user.role === 'admin';
 
   const data = await getDashboardData(session.user.id);
   if (!data.onboarded) redirect('/onboarding');
 
-  const { criteria, allDeals, dailyDeals, watchedModelIds, searchRange } = data;
+  const { criteria, allDeals, dailyDeals, watchedModelIds, savedDeals, searchRange } = data;
   const hiddenByRange = data.totalBeforeFilter - allDeals.length;
+  const savedKeys = savedDeals.map((d) => `${d.listing.sourceId}:${d.listing.externalId}`);
 
   return (
     <main className="container">
@@ -81,28 +86,33 @@ export default async function DashboardPage() {
         year and city). Best deals first.
       </p>
 
-      <SearchSettings current={searchRange} />
-      {isAdmin ? (
-        <ScanNowButton />
-      ) : (
-        <div className="scan-now">
-          <button
-            className="btn"
-            type="button"
-            disabled
-            title="On-demand scans are coming soon for members."
-          >
-            Scan now
-          </button>
-          <span className="status-pill">Coming soon</span>
-        </div>
-      )}
-
       <DealTabs
         daily={dailyDeals.map(toView)}
         all={allDeals.map(toView)}
+        saved={savedDeals.map(toView)}
         watchedModelIds={watchedModelIds}
+        savedKeys={savedKeys}
         hiddenByRange={hiddenByRange}
+        sidebar={
+          <>
+            <SearchSettings current={searchRange} />
+            {isAdmin ? (
+              <ScanNowButton />
+            ) : (
+              <div className="scan-now">
+                <button
+                  className="btn"
+                  type="button"
+                  disabled
+                  title="On-demand scans are coming soon for members."
+                >
+                  Scan now
+                </button>
+                <span className="status-pill">Coming soon</span>
+              </div>
+            )}
+          </>
+        }
       />
 
       <div className="footer">
