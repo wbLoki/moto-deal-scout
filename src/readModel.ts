@@ -77,7 +77,9 @@ export async function getDashboardData(userId: string, limit = 60): Promise<Dash
         config.global.minPriceFactor,
       );
 
-    const recent = (await listings.getRecentListings(limit * FETCH_MULTIPLIER)).filter(plausible);
+    const recent = (await listings.getTopScoredListings(limit * FETCH_MULTIPLIER)).filter(
+      plausible,
+    );
     const recentInRange = recent
       .filter((d) => listingWithinRange(d.listing, searchRange))
       .sort(byScoreDesc);
@@ -123,7 +125,7 @@ async function readPublicDeals(limit: number): Promise<ScoredListing[]> {
     const allModels = await modelRepo.listAll();
 
     const listings = new LibsqlListingRepository(db, allModels);
-    const recent = await listings.getRecentListings(limit * FETCH_MULTIPLIER);
+    const recent = await listings.getTopScoredListings(limit * FETCH_MULTIPLIER);
     return recent
       .filter((d) =>
         priceIsPlausible(

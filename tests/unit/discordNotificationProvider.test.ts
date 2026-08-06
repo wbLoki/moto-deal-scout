@@ -7,11 +7,11 @@ import { makeListing, makeModelCriteria } from '../fixtures/sampleData.js';
 
 const silentLogger = pino({ level: 'silent' });
 
-function buildScored(): ScoredListing {
+function buildScored(total = 90): ScoredListing {
   return {
     listing: makeListing(),
     match: { criteria: makeModelCriteria(), confidence: 0.9 },
-    score: { price: 30, mileage: 20, year: 15, city: 10, total: 75, reasons: ['good price'] },
+    score: { price: 30, mileage: 20, year: 15, city: 10, total, reasons: ['good price'] },
     isGoodDeal: true,
   };
 }
@@ -35,7 +35,7 @@ describe('DiscordNotificationProvider', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('posts an embed per good deal to the webhook URL', async () => {
+  it('posts an embed per hot deal to the webhook URL', async () => {
     const provider = new DiscordNotificationProvider(
       'https://discord.com/api/webhooks/x/y',
       silentLogger,
@@ -47,6 +47,16 @@ describe('DiscordNotificationProvider', () => {
     expect(url).toBe('https://discord.com/api/webhooks/x/y');
     const body = JSON.parse(init.body as string) as { embeds: unknown[] };
     expect(body.embeds).toHaveLength(1);
+  });
+
+  it('does not post good-but-not-hot deals (score below 85)', async () => {
+    const provider = new DiscordNotificationProvider(
+      'https://discord.com/api/webhooks/x/y',
+      silentLogger,
+    );
+    // 84 is a good deal shown on the dashboard, but only 85+ pings Discord.
+    await provider.notifyGoodDeals([buildScored(84)]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('does not call the webhook for an empty deals list from the dispatcher path', async () => {

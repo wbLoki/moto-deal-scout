@@ -31,6 +31,7 @@ export const MOTORCYCLE_CATALOG: readonly CatalogBrand[] = [
       'Tracer 9',
       'Ténéré 700',
       'Super Ténéré 1200',
+      'NMAX',
       'NMAX 125',
       'NMAX 155',
       'XMAX 125',

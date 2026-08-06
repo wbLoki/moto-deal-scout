@@ -73,6 +73,12 @@ class InMemoryRepository implements ListingRepository {
     return Promise.resolve(this.saved.slice(0, limit));
   }
 
+  getTopScoredListings(limit: number): Promise<ScoredListing[]> {
+    return Promise.resolve(
+      [...this.saved].sort((a, b) => b.score.total - a.score.total).slice(0, limit),
+    );
+  }
+
   getListingsSince(): Promise<ScoredListing[]> {
     return Promise.resolve(this.saved);
   }

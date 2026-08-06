@@ -89,6 +89,14 @@ describe('CatalogModelResolver', () => {
     expect(resolver.resolve('MT-07 2020 première main')?.id).toBe('yamaha-mt07');
   });
 
+  it('matches a bare NMAX but still prefers a displacement variant when present', () => {
+    // Most Moroccan NMAX ads omit the displacement ("YAMAHA NMAX"). Without a
+    // generic entry those match nothing and get dropped from the feed; with it
+    // they resolve to yamaha-nmax, while "NMAX 155" still wins on longer match.
+    expect(resolver.resolve('YAMAHA NMAX')?.id).toBe('yamaha-nmax');
+    expect(resolver.resolve('Yamaha NMAX 155 2022')?.id).toBe('yamaha-nmax-155');
+  });
+
   it('returns undefined for a title unrelated to any catalog model', () => {
     expect(resolver.resolve('Vélo électrique pliable neuf')).toBeUndefined();
   });

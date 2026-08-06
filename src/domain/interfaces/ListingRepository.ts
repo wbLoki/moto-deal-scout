@@ -22,6 +22,14 @@ export interface ListingRepository {
   /** The most recent listings of any tier, most recent first. Powers the dashboard. */
   getRecentListings(limit: number): Promise<ScoredListing[]>;
 
+  /**
+   * The highest-scored listings of any tier, best deal first. Powers the
+   * "best deals" feed. Ordering by score rather than insert time keeps a
+   * large one-off batch (e.g. a discovery crawl) from monopolizing the page
+   * and burying every earlier listing.
+   */
+  getTopScoredListings(limit: number): Promise<ScoredListing[]>;
+
   /** All listings (any tier) stored since the given date, most recent first. */
   getListingsSince(sinceDate: Date): Promise<ScoredListing[]>;
 

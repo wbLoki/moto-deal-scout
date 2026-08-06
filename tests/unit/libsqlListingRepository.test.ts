@@ -82,6 +82,26 @@ describe('LibsqlListingRepository', () => {
     expect(good.map((d) => d.listing.externalId)).toEqual(['good']);
   });
 
+  it('getTopScoredListings orders by score, not insert time', async () => {
+    // A late-inserted low scorer must not bury an earlier high scorer — this
+    // is what kept old listings visible after a large discovery batch landed.
+    await repo.save(
+      buildScored({
+        listing: makeListing({ externalId: 'old-great' }),
+        score: { price: 40, mileage: 20, year: 15, city: 10, total: 90, reasons: [] },
+      }),
+    );
+    await repo.save(
+      buildScored({
+        listing: makeListing({ externalId: 'new-meh' }),
+        score: { price: 10, mileage: 5, year: 5, city: 5, total: 30, reasons: [] },
+      }),
+    );
+
+    const top = await repo.getTopScoredListings(50);
+    expect(top.map((d) => d.listing.externalId)).toEqual(['old-great', 'new-meh']);
+  });
+
   it('getListingsSince returns any-tier listings since the date', async () => {
     await repo.save(buildScored({ listing: makeListing({ externalId: 'x' }), isGoodDeal: false }));
     await expect(repo.getListingsSince(new Date('2000-01-01'))).resolves.toHaveLength(1);
