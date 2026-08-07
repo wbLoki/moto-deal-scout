@@ -7,6 +7,7 @@ import type {
 } from '../../../domain/interfaces/MarketplaceSource.js';
 import type { BrowserManager } from '../shared/BrowserManager.js';
 import { crawlPages } from '../shared/crawl.js';
+import { delay } from '../shared/throttle.js';
 import { parseNumber, parseYear, slugifyWithHyphens } from '../shared/textParsing.js';
 
 const BASE_URL = 'https://www.biker.ma';
@@ -78,6 +79,32 @@ export class BikerSource implements MarketplaceSource {
       });
     } finally {
       await page.close();
+    }
+  }
+
+  /**
+   * Fills in `postedAt`, which the search cards omit — only the detail record
+   * carries the publish date. Biker.ma's own detail view is an Angular page that
+   * fetches `/api/v1/moto/detail/{id}`, so we hit that JSON endpoint directly
+   * (its `dateajout` is a clean ISO timestamp) rather than rendering a browser
+   * page. The scanner calls this only for listings it hasn't stored yet. Any
+   * failure returns the listing untouched: a missing date must never drop it.
+   */
+  async enrich(listing: Listing): Promise<Listing> {
+    if (listing.postedAt) return listing;
+
+    try {
+      await delay(this.options.throttleMs);
+      const res = await fetch(`${BASE_URL}/api/v1/moto/detail/${listing.externalId}`, {
+        headers: { accept: 'application/json' },
+      });
+      if (!res.ok) return listing;
+      const data = (await res.json()) as { dateajout?: string };
+      const postedAt = data.dateajout ? new Date(data.dateajout) : undefined;
+      return postedAt && !Number.isNaN(postedAt.getTime()) ? { ...listing, postedAt } : listing;
+    } catch (err) {
+      this.logger.warn({ err, externalId: listing.externalId }, 'Biker.ma detail enrich failed');
+      return listing;
     }
   }
 

@@ -15,18 +15,27 @@ const silentLogger = pino({ level: 'silent' });
 
 class FakeSource implements MarketplaceSource {
   readonly disposeCalls: number[] = [];
+  /** Listings passed to enrich(), so tests can assert it ran only for new ones. */
+  readonly enrichCalls: Listing[] = [];
   private callCount = 0;
 
   constructor(
     readonly id: MarketplaceId,
     readonly name: string,
     private readonly listingsByCall: Listing[][],
+    /** When set, enrich() applies it (e.g. stamp postedAt); otherwise passthrough. */
+    private readonly enrichFn?: (listing: Listing) => Listing,
   ) {}
 
   fetchListings(_query: SourceQuery): Promise<Listing[]> {
     const result = this.listingsByCall[this.callCount] ?? [];
     this.callCount += 1;
     return Promise.resolve(result);
+  }
+
+  enrich(listing: Listing): Promise<Listing> {
+    this.enrichCalls.push(listing);
+    return Promise.resolve(this.enrichFn ? this.enrichFn(listing) : listing);
   }
 
   dispose(): Promise<void> {
@@ -170,6 +179,40 @@ describe('DealScanner', () => {
     const report = await scanner.scan();
 
     expect(report.newListingsSeen).toBe(0);
+  });
+
+  it('enriches a new listing (e.g. fetches its post date) before storing it', async () => {
+    const criteria = buildCriteria();
+    const posted = new Date('2025-03-17T00:00:00Z');
+    const listing = makeListing({ externalId: '1', priceMAD: 60000, mileageKm: 1000, year: 2023 });
+    const source = new FakeSource('biker', 'Biker.ma', [[listing]], (l) => ({
+      ...l,
+      postedAt: posted,
+    }));
+    const scanner = new DealScanner({ sources: [source], repository, criteria, logger: silentLogger });
+
+    await scanner.scan();
+
+    expect(source.enrichCalls).toHaveLength(1);
+    expect(repository.saved[0]?.listing.postedAt).toEqual(posted);
+  });
+
+  it('does not enrich a listing it has already stored', async () => {
+    const criteria = buildCriteria();
+    const listing = makeListing({ externalId: '1' });
+    const source = new FakeSource('biker', 'Biker.ma', [[listing]]);
+    const scanner = new DealScanner({ sources: [source], repository, criteria, logger: silentLogger });
+    await repository.save({
+      listing,
+      match: { criteria: criteria.models[0]!, confidence: 1 },
+      score: { price: 0, mileage: 0, year: 0, city: 0, total: 0, reasons: [] },
+      isGoodDeal: false,
+    });
+
+    await scanner.scan();
+
+    // The extra detail-page fetch must be skipped for listings we already have.
+    expect(source.enrichCalls).toHaveLength(0);
   });
 
   it('records a price drop when an already-seen listing gets cheaper', async () => {

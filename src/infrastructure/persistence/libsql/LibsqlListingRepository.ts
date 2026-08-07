@@ -14,10 +14,16 @@ import type {
 import { tierScoreBand } from '../../../domain/services/dealTier.js';
 import { mapRowToScoredListing, toInsertArgs, UPSERT_SQL, type ListingRow } from './schema.js';
 
-/** SQL ORDER BY fragment per sort key. A stable id tiebreaker is appended by callers. */
+/**
+ * SQL ORDER BY fragment per sort key. A stable id tiebreaker is appended by
+ * callers. The date sorts key off the marketplace's own publish date when we
+ * have it, falling back to first-seen (`created_at`) for listings whose source
+ * doesn't expose one — so "Newest" means newest *ad*, not newest to our crawler.
+ */
+const DATE_EXPR = 'COALESCE(l.posted_at, l.created_at)';
 const ORDER_BY: Record<SortKey, string> = {
-  newest: 'l.created_at DESC',
-  oldest: 'l.created_at ASC',
+  newest: `${DATE_EXPR} DESC`,
+  oldest: `${DATE_EXPR} ASC`,
   'price-asc': 'l.price_mad ASC',
   'price-desc': 'l.price_mad DESC',
   score: 'l.score_total DESC',

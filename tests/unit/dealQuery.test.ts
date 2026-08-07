@@ -40,6 +40,7 @@ function scored(over: {
   city?: string;
   total?: number;
   priceMin?: number; // model's calibration floor, for tier reconstruction
+  postedAt?: Date; // marketplace publish date; undefined => falls back to created_at
 }): ScoredListing {
   const total = over.total ?? 75;
   return {
@@ -49,6 +50,7 @@ function scored(over: {
       year: over.year ?? 2019,
       mileageKm: over.mileageKm,
       city: over.city ?? 'Casablanca',
+      postedAt: over.postedAt,
     }),
     match: {
       criteria: makeModelCriteria({
@@ -168,6 +170,22 @@ describe('LibsqlListingRepository.queryDeals', () => {
     expect(asc.deals.map((d) => d.listing.priceMAD)).toEqual([40000, 55000, 70000, 80000]);
     const score = await repo.queryDeals(query({ sort: 'score' }));
     expect(score.deals.map((d) => d.score.total)).toEqual([95, 90, 82, 60]);
+  });
+
+  it('sorts the date orders by posted_at, falling back to created_at', async () => {
+    // The four seeded listings have no posted_at, so they fall back to
+    // created_at (~now). Two more carry explicit, older publish dates.
+    await repo.save(scored({ externalId: 'jun', postedAt: new Date('2026-06-01T00:00:00Z') }));
+    await repo.save(scored({ externalId: 'jan', postedAt: new Date('2026-01-01T00:00:00Z') }));
+
+    const newest = await repo.queryDeals(query({ sort: 'newest', pageSize: 50 }));
+    const ids = newest.deals.map((d) => d.listing.externalId);
+    // Newest ad first: the fresh (created_at≈now) ones lead, then Jun, then Jan.
+    expect(ids.indexOf('jun')).toBeLessThan(ids.indexOf('jan'));
+    expect(ids[ids.length - 1]).toBe('jan');
+
+    const oldest = await repo.queryDeals(query({ sort: 'oldest', pageSize: 50 }));
+    expect(oldest.deals[0]?.listing.externalId).toBe('jan');
   });
 
   it('paginates with limit/offset while reporting the full total', async () => {

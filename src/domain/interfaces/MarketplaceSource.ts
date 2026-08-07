@@ -36,6 +36,16 @@ export interface MarketplaceSource {
   /** Fetch listings matching a single model query. May return an empty array. */
   fetchListings(query: SourceQuery): Promise<Listing[]>;
 
+  /**
+   * Optionally fill in fields that only exist on a listing's detail page (e.g.
+   * Biker.ma's "Publié le" post date, absent from the search cards). The
+   * scanner calls this only for listings it hasn't stored yet, so the extra
+   * page load happens once per listing. Must be resilient: on any failure
+   * return the listing unchanged rather than throwing, so enrichment never
+   * costs us a listing. Omit when the search cards already carry everything.
+   */
+  enrich?(listing: Listing): Promise<Listing>;
+
   /** Release any held resources (browser/context). Safe to call multiple times. */
   dispose(): Promise<void>;
 }

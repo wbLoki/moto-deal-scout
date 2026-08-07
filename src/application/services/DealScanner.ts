@@ -162,7 +162,7 @@ export class DealScanner {
             known.set(match.id, criteria);
           }
 
-          const result = await this.processListing(listing, criteria, match.confidence);
+          const result = await this.processListing(listing, criteria, source, match.confidence);
           if (result) scored.push(result);
         }
       } catch (err) {
@@ -221,7 +221,7 @@ export class DealScanner {
         listingsFound += listings.length;
 
         for (const listing of listings) {
-          const result = await this.processListing(listing, model);
+          const result = await this.processListing(listing, model, source);
           if (result) scored.push(result);
         }
       }
@@ -240,6 +240,7 @@ export class DealScanner {
   private async processListing(
     listing: Listing,
     model: SearchCriteria['models'][number],
+    source: MarketplaceSource,
     /** Supplied by discovery, which already established the match itself. */
     knownConfidence?: number,
   ): Promise<ScoredListing | undefined> {
@@ -257,9 +258,14 @@ export class DealScanner {
     const confidence = knownConfidence ?? this.matcher.matchAgainst(listing.title, model);
     if (confidence < this.criteria.global.minModelMatchConfidence) return undefined;
 
-    const score = this.scorer.score(listing, model, this.criteria.global);
+    // Only now — a genuinely new listing we're about to store — is it worth the
+    // extra detail-page fetch some sources need to fill in fields like the
+    // Biker.ma post date. Sources without one leave the listing unchanged.
+    const enriched = source.enrich ? await source.enrich(listing) : listing;
+
+    const score = this.scorer.score(enriched, model, this.criteria.global);
     const result: ScoredListing = {
-      listing,
+      listing: enriched,
       match: { criteria: model, confidence },
       score,
       // An uncalibrated model can't be judged a good deal — its price factor
