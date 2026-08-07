@@ -511,6 +511,12 @@ textarea:focus-visible,
   gap: 0.35rem 0.85rem;
 }
 
+.card-date {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 0.1rem;
+}
+
 .badges {
   display: flex;
   gap: 0.4rem;

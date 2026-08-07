@@ -32,6 +32,7 @@ export function toDealView(scored: ScoredListing): DealView {
     matchConfidence: match.confidence,
     score: score.total,
     createdAt: listing.firstSeenAt ?? listing.scrapedAt.toISOString(),
+    postedAt: listing.postedAt?.toISOString() ?? null,
     tierLabel: tier.label,
     tierLevel: tier.level,
   };

@@ -2,6 +2,29 @@ import type { ReactNode } from 'react';
 import { ExternalLinkIcon } from './icons.js';
 
 const madFmt = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
+const dateFmt = new Intl.DateTimeFormat('fr-MA', { day: 'numeric', month: 'short', year: 'numeric' });
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Local calendar midnight, so "days ago" counts dates, not 24h windows. */
+function startOfDay(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+/**
+ * Human-friendly publish date: "Today" / "Yesterday" / "N days ago" for the
+ * last month, an absolute date beyond that. Returns null for a missing/invalid
+ * date so the caller can omit the line.
+ */
+function formatPostDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const days = Math.round((startOfDay(new Date()) - startOfDay(date)) / MS_PER_DAY);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 30) return `${days} days ago`;
+  return dateFmt.format(date);
+}
 
 /** The visual fields a deal card renders — shared by the public and member feeds. */
 export interface DealCardData {
@@ -21,6 +44,8 @@ export interface DealCardData {
   readonly score: number;
   /** ISO timestamp of when the listing was first seen (for the date sorts). */
   readonly createdAt: string;
+  /** ISO marketplace publish date, or null when the source didn't provide one. */
+  readonly postedAt: string | null;
 }
 
 /**
@@ -40,6 +65,8 @@ export function DealCardShell({
   scoreTitle?: string;
   matchPct?: number;
 }) {
+  // Prefer the marketplace publish date; fall back to first-seen when absent.
+  const postedLabel = formatPostDate(data.postedAt ?? data.createdAt);
   return (
     <article className="card">
       {topRight}
@@ -71,6 +98,7 @@ export function DealCardShell({
           <span>{data.mileageKm !== null ? `${data.mileageKm} km` : 'km n/a'}</span>
           <span>{data.city}</span>
         </div>
+        {postedLabel && <div className="card-date">Posted {postedLabel}</div>}
         <div className="badges">
           <span className="badge">{data.sourceId}</span>
           {matchPct !== undefined && <span className="badge">match {matchPct}%</span>}
