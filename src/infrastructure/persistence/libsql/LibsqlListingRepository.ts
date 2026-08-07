@@ -247,7 +247,7 @@ export class LibsqlListingRepository implements ListingRepository {
     const parts = buildParts(q, { tab: 'all', applyRange: true, applyFilters: false });
     const where = parts.where ? `WHERE ${parts.where}` : '';
     const res = await this.client.execute({
-      sql: `SELECT m.brand AS brand, l.city AS city, l.mileage_km AS mileage
+      sql: `SELECT m.brand AS brand, l.city AS city, l.mileage_km AS mileage, l.price_mad AS price
             FROM listings l ${parts.joins} ${where}`,
       args: [...parts.joinArgs, ...parts.whereArgs],
     });
@@ -255,20 +255,23 @@ export class LibsqlListingRepository implements ListingRepository {
     const brandByKey = new Map<string, string>();
     const cityByKey = new Map<string, string>();
     let maxMileage = 0;
+    let maxPrice = 0;
     for (const row of res.rows as unknown as {
       brand: string;
       city: string;
       mileage: number | null;
+      price: number;
     }[]) {
       const brand = row.brand.trim();
       if (brand) brandByKey.set(brand.toLowerCase(), brand);
       const city = row.city.trim();
       if (city) cityByKey.set(city.toLowerCase(), city);
       if (row.mileage !== null && row.mileage > maxMileage) maxMileage = row.mileage;
+      if (row.price > maxPrice) maxPrice = row.price;
     }
     const sorted = (m: Map<string, string>): string[] =>
       [...m.values()].sort((a, b) => a.localeCompare(b));
-    return { brands: sorted(brandByKey), cities: sorted(cityByKey), maxMileage };
+    return { brands: sorted(brandByKey), cities: sorted(cityByKey), maxMileage, maxPrice };
   }
 
   async getListingsSince(sinceDate: Date): Promise<ScoredListing[]> {

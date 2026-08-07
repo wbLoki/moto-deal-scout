@@ -1,30 +1,36 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { DealCardShell, type DealCardData } from './DealCardShell.js';
-import { DealSearchBar, matchesQuery } from './DealSearchBar.js';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { DealCardShell } from './DealCardShell.js';
+import { DealSearchBar } from './DealSearchBar.js';
 import { SortSelect } from './SortSelect.js';
 import { Pagination } from './Pagination.js';
 import { SignInModal } from './SignInModal.js';
-import { DEFAULT_SORT, PAGE_SIZE, sortDeals, type SortKey } from './dealSort.js';
-import {
-  MIN_YEAR,
-  RATING_OPTIONS,
-  matchesBrand,
-  matchesCity,
-  matchesRating,
-  mileageCap,
-  uniqueBrands,
-  uniqueCities,
-  withinKm,
-  yearOptions,
-} from './dealFilters.js';
+import { PAGE_SIZE, type SortKey } from './dealSort.js';
+import { MIN_YEAR, RATING_OPTIONS, yearOptions, type FilterOption } from './dealFilters.js';
 import { MultiSelect } from './MultiSelect.js';
 import { BookmarkIcon, EyeIcon } from './icons.js';
+import { fetchPublicDealsPageAction } from './deal-actions.js';
+import type { DealView } from './dealView.js';
+import type { PublicDealsInput } from '../src/readModel.js';
+import type { DealFacets } from '../src/domain/interfaces/ListingRepository.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const MAX_YEAR = CURRENT_YEAR + 1;
 const YEARS = yearOptions();
+const SEARCH_DEBOUNCE_MS = 300;
+
+function titleCase(s: string): string {
+  return s
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(' ');
+}
+
+function roundUp(value: number, step: number): number {
+  return Math.ceil(value / step) * step;
+}
 
 /**
  * The members-only controls as they appear for anonymous visitors: clicking
@@ -55,25 +61,49 @@ function PublicCardActions({ onNeedSignIn }: { onNeedSignIn: (feature: string) =
   );
 }
 
-function roundUp(value: number, step: number): number {
-  return Math.ceil(value / step) * step;
-}
-
 /**
- * The public deal feed: a sticky left sidebar (search, sort, budget/year
- * filters) and a paginated grid. Everything is client-side (nothing saved) —
- * signing in is what unlocks a persisted range, following, saving and alerts.
+ * The public deal feed: a sticky left sidebar (search, sort, budget/year/mileage
+ * filters) and a paginated grid. Filtering, sorting and pagination all run in
+ * SQL on the server — the browser only holds the page it shows — so anonymous
+ * visitors can browse the entire catalog, not just a capped teaser. Signing in
+ * is what unlocks a persisted range, following, saving and alerts.
  */
-export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
+export function PublicFeed({
+  initialDeals,
+  initialTotal,
+  initialSort,
+  facets,
+}: {
+  initialDeals: readonly DealView[];
+  initialTotal: number;
+  initialSort: SortKey;
+  facets: DealFacets;
+}) {
   const priceCap = useMemo(
-    () => roundUp(Math.max(50000, ...deals.map((d) => d.priceMAD)), 5000),
-    [deals],
+    () => roundUp(Math.max(50000, facets.maxPrice), 5000),
+    [facets.maxPrice],
   );
-  const kmCap = useMemo(() => mileageCap(deals), [deals]);
+  const kmCap = useMemo(
+    () => (facets.maxMileage > 0 ? roundUp(facets.maxMileage, 5000) : 200000),
+    [facets.maxMileage],
+  );
+  const brandOptions = useMemo<FilterOption[]>(
+    () => facets.brands.map((b) => ({ value: b.toLowerCase(), label: b })),
+    [facets.brands],
+  );
+  const cityOptions = useMemo<FilterOption[]>(
+    () => facets.cities.map((c) => ({ value: c.toLowerCase(), label: titleCase(c) })),
+    [facets.cities],
+  );
+
+  const [deals, setDeals] = useState<readonly DealView[]>(initialDeals);
+  const [total, setTotal] = useState(initialTotal);
+  const [isPending, startTransition] = useTransition();
 
   const [signInFeature, setSignInFeature] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>(initialSort);
   const [budgetMin, setBudgetMin] = useState(0);
   const [budgetMax, setBudgetMax] = useState(priceCap);
   const [yearMin, setYearMin] = useState(MIN_YEAR);
@@ -85,10 +115,8 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
   const [brandsSel, setBrandsSel] = useState<string[]>([]);
   const [page, setPage] = useState(1);
 
-  const cityOptions = useMemo(() => uniqueCities(deals), [deals]);
-  const brandOptions = useMemo(() => uniqueBrands(deals), [deals]);
-
   const invalid = budgetMax < budgetMin || yearMax < yearMin || kmMax < kmMin;
+  const resetPage = () => setPage(1);
 
   const resetFilters = () => {
     setQuery('');
@@ -101,40 +129,56 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
     setRatings([]);
     setCities([]);
     setBrandsSel([]);
+    resetPage();
   };
 
-  const visible = useMemo(() => {
-    if (invalid) return [];
-    const filtered = deals.filter((d) => {
-      if (d.priceMAD < budgetMin || d.priceMAD > budgetMax) return false;
-      if (d.year !== null && (d.year < yearMin || d.year > yearMax)) return false;
-      if (!withinKm(d.mileageKm, kmMin, kmMax)) return false;
-      if (!matchesRating(d.tierLevel, ratings)) return false;
-      if (!matchesCity(d.city, cities)) return false;
-      if (!matchesBrand(d.brand, brandsSel)) return false;
-      return matchesQuery(d, query);
-    });
-    return sortDeals(filtered, sort);
-  }, [
-    deals,
-    budgetMin,
-    budgetMax,
-    yearMin,
-    yearMax,
-    kmMin,
-    kmMax,
-    ratings,
-    cities,
-    brandsSel,
-    query,
-    sort,
-    invalid,
-  ]);
-
-  // Any change to the result set or ordering returns to the first page.
+  // Debounce the search box into the value the fetch depends on.
   useEffect(() => {
-    setPage(1);
+    const t = setTimeout(() => {
+      setDebouncedQuery(query);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // Fetch the exact page from the server whenever a control changes. The first
+  // render is skipped — its data arrived server-rendered as props.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    if (invalid) {
+      setDeals([]);
+      setTotal(0);
+      return;
+    }
+    const input: PublicDealsInput = {
+      search: debouncedQuery.trim(),
+      budgetMin,
+      budgetMax,
+      yearMin,
+      yearMax,
+      mileageMin: kmMin,
+      mileageMax: kmMax >= kmCap ? 0 : kmMax,
+      ratings,
+      cities,
+      brands: brandsSel,
+      sort,
+      page,
+    };
+    startTransition(async () => {
+      const res = await fetchPublicDealsPageAction(input);
+      if (res.ok) {
+        setDeals(res.deals);
+        setTotal(res.total);
+      }
+    });
   }, [
+    debouncedQuery,
+    sort,
+    page,
     budgetMin,
     budgetMax,
     yearMin,
@@ -144,19 +188,23 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
     ratings,
     cities,
     brandsSel,
-    query,
-    sort,
+    invalid,
+    kmCap,
   ]);
 
-  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  const clampedPage = Math.min(page, pageCount);
-  const pageItems = visible.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="browse">
       <aside className="browse-sidebar">
         <DealSearchBar value={query} onChange={setQuery} />
-        <SortSelect value={sort} onChange={setSort} />
+        <SortSelect
+          value={sort}
+          onChange={(v) => {
+            setSort(v);
+            resetPage();
+          }}
+        />
 
         <div className="filters-head">
           <h3 className="filters-title">Filters</h3>
@@ -175,7 +223,10 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
                 min={0}
                 step={1000}
                 value={budgetMin}
-                onChange={(e) => setBudgetMin(Number(e.target.value))}
+                onChange={(e) => {
+                  setBudgetMin(Number(e.target.value));
+                  resetPage();
+                }}
               />
             </label>
             <label>
@@ -185,7 +236,10 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
                 min={0}
                 step={1000}
                 value={budgetMax}
-                onChange={(e) => setBudgetMax(Number(e.target.value))}
+                onChange={(e) => {
+                  setBudgetMax(Number(e.target.value));
+                  resetPage();
+                }}
               />
             </label>
           </div>
@@ -196,7 +250,13 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
           <div className="sidebar-row">
             <label>
               <span>From</span>
-              <select value={yearMin} onChange={(e) => setYearMin(Number(e.target.value))}>
+              <select
+                value={yearMin}
+                onChange={(e) => {
+                  setYearMin(Number(e.target.value));
+                  resetPage();
+                }}
+              >
                 {YEARS.map((y) => (
                   <option key={y} value={y}>
                     {y}
@@ -206,7 +266,13 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
             </label>
             <label>
               <span>To</span>
-              <select value={yearMax} onChange={(e) => setYearMax(Number(e.target.value))}>
+              <select
+                value={yearMax}
+                onChange={(e) => {
+                  setYearMax(Number(e.target.value));
+                  resetPage();
+                }}
+              >
                 {YEARS.map((y) => (
                   <option key={y} value={y}>
                     {y}
@@ -227,7 +293,10 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
                 min={0}
                 step={1000}
                 value={kmMin}
-                onChange={(e) => setKmMin(Number(e.target.value))}
+                onChange={(e) => {
+                  setKmMin(Number(e.target.value));
+                  resetPage();
+                }}
               />
             </label>
             <label>
@@ -237,7 +306,10 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
                 min={0}
                 step={1000}
                 value={kmMax}
-                onChange={(e) => setKmMax(Number(e.target.value))}
+                onChange={(e) => {
+                  setKmMax(Number(e.target.value));
+                  resetPage();
+                }}
               />
             </label>
           </div>
@@ -247,7 +319,10 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
           label="Deal rating"
           options={RATING_OPTIONS}
           selected={ratings}
-          onChange={setRatings}
+          onChange={(v) => {
+            setRatings(v);
+            resetPage();
+          }}
           allLabel="All ratings"
         />
 
@@ -255,7 +330,10 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
           label="Brand"
           options={brandOptions}
           selected={brandsSel}
-          onChange={setBrandsSel}
+          onChange={(v) => {
+            setBrandsSel(v);
+            resetPage();
+          }}
           allLabel="All brands"
         />
 
@@ -263,7 +341,10 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
           label="City"
           options={cityOptions}
           selected={cities}
-          onChange={setCities}
+          onChange={(v) => {
+            setCities(v);
+            resetPage();
+          }}
           allLabel="All cities"
         />
 
@@ -272,26 +353,26 @@ export function PublicFeed({ deals }: { deals: readonly DealCardData[] }) {
 
       <div className="browse-main">
         <div className="browse-count">
-          {visible.length} {visible.length === 1 ? 'listing' : 'listings'}
+          {total} {total === 1 ? 'listing' : 'listings'}
         </div>
 
-        {pageItems.length === 0 ? (
+        <div className="grid" aria-busy={isPending}>
+          {deals.map((deal) => (
+            <DealCardShell
+              key={deal.key}
+              data={deal}
+              topRight={<PublicCardActions onNeedSignIn={setSignInFeature} />}
+            />
+          ))}
+        </div>
+
+        {deals.length === 0 && (
           <div className="empty">
             {invalid ? 'Check your filter values.' : 'No deals match your filters.'}
           </div>
-        ) : (
-          <div className="grid">
-            {pageItems.map((deal) => (
-              <DealCardShell
-                key={deal.key}
-                data={deal}
-                topRight={<PublicCardActions onNeedSignIn={setSignInFeature} />}
-              />
-            ))}
-          </div>
         )}
 
-        <Pagination page={clampedPage} pageCount={pageCount} onPage={setPage} />
+        <Pagination page={Math.min(page, pageCount)} pageCount={pageCount} onPage={setPage} />
       </div>
 
       <SignInModal feature={signInFeature} onClose={() => setSignInFeature(null)} />

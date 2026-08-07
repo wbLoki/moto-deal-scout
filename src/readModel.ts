@@ -10,7 +10,6 @@ import type {
   DealTab,
   TabCounts,
 } from './domain/interfaces/ListingRepository.js';
-import { priceIsPlausible } from './domain/services/priceFilter.js';
 import { openDatabase } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
@@ -65,10 +64,6 @@ export interface DashboardData {
   readonly initialTotal: number;
 }
 
-// The scan stores more listings than we show; fetch a generous page, filter
-// by the user's range, sort best-first, then cap at `limit`.
-const FETCH_MULTIPLIER = 5;
-
 /** The neutral, unfiltered page-1 request used for first paint and facets/counts. */
 function baseInput(tab: DealTab = 'all'): DealsPageInput {
   return {
@@ -82,10 +77,6 @@ function baseInput(tab: DealTab = 'all'): DealsPageInput {
     sort: DEFAULT_SORT,
     page: 1,
   };
-}
-
-function byScoreDesc(a: ScoredListing, b: ScoredListing): number {
-  return b.score.total - a.score.total;
 }
 
 function startOfToday(): Date {
@@ -213,12 +204,76 @@ export async function getDealsPage(userId: string, input: DealsPageInput): Promi
 }
 
 /**
- * Public, no-login read: the top-scored recent listings across all models,
- * with no per-user range filter — just plausibly priced and sorted best-first.
- * Shared by the public homepage feed (`getPublicDeals`) and the smaller landing
- * teaser (`getHotDeals`); the only difference is how many deals are returned.
+ * The public feed's filter/sort/page controls. Unlike the member dashboard —
+ * whose budget/year window is a saved setting — anonymous visitors set budget
+ * and year live in the sidebar, so those travel with each request. No tabs, no
+ * watchlist, no saved list.
  */
-async function readPublicDeals(limit: number): Promise<ScoredListing[]> {
+export interface PublicDealsInput {
+  readonly search: string;
+  readonly budgetMin: number;
+  readonly budgetMax: number;
+  readonly yearMin: number;
+  readonly yearMax: number;
+  readonly mileageMin: number;
+  /** `0` means "no upper bound". */
+  readonly mileageMax: number;
+  readonly ratings: readonly string[];
+  readonly cities: readonly string[];
+  readonly brands: readonly string[];
+  readonly sort: SortKey;
+  readonly page: number;
+}
+
+/** Everything the public homepage needs for its first server-rendered paint. */
+export interface PublicDashboardData {
+  readonly initialDeals: readonly ScoredListing[];
+  readonly initialTotal: number;
+  readonly initialSort: SortKey;
+  /** Filter options + slider bounds, over the whole plausible catalog. */
+  readonly facets: DealFacets;
+}
+
+/** Unbounded range for the unfiltered public first paint and its facets. */
+const PUBLIC_WIDE_RANGE: SearchRange = {
+  budgetMin: 0,
+  budgetMax: Number.MAX_SAFE_INTEGER,
+  yearMin: 0,
+  yearMax: 9999,
+};
+
+/** Builds a {@link DealQuery} for the anonymous feed (no user, single "all" tab). */
+function toPublicDealQuery(input: PublicDealsInput, minPriceFactor: number): DealQuery {
+  return {
+    userId: '',
+    tab: 'all',
+    range: {
+      budgetMin: input.budgetMin,
+      budgetMax: input.budgetMax,
+      yearMin: input.yearMin,
+      yearMax: input.yearMax,
+    },
+    minPriceFactor,
+    watchedModelIds: [],
+    search: input.search,
+    mileageMin: input.mileageMin,
+    mileageMax: input.mileageMax,
+    ratings: input.ratings,
+    cities: input.cities,
+    brands: input.brands,
+    sort: input.sort,
+    page: input.page,
+    pageSize: PAGE_SIZE,
+    startOfToday: '',
+  };
+}
+
+/**
+ * Public homepage first paint: the first page of the whole plausible catalog
+ * (no budget/year filter applied yet) plus the filter facets and slider bounds.
+ * Same SQL path as the member dashboard, minus the per-user scoping.
+ */
+export async function getPublicDashboard(): Promise<PublicDashboardData> {
   const env = loadEnv();
   const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
@@ -226,33 +281,51 @@ async function readPublicDeals(limit: number): Promise<ScoredListing[]> {
     const modelRepo = new LibsqlModelRepository(db);
     await modelRepo.seedIfEmpty(config.models);
     const allModels = await modelRepo.listAll();
-
     const listings = new LibsqlListingRepository(db, allModels);
-    const recent = await listings.getTopScoredListings(limit * FETCH_MULTIPLIER);
-    return recent
-      .filter((d) =>
-        priceIsPlausible(
-          d.listing.priceMAD,
-          d.match.criteria.priceRangeMAD.min,
-          config.global.minPriceFactor,
-        ),
-      )
-      .sort(byScoreDesc)
-      .slice(0, limit);
+
+    const wide = toPublicDealQuery(
+      {
+        search: '',
+        budgetMin: PUBLIC_WIDE_RANGE.budgetMin,
+        budgetMax: PUBLIC_WIDE_RANGE.budgetMax,
+        yearMin: PUBLIC_WIDE_RANGE.yearMin,
+        yearMax: PUBLIC_WIDE_RANGE.yearMax,
+        mileageMin: 0,
+        mileageMax: 0,
+        ratings: [],
+        cities: [],
+        brands: [],
+        sort: DEFAULT_SORT,
+        page: 1,
+      },
+      config.global.minPriceFactor,
+    );
+    const [{ deals, total }, facets] = await Promise.all([
+      listings.queryDeals(wide),
+      listings.getDealFacets(wide),
+    ]);
+    return { initialDeals: deals, initialTotal: total, initialSort: DEFAULT_SORT, facets };
   } finally {
     db.close();
   }
 }
 
-/**
- * The full public deal feed shown to anonymous visitors on the homepage. Same
- * shape and scoring as the member feed, minus the per-user budget/year filter.
- */
-export function getPublicDeals(limit = 60): Promise<ScoredListing[]> {
-  return readPublicDeals(limit);
-}
-
-/** A small teaser of the globally hottest deals (e.g. for marketing sections). */
-export function getHotDeals(limit = 6): Promise<ScoredListing[]> {
-  return readPublicDeals(limit);
+/** Answers one filter/sort/page request from the anonymous public feed. */
+export async function getPublicDealsPage(
+  input: PublicDealsInput,
+): Promise<{ deals: ScoredListing[]; total: number }> {
+  const env = loadEnv();
+  const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
+  const db = await openDatabase(resolveDatabaseConfig(env));
+  try {
+    const modelRepo = new LibsqlModelRepository(db);
+    await modelRepo.seedIfEmpty(config.models);
+    const allModels = await modelRepo.listAll();
+    const listings = new LibsqlListingRepository(db, allModels);
+    // Must await before the finally closes the client — returning the pending
+    // promise would let db.close() fire mid-query ("Client was closed").
+    return await listings.queryDeals(toPublicDealQuery(input, config.global.minPriceFactor));
+  } finally {
+    db.close();
+  }
 }

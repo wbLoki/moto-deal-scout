@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../auth.js';
-import { getDashboardData, getPublicDeals } from '../src/readModel.js';
+import { getDashboardData, getPublicDashboard } from '../src/readModel.js';
 import { PublicHome } from './PublicHome.js';
 import { SearchSettings } from './SearchSettings.js';
 import { ScanNowButton } from './ScanNowButton.js';
@@ -18,8 +18,15 @@ export default async function DashboardPage() {
   const session = await auth();
   // Anonymous visitors can browse the full public deal feed (no login required).
   if (!session?.user?.id) {
-    const deals = await getPublicDeals();
-    return <PublicHome deals={deals.map(toDealView)} />;
+    const pub = await getPublicDashboard();
+    return (
+      <PublicHome
+        initialDeals={pub.initialDeals.map(toDealView)}
+        initialTotal={pub.initialTotal}
+        initialSort={pub.initialSort}
+        facets={pub.facets}
+      />
+    );
   }
   const isAdmin = session.user.role === 'admin';
 

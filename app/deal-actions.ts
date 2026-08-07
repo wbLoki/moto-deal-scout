@@ -2,7 +2,12 @@
 
 import { auth } from '../auth.js';
 import type { TabCounts } from '../src/domain/interfaces/ListingRepository.js';
-import { getDealsPage, type DealsPageInput } from '../src/readModel.js';
+import {
+  getDealsPage,
+  getPublicDealsPage,
+  type DealsPageInput,
+  type PublicDealsInput,
+} from '../src/readModel.js';
 import { toDealView, type DealView } from './dealView.js';
 
 const EMPTY_COUNTS: TabCounts = { all: 0, daily: 0, watched: 0, saved: 0 };
@@ -34,5 +39,27 @@ export async function fetchDealsPageAction(input: DealsPageInput): Promise<Deals
     };
   } catch {
     return { ok: false, deals: [], total: 0, tabCounts: EMPTY_COUNTS };
+  }
+}
+
+export interface PublicDealsPageResult {
+  readonly ok: boolean;
+  readonly deals: DealView[];
+  readonly total: number;
+}
+
+/**
+ * The anonymous counterpart: no session, and the budget/year window travels in
+ * the input rather than coming from a saved per-user range. Powers the public
+ * homepage feed's filtering, sorting and pagination.
+ */
+export async function fetchPublicDealsPageAction(
+  input: PublicDealsInput,
+): Promise<PublicDealsPageResult> {
+  try {
+    const page = await getPublicDealsPage(input);
+    return { ok: true, deals: page.deals.map(toDealView), total: page.total };
+  } catch {
+    return { ok: false, deals: [], total: 0 };
   }
 }

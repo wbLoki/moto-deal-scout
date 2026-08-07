@@ -55,6 +55,8 @@ export interface DealFacets {
   readonly cities: readonly string[];
   /** Largest mileage seen, for the mileage slider's upper bound. */
   readonly maxMileage: number;
+  /** Highest price seen, for the public budget slider's upper bound. */
+  readonly maxPrice: number;
 }
 
 /**

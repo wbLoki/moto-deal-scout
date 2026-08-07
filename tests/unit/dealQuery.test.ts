@@ -224,5 +224,6 @@ describe('LibsqlListingRepository.countDealsByTab & getDealFacets', () => {
     expect(facets.brands).toEqual(['Honda', 'Yamaha']);
     expect(facets.cities.map((c) => c.toLowerCase()).sort()).toEqual(['casablanca', 'rabat']);
     expect(facets.maxMileage).toBe(55000);
+    expect(facets.maxPrice).toBe(70000);
   });
 });
