@@ -1,10 +1,132 @@
-import type { Client, Row } from '@libsql/client';
+import type { Client, InValue, Row } from '@libsql/client';
 import type { Logger } from 'pino';
+import type { SortKey } from '../../../domain/entities/DealSort.js';
 import type { MarketplaceId } from '../../../domain/entities/Listing.js';
 import type { ScoredListing } from '../../../domain/entities/ScoredListing.js';
 import type { ModelCriteria } from '../../../domain/entities/SearchCriteria.js';
-import type { ListingRepository } from '../../../domain/interfaces/ListingRepository.js';
+import type {
+  DealFacets,
+  DealQuery,
+  DealTab,
+  ListingRepository,
+  TabCounts,
+} from '../../../domain/interfaces/ListingRepository.js';
+import { tierScoreBand } from '../../../domain/services/dealTier.js';
 import { mapRowToScoredListing, toInsertArgs, UPSERT_SQL, type ListingRow } from './schema.js';
+
+/** SQL ORDER BY fragment per sort key. A stable id tiebreaker is appended by callers. */
+const ORDER_BY: Record<SortKey, string> = {
+  newest: 'l.created_at DESC',
+  oldest: 'l.created_at ASC',
+  'price-asc': 'l.price_mad ASC',
+  'price-desc': 'l.price_mad DESC',
+  score: 'l.score_total DESC',
+};
+
+const placeholders = (n: number): string => Array(n).fill('?').join(', ');
+
+/** Escapes LIKE wildcards so a user's `%`/`_` are matched literally (with ESCAPE '\'). */
+const likeContains = (term: string): string => `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+
+/** The FROM/JOIN + WHERE of a deal query, with join args and where args kept separate. */
+interface QueryParts {
+  readonly joins: string;
+  readonly joinArgs: InValue[];
+  readonly where: string;
+  readonly whereArgs: InValue[];
+}
+
+/**
+ * Builds the shared FROM/JOIN + WHERE for the dashboard feed. `tab` may differ
+ * from `q.tab` (the tab-count queries reuse this for each tab). `applyRange`
+ * and `applyFilters` let counts/facets omit the budget window or the
+ * search/mileage/rating/city/brand filters. Positional args are returned split
+ * because the saved-tab JOIN carries a `?` that must precede the WHERE args.
+ */
+function buildParts(
+  q: DealQuery,
+  opts: { tab: DealTab; applyRange: boolean; applyFilters: boolean },
+): QueryParts {
+  const joinArgs: InValue[] = [];
+  const conds: string[] = [];
+  const whereArgs: InValue[] = [];
+  let joins = 'JOIN models m ON m.id = l.matched_model_id';
+
+  // Saved bookmarks join in (and deliberately ignore the budget/year range).
+  if (opts.tab === 'saved') {
+    joins +=
+      ' JOIN user_saved_listings sv ON sv.source_id = l.source_id' +
+      ' AND sv.external_id = l.external_id AND sv.user_id = ?';
+    joinArgs.push(q.userId);
+  }
+
+  // Hide implausibly-cheap listings (price below the model's floor × factor).
+  // A provisional model has price_min = 0, so its threshold is 0 — always passes.
+  conds.push('l.price_mad >= m.price_min * ?');
+  whereArgs.push(q.minPriceFactor);
+
+  if (opts.applyRange) {
+    conds.push('l.price_mad BETWEEN ? AND ?');
+    whereArgs.push(q.range.budgetMin, q.range.budgetMax);
+    conds.push('(l.year IS NULL OR l.year BETWEEN ? AND ?)');
+    whereArgs.push(q.range.yearMin, q.range.yearMax);
+  }
+
+  if (opts.tab === 'daily') {
+    conds.push('l.created_at >= ?');
+    whereArgs.push(q.startOfToday);
+  } else if (opts.tab === 'watched') {
+    // Caller guarantees a non-empty set (an empty watchlist short-circuits to 0).
+    conds.push(`l.matched_model_id IN (${placeholders(q.watchedModelIds.length)})`);
+    whereArgs.push(...q.watchedModelIds);
+  }
+
+  if (opts.applyFilters) {
+    const search = q.search.trim().toLowerCase();
+    if (search) {
+      conds.push("LOWER(m.brand || ' ' || m.model || ' ' || l.city) LIKE ? ESCAPE '\\'");
+      whereArgs.push(likeContains(search));
+    }
+
+    if (q.mileageMin > 0 || q.mileageMax > 0) {
+      const max = q.mileageMax > 0 ? q.mileageMax : Number.MAX_SAFE_INTEGER;
+      conds.push('(l.mileage_km IS NULL OR l.mileage_km BETWEEN ? AND ?)');
+      whereArgs.push(q.mileageMin, max);
+    }
+
+    if (q.cities.length > 0) {
+      conds.push(`LOWER(l.city) IN (${placeholders(q.cities.length)})`);
+      whereArgs.push(...q.cities.map((c) => c.toLowerCase()));
+    }
+
+    if (q.brands.length > 0) {
+      conds.push(`LOWER(m.brand) IN (${placeholders(q.brands.length)})`);
+      whereArgs.push(...q.brands.map((b) => b.toLowerCase()));
+    }
+
+    if (q.ratings.length > 0) {
+      const ors: string[] = [];
+      for (const level of q.ratings) {
+        if (level === 'calibrating') {
+          ors.push('m.price_min = 0');
+          continue;
+        }
+        const band = tierScoreBand(level);
+        if (!band) continue;
+        if (band.maxExclusive === Infinity) {
+          ors.push('(m.price_min > 0 AND l.score_total >= ?)');
+          whereArgs.push(band.min);
+        } else {
+          ors.push('(m.price_min > 0 AND l.score_total >= ? AND l.score_total < ?)');
+          whereArgs.push(band.min, band.maxExclusive);
+        }
+      }
+      if (ors.length > 0) conds.push(`(${ors.join(' OR ')})`);
+    }
+  }
+
+  return { joins, joinArgs, where: conds.join(' AND '), whereArgs };
+}
 
 /**
  * libsql-backed {@link ListingRepository}. Works unchanged against a local
@@ -67,6 +189,86 @@ export class LibsqlListingRepository implements ListingRepository {
       args: [limit],
     });
     return this.mapRows(result.rows);
+  }
+
+  async queryDeals(q: DealQuery): Promise<{ deals: ScoredListing[]; total: number }> {
+    // An empty watchlist can't match anything; skip the round-trip entirely.
+    if (q.tab === 'watched' && q.watchedModelIds.length === 0) return { deals: [], total: 0 };
+
+    const parts = buildParts(q, {
+      tab: q.tab,
+      applyRange: q.tab !== 'saved',
+      applyFilters: true,
+    });
+    const where = parts.where ? `WHERE ${parts.where}` : '';
+    const orderBy = `${ORDER_BY[q.sort]}, l.source_id, l.external_id`;
+    const offset = Math.max(0, (q.page - 1) * q.pageSize);
+
+    const [rowsRes, countRes] = await Promise.all([
+      this.client.execute({
+        sql: `SELECT l.* FROM listings l ${parts.joins} ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
+        args: [...parts.joinArgs, ...parts.whereArgs, q.pageSize, offset],
+      }),
+      this.client.execute({
+        sql: `SELECT COUNT(*) AS n FROM listings l ${parts.joins} ${where}`,
+        args: [...parts.joinArgs, ...parts.whereArgs],
+      }),
+    ]);
+
+    return {
+      deals: this.mapRows(rowsRes.rows),
+      total: Number((countRes.rows[0] as unknown as { n: number }).n),
+    };
+  }
+
+  async countDealsByTab(q: DealQuery): Promise<TabCounts> {
+    const countFor = async (tab: DealTab): Promise<number> => {
+      if (tab === 'watched' && q.watchedModelIds.length === 0) return 0;
+      const parts = buildParts(q, { tab, applyRange: tab !== 'saved', applyFilters: false });
+      const where = parts.where ? `WHERE ${parts.where}` : '';
+      const res = await this.client.execute({
+        sql: `SELECT COUNT(*) AS n FROM listings l ${parts.joins} ${where}`,
+        args: [...parts.joinArgs, ...parts.whereArgs],
+      });
+      return Number((res.rows[0] as unknown as { n: number }).n);
+    };
+
+    const [all, daily, watched, saved] = await Promise.all([
+      countFor('all'),
+      countFor('daily'),
+      countFor('watched'),
+      countFor('saved'),
+    ]);
+    return { all, daily, watched, saved };
+  }
+
+  async getDealFacets(q: DealQuery): Promise<DealFacets> {
+    // Filter options come from the whole in-range set, not one page or tab.
+    const parts = buildParts(q, { tab: 'all', applyRange: true, applyFilters: false });
+    const where = parts.where ? `WHERE ${parts.where}` : '';
+    const res = await this.client.execute({
+      sql: `SELECT m.brand AS brand, l.city AS city, l.mileage_km AS mileage
+            FROM listings l ${parts.joins} ${where}`,
+      args: [...parts.joinArgs, ...parts.whereArgs],
+    });
+
+    const brandByKey = new Map<string, string>();
+    const cityByKey = new Map<string, string>();
+    let maxMileage = 0;
+    for (const row of res.rows as unknown as {
+      brand: string;
+      city: string;
+      mileage: number | null;
+    }[]) {
+      const brand = row.brand.trim();
+      if (brand) brandByKey.set(brand.toLowerCase(), brand);
+      const city = row.city.trim();
+      if (city) cityByKey.set(city.toLowerCase(), city);
+      if (row.mileage !== null && row.mileage > maxMileage) maxMileage = row.mileage;
+    }
+    const sorted = (m: Map<string, string>): string[] =>
+      [...m.values()].sort((a, b) => a.localeCompare(b));
+    return { brands: sorted(brandByKey), cities: sorted(cityByKey), maxMileage };
   }
 
   async getListingsSince(sinceDate: Date): Promise<ScoredListing[]> {

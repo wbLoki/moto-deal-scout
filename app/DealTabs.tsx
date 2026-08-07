@@ -1,31 +1,31 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import Link from 'next/link';
 import { setWatchedModelAction } from './watchlist-actions.js';
 import { setSavedListingAction } from './saved-actions.js';
-import { DealCardShell, type DealCardData } from './DealCardShell.js';
-import { DealSearchBar, matchesQuery } from './DealSearchBar.js';
+import { fetchDealsPageAction } from './deal-actions.js';
+import { DealCardShell } from './DealCardShell.js';
+import { DealSearchBar } from './DealSearchBar.js';
 import { SortSelect } from './SortSelect.js';
 import { Pagination } from './Pagination.js';
-import { DEFAULT_SORT, PAGE_SIZE, sortDeals, type SortKey } from './dealSort.js';
-import {
-  RATING_OPTIONS,
-  matchesBrand,
-  matchesCity,
-  matchesRating,
-  mileageCap,
-  uniqueBrands,
-  uniqueCities,
-  withinKm,
-} from './dealFilters.js';
+import { PAGE_SIZE, type SortKey } from './dealSort.js';
+import { RATING_OPTIONS, type FilterOption } from './dealFilters.js';
 import { MultiSelect } from './MultiSelect.js';
 import { BookmarkIcon } from './icons.js';
+import type { DealView } from './dealView.js';
+import type { DealsPageInput } from '../src/readModel.js';
+import type { DealFacets, DealTab, TabCounts } from '../src/domain/interfaces/ListingRepository.js';
 
-/** Flat, fully-serializable view of a scored listing for the client. */
-export interface DealView extends DealCardData {
-  modelId: string;
-  matchConfidence: number;
+/** Debounce for the search box, so we don't hit the server on every keystroke. */
+const SEARCH_DEBOUNCE_MS = 300;
+
+function titleCase(s: string): string {
+  return s
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(' ');
 }
 
 /** Eye toggle to follow/unfollow the card's model. */
@@ -112,11 +112,7 @@ function DealCard({
       matchPct={Math.round(deal.matchConfidence * 100)}
       topRight={
         <div className="card-actions">
-          <WatchEye
-            watching={watching}
-            label={label}
-            onToggle={() => onToggleWatch(deal.modelId)}
-          />
+          <WatchEye watching={watching} label={label} onToggle={() => onToggleWatch(deal.modelId)} />
           <SaveButton saved={saved} label={label} onToggle={() => onToggleSave(deal.key)} />
         </div>
       }
@@ -124,44 +120,76 @@ function DealCard({
   );
 }
 
-type TabId = 'daily' | 'watched' | 'saved' | 'all';
+const TABS: { id: DealTab; label: string }[] = [
+  { id: 'daily', label: 'Daily deals' },
+  { id: 'watched', label: 'Your watched models' },
+  { id: 'saved', label: 'Saved' },
+  { id: 'all', label: 'All deals' },
+];
 
 export function DealTabs({
-  daily,
-  all,
-  saved,
+  initialDeals,
+  initialTotal,
+  initialTab,
+  initialSort,
+  tabCounts,
+  facets,
   watchedModelIds,
   savedKeys,
-  hiddenByRange,
   sidebar,
 }: {
-  daily: readonly DealView[];
-  all: readonly DealView[];
-  saved: readonly DealView[];
+  initialDeals: readonly DealView[];
+  initialTotal: number;
+  initialTab: DealTab;
+  initialSort: SortKey;
+  tabCounts: TabCounts;
+  facets: DealFacets;
   watchedModelIds: readonly string[];
   savedKeys: readonly string[];
-  hiddenByRange: number;
   /** Injected sidebar content (saved range + scan control) shown above search/sort. */
   sidebar?: ReactNode;
 }) {
+  // Server-provided page + counts; refreshed on every filter/sort/page change.
+  const [deals, setDeals] = useState<readonly DealView[]>(initialDeals);
+  const [total, setTotal] = useState(initialTotal);
+  const [counts, setCounts] = useState<TabCounts>(tabCounts);
+
   // Watched models and saved listings live in client state so toggles flip
-  // instantly (optimistic) and the Watched/Saved tabs update without a reload.
+  // instantly (optimistic); a refetch then refreshes the counts and tabs.
   const [watched, setWatched] = useState<ReadonlySet<string>>(() => new Set(watchedModelIds));
   const [savedSet, setSavedSet] = useState<ReadonlySet<string>>(() => new Set(savedKeys));
-  const [, startTransition] = useTransition();
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
-  const [page, setPage] = useState(1);
 
-  const kmCap = useMemo(() => mileageCap(all), [all]);
-  const cityOptions = useMemo(() => uniqueCities(all), [all]);
-  const brandOptions = useMemo(() => uniqueBrands(all), [all]);
+  const [active, setActive] = useState<DealTab>(initialTab);
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>(initialSort);
+  const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isPending, startTransition] = useTransition();
+
+  const kmCap = useMemo(
+    () => (facets.maxMileage > 0 ? Math.ceil(facets.maxMileage / 5000) * 5000 : 200000),
+    [facets.maxMileage],
+  );
+  const brandOptions = useMemo<FilterOption[]>(
+    () => facets.brands.map((b) => ({ value: b.toLowerCase(), label: b })),
+    [facets.brands],
+  );
+  const cityOptions = useMemo<FilterOption[]>(
+    () => facets.cities.map((c) => ({ value: c.toLowerCase(), label: titleCase(c) })),
+    [facets.cities],
+  );
+
   const [kmMin, setKmMin] = useState(0);
   const [kmMax, setKmMax] = useState(kmCap);
   const [ratings, setRatings] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [brandsSel, setBrandsSel] = useState<string[]>([]);
 
+  const kmInvalid = kmMax < kmMin;
+
+  // Any control change returns to page 1; only the pager itself keeps a page.
+  const resetPage = () => setPage(1);
   const resetFilters = () => {
     setQuery('');
     setKmMin(0);
@@ -169,21 +197,53 @@ export function DealTabs({
     setRatings([]);
     setCities([]);
     setBrandsSel([]);
+    resetPage();
   };
 
-  const watchedDeals = useMemo(() => all.filter((d) => watched.has(d.modelId)), [all, watched]);
+  // Debounce the search box into `debouncedQuery` (which the fetch depends on).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedQuery(query);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [query]);
 
-  // Pool every deal we know about (saved list + current feeds) so a card just
-  // saved from the All tab still appears under Saved.
-  const dealsByKey = useMemo(() => {
-    const m = new Map<string, DealView>();
-    for (const d of [...saved, ...all, ...daily]) if (!m.has(d.key)) m.set(d.key, d);
-    return m;
-  }, [saved, all, daily]);
-  const savedDeals = useMemo(
-    () => [...savedSet].map((k) => dealsByKey.get(k)).filter((d): d is DealView => d !== undefined),
-    [savedSet, dealsByKey],
-  );
+  // The one place we talk to the server: whenever the tab, search, sort, page,
+  // filters or a watch/save toggle (refreshKey) change, fetch that exact page.
+  // The initial render is skipped — its data came from the server on first paint.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    if (kmInvalid) {
+      setDeals([]);
+      setTotal(0);
+      return;
+    }
+    const input: DealsPageInput = {
+      tab: active,
+      search: debouncedQuery.trim(),
+      mileageMin: kmMin,
+      // Slider pinned at the data's max means "no upper bound".
+      mileageMax: kmMax >= kmCap ? 0 : kmMax,
+      ratings,
+      cities,
+      brands: brandsSel,
+      sort,
+      page,
+    };
+    startTransition(async () => {
+      const res = await fetchDealsPageAction(input);
+      if (res.ok) {
+        setDeals(res.deals);
+        setTotal(res.total);
+        setCounts(res.tabCounts);
+      }
+    });
+  }, [active, debouncedQuery, sort, page, kmMin, kmMax, ratings, cities, brandsSel, refreshKey]);
 
   const toggleWatch = (modelId: string) => {
     const willWatch = !watched.has(modelId);
@@ -191,6 +251,7 @@ export function DealTabs({
     startTransition(async () => {
       const res = await setWatchedModelAction(modelId, willWatch);
       if (!res.ok) setWatched((prev) => withToggle(prev, modelId, !willWatch));
+      else setRefreshKey((k) => k + 1);
     });
   };
 
@@ -200,48 +261,20 @@ export function DealTabs({
     startTransition(async () => {
       const res = await setSavedListingAction(key, willSave);
       if (!res.ok) setSavedSet((prev) => withToggle(prev, key, !willSave));
+      else setRefreshKey((k) => k + 1);
     });
   };
 
-  const tabs: { id: TabId; label: string; deals: readonly DealView[] }[] = [
-    { id: 'daily', label: 'Daily deals', deals: daily },
-    { id: 'watched', label: 'Your watched models', deals: watchedDeals },
-    { id: 'saved', label: 'Saved', deals: savedDeals },
-    { id: 'all', label: 'All deals', deals: all },
-  ];
+  const selectTab = (id: DealTab) => {
+    setActive(id);
+    resetPage();
+  };
 
-  const initial: TabId = tabs.find((t) => t.deals.length > 0)?.id ?? 'all';
-  const [active, setActive] = useState<TabId>(initial);
-  const activeDeals = tabs.find((t) => t.id === active)?.deals ?? all;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const kmInvalid = kmMax < kmMin;
-  const visible = useMemo(() => {
-    if (kmInvalid) return [];
-    const filtered = activeDeals.filter(
-      (d) =>
-        matchesQuery(d, query) &&
-        withinKm(d.mileageKm, kmMin, kmMax) &&
-        matchesRating(d.tierLevel, ratings) &&
-        matchesCity(d.city, cities) &&
-        matchesBrand(d.brand, brandsSel),
-    );
-    return sortDeals(filtered, sort);
-  }, [activeDeals, query, sort, kmMin, kmMax, ratings, cities, brandsSel, kmInvalid]);
-
-  // Return to page 1 whenever the tab, search, ordering or filters change.
-  useEffect(() => {
-    setPage(1);
-  }, [active, query, sort, kmMin, kmMax, ratings, cities, brandsSel]);
-
-  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  const clampedPage = Math.min(page, pageCount);
-  const pageItems = visible.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
-
-  const emptyNote = (id: TabId) => {
+  const emptyNote = (id: DealTab): ReactNode => {
     if (id === 'daily') return 'No new listings today yet — the daily scan runs each morning.';
-    if (id === 'saved') {
-      return 'No saved bikes yet — tap the bookmark on any card to save it here.';
-    }
+    if (id === 'saved') return 'No saved bikes yet — tap the bookmark on any card to save it here.';
     if (id === 'watched') {
       return watched.size > 0 ? (
         'No listings for your followed models in range right now.'
@@ -263,7 +296,13 @@ export function DealTabs({
       <aside className="browse-sidebar">
         {sidebar}
         <DealSearchBar value={query} onChange={setQuery} />
-        <SortSelect value={sort} onChange={setSort} />
+        <SortSelect
+          value={sort}
+          onChange={(v) => {
+            setSort(v);
+            resetPage();
+          }}
+        />
 
         <div className="filters-head">
           <h3 className="filters-title">Filters</h3>
@@ -282,7 +321,10 @@ export function DealTabs({
                 min={0}
                 step={1000}
                 value={kmMin}
-                onChange={(e) => setKmMin(Number(e.target.value))}
+                onChange={(e) => {
+                  setKmMin(Number(e.target.value));
+                  resetPage();
+                }}
               />
             </label>
             <label>
@@ -292,7 +334,10 @@ export function DealTabs({
                 min={0}
                 step={1000}
                 value={kmMax}
-                onChange={(e) => setKmMax(Number(e.target.value))}
+                onChange={(e) => {
+                  setKmMax(Number(e.target.value));
+                  resetPage();
+                }}
               />
             </label>
           </div>
@@ -302,7 +347,10 @@ export function DealTabs({
           label="Deal rating"
           options={RATING_OPTIONS}
           selected={ratings}
-          onChange={setRatings}
+          onChange={(v) => {
+            setRatings(v);
+            resetPage();
+          }}
           allLabel="All ratings"
         />
 
@@ -310,7 +358,10 @@ export function DealTabs({
           label="Brand"
           options={brandOptions}
           selected={brandsSel}
-          onChange={setBrandsSel}
+          onChange={(v) => {
+            setBrandsSel(v);
+            resetPage();
+          }}
           allLabel="All brands"
         />
 
@@ -318,7 +369,10 @@ export function DealTabs({
           label="City"
           options={cityOptions}
           selected={cities}
-          onChange={setCities}
+          onChange={(v) => {
+            setCities(v);
+            resetPage();
+          }}
           allLabel="All cities"
         />
 
@@ -327,53 +381,44 @@ export function DealTabs({
 
       <div className="browse-main">
         <div className="tabs" role="tablist">
-          {tabs.map((t) => (
+          {TABS.map((t) => (
             <button
               key={t.id}
               role="tab"
               aria-selected={t.id === active}
               className={t.id === active ? 'tab active' : 'tab'}
-              onClick={() => setActive(t.id)}
+              onClick={() => selectTab(t.id)}
               type="button"
             >
-              {t.label} <span className="tab-count">{t.deals.length}</span>
+              {t.label} <span className="tab-count">{counts[t.id]}</span>
             </button>
           ))}
         </div>
 
         <div className="browse-count">
-          {visible.length} {visible.length === 1 ? 'listing' : 'listings'}
+          {total} {total === 1 ? 'listing' : 'listings'}
         </div>
 
-        {pageItems.length === 0 ? (
+        <div className="grid" aria-busy={isPending}>
+          {deals.map((deal) => (
+            <DealCard
+              key={deal.key}
+              deal={deal}
+              watching={watched.has(deal.modelId)}
+              saved={savedSet.has(deal.key)}
+              onToggleWatch={toggleWatch}
+              onToggleSave={toggleSave}
+            />
+          ))}
+        </div>
+
+        {deals.length === 0 && (
           <div className="empty">
-            {query.trim() && activeDeals.length > 0
-              ? `No deals match “${query}”.`
-              : emptyNote(active)}
-          </div>
-        ) : (
-          <div className="grid">
-            {pageItems.map((deal) => (
-              <DealCard
-                key={deal.key}
-                deal={deal}
-                watching={watched.has(deal.modelId)}
-                saved={savedSet.has(deal.key)}
-                onToggleWatch={toggleWatch}
-                onToggleSave={toggleSave}
-              />
-            ))}
+            {debouncedQuery.trim() ? `No deals match “${debouncedQuery.trim()}”.` : emptyNote(active)}
           </div>
         )}
 
-        <Pagination page={clampedPage} pageCount={pageCount} onPage={setPage} />
-
-        {hiddenByRange > 0 && (
-          <p className="range-note">
-            {hiddenByRange} more listing{hiddenByRange === 1 ? '' : 's'} outside your budget/year
-            range.
-          </p>
-        )}
+        <Pagination page={Math.min(page, pageCount)} pageCount={pageCount} onPage={setPage} />
       </div>
     </div>
   );

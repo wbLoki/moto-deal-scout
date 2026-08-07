@@ -83,6 +83,19 @@ class InMemoryRepository implements ListingRepository {
     return Promise.resolve(this.saved);
   }
 
+  // Dashboard-only reads; the scanner never calls these, so stubs suffice.
+  queryDeals(): Promise<{ deals: ScoredListing[]; total: number }> {
+    return Promise.resolve({ deals: [], total: 0 });
+  }
+
+  countDealsByTab(): Promise<{ all: number; daily: number; watched: number; saved: number }> {
+    return Promise.resolve({ all: 0, daily: 0, watched: 0, saved: 0 });
+  }
+
+  getDealFacets(): Promise<{ brands: string[]; cities: string[]; maxMileage: number }> {
+    return Promise.resolve({ brands: [], cities: [], maxMileage: 0 });
+  }
+
   getPricesForModel(modelId: string): Promise<number[]> {
     return Promise.resolve(
       this.saved.filter((s) => s.match.criteria.id === modelId).map((s) => s.listing.priceMAD),

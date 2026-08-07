@@ -1,11 +1,9 @@
 import type { DealCardData } from './DealCardShell.js';
+import { DEFAULT_SORT, PAGE_SIZE, type SortKey } from '../src/domain/entities/DealSort.js';
 
-export type SortKey = 'newest' | 'oldest' | 'price-asc' | 'price-desc' | 'score';
-
-export const DEFAULT_SORT: SortKey = 'newest';
-
-/** Deals shown per page (pagination, not infinite scroll). */
-export const PAGE_SIZE = 24;
+// Re-exported so existing app-side imports (`./dealSort`) keep working while
+// the canonical definitions live in the shared domain module.
+export { DEFAULT_SORT, PAGE_SIZE, type SortKey };
 
 export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'newest', label: 'Newest first' },
