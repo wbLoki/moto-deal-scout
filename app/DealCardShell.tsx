@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ExternalLinkIcon } from './icons.js';
+import { CalendarIcon, ExternalLinkIcon } from './icons.js';
 
 const madFmt = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
 const dateFmt = new Intl.DateTimeFormat('fr-MA', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -98,7 +98,12 @@ export function DealCardShell({
           <span>{data.mileageKm !== null ? `${data.mileageKm} km` : 'km n/a'}</span>
           <span>{data.city}</span>
         </div>
-        {postedLabel && <div className="card-date">Posted {postedLabel}</div>}
+        {postedLabel && (
+          <div className="card-date">
+            <CalendarIcon size={13} aria-label="Posted" />
+            <span>{postedLabel}</span>
+          </div>
+        )}
         {matchPct !== undefined && (
           <div className="badges">
             <span className="badge">match {matchPct}%</span>
