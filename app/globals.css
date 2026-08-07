@@ -669,6 +669,27 @@ textarea:focus-visible,
   border-style: dashed;
 }
 
+/* Rating tag overlaid on the card image, top-left. */
+.card-tag {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  z-index: 2;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* Over a photo the translucent tiers need an opaque backdrop to stay legible. */
+.card-tag.tag-great,
+.card-tag.tag-good,
+.card-tag.tag-okay,
+.card-tag.tag-bad,
+.card-tag.tag-calibrating {
+  background: rgba(12, 14, 18, 0.66);
+  border-color: currentColor;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
 /* --- Deal tabs (segmented control) --- */
 .tabs-wrap {
   margin-bottom: 1.5rem;

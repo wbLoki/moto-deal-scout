@@ -70,6 +70,12 @@ export function DealCardShell({
   return (
     <article className="card">
       {topRight}
+      <span
+        className={`tag tag-${data.tierLevel} card-tag`}
+        {...(scoreTitle ? { title: scoreTitle } : {})}
+      >
+        {data.tierLabel}
+      </span>
       {data.imageUrl ? (
         <img
           className="card-media"
@@ -85,12 +91,6 @@ export function DealCardShell({
           <h3 className="card-title">
             {data.brand} {data.model}
           </h3>
-          <span
-            className={`tag tag-${data.tierLevel}`}
-            {...(scoreTitle ? { title: scoreTitle } : {})}
-          >
-            {data.tierLabel}
-          </span>
         </div>
         <div className="price">{madFmt.format(data.priceMAD)} MAD</div>
         <div className="meta">
