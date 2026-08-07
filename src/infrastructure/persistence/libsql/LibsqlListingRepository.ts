@@ -100,6 +100,12 @@ function buildParts(
       whereArgs.push(q.mileageMin, max);
     }
 
+    if (q.ccMin > 0 || q.ccMax > 0) {
+      const max = q.ccMax > 0 ? q.ccMax : Number.MAX_SAFE_INTEGER;
+      conds.push('(l.displacement_cc IS NULL OR l.displacement_cc BETWEEN ? AND ?)');
+      whereArgs.push(q.ccMin, max);
+    }
+
     if (q.cities.length > 0) {
       conds.push(`LOWER(l.city) IN (${placeholders(q.cities.length)})`);
       whereArgs.push(...q.cities.map((c) => c.toLowerCase()));
@@ -253,7 +259,8 @@ export class LibsqlListingRepository implements ListingRepository {
     const parts = buildParts(q, { tab: 'all', applyRange: true, applyFilters: false });
     const where = parts.where ? `WHERE ${parts.where}` : '';
     const res = await this.client.execute({
-      sql: `SELECT m.brand AS brand, l.city AS city, l.mileage_km AS mileage, l.price_mad AS price
+      sql: `SELECT m.brand AS brand, l.city AS city, l.mileage_km AS mileage,
+                   l.displacement_cc AS cc, l.price_mad AS price
             FROM listings l ${parts.joins} ${where}`,
       args: [...parts.joinArgs, ...parts.whereArgs],
     });
@@ -261,11 +268,13 @@ export class LibsqlListingRepository implements ListingRepository {
     const brandByKey = new Map<string, string>();
     const cityByKey = new Map<string, string>();
     let maxMileage = 0;
+    let maxCc = 0;
     let maxPrice = 0;
     for (const row of res.rows as unknown as {
       brand: string;
       city: string;
       mileage: number | null;
+      cc: number | null;
       price: number;
     }[]) {
       const brand = row.brand.trim();
@@ -273,11 +282,12 @@ export class LibsqlListingRepository implements ListingRepository {
       const city = row.city.trim();
       if (city) cityByKey.set(city.toLowerCase(), city);
       if (row.mileage !== null && row.mileage > maxMileage) maxMileage = row.mileage;
+      if (row.cc !== null && row.cc > maxCc) maxCc = row.cc;
       if (row.price > maxPrice) maxPrice = row.price;
     }
     const sorted = (m: Map<string, string>): string[] =>
       [...m.values()].sort((a, b) => a.localeCompare(b));
-    return { brands: sorted(brandByKey), cities: sorted(cityByKey), maxMileage, maxPrice };
+    return { brands: sorted(brandByKey), cities: sorted(cityByKey), maxMileage, maxCc, maxPrice };
   }
 
   async getListingsSince(sinceDate: Date): Promise<ScoredListing[]> {

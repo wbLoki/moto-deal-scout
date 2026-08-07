@@ -19,6 +19,8 @@ export interface Listing {
   readonly priceMAD: number;
   readonly year: number | undefined;
   readonly mileageKm: number | undefined;
+  /** Engine displacement in cc, when the source reports it. */
+  readonly displacementCc: number | undefined;
   readonly city: string;
   readonly imageUrl: string | undefined;
   /** Publish date reported by the marketplace, when available. */

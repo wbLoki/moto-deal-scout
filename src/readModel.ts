@@ -31,6 +31,9 @@ export interface DealsPageInput {
   readonly mileageMin: number;
   /** `0` means "no upper bound". */
   readonly mileageMax: number;
+  readonly ccMin: number;
+  /** `0` means "no upper bound". */
+  readonly ccMax: number;
   readonly ratings: readonly string[];
   readonly cities: readonly string[];
   readonly brands: readonly string[];
@@ -71,6 +74,8 @@ function baseInput(tab: DealTab = 'all'): DealsPageInput {
     search: '',
     mileageMin: 0,
     mileageMax: 0,
+    ccMin: 0,
+    ccMax: 0,
     ratings: [],
     cities: [],
     brands: [],
@@ -100,6 +105,8 @@ function toDealQuery(
     search: input.search,
     mileageMin: input.mileageMin,
     mileageMax: input.mileageMax,
+    ccMin: input.ccMin,
+    ccMax: input.ccMax,
     ratings: input.ratings,
     cities: input.cities,
     brands: input.brands,
@@ -218,6 +225,9 @@ export interface PublicDealsInput {
   readonly mileageMin: number;
   /** `0` means "no upper bound". */
   readonly mileageMax: number;
+  readonly ccMin: number;
+  /** `0` means "no upper bound". */
+  readonly ccMax: number;
   readonly ratings: readonly string[];
   readonly cities: readonly string[];
   readonly brands: readonly string[];
@@ -258,6 +268,8 @@ function toPublicDealQuery(input: PublicDealsInput, minPriceFactor: number): Dea
     search: input.search,
     mileageMin: input.mileageMin,
     mileageMax: input.mileageMax,
+    ccMin: input.ccMin,
+    ccMax: input.ccMax,
     ratings: input.ratings,
     cities: input.cities,
     brands: input.brands,
@@ -292,6 +304,8 @@ export async function getPublicDashboard(): Promise<PublicDashboardData> {
         yearMax: PUBLIC_WIDE_RANGE.yearMax,
         mileageMin: 0,
         mileageMax: 0,
+        ccMin: 0,
+        ccMax: 0,
         ratings: [],
         cities: [],
         brands: [],

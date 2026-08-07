@@ -36,6 +36,7 @@ export function makeListing(overrides: Partial<Listing> = {}): Listing {
     priceMAD: 70000,
     year: 2019,
     mileageKm: 15000,
+    displacementCc: 689,
     city: 'Casablanca',
     imageUrl: undefined,
     postedAt: new Date(),

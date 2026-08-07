@@ -87,6 +87,7 @@ export function PublicFeed({
     () => (facets.maxMileage > 0 ? roundUp(facets.maxMileage, 5000) : 200000),
     [facets.maxMileage],
   );
+  const ccCap = useMemo(() => (facets.maxCc > 0 ? roundUp(facets.maxCc, 50) : 1300), [facets.maxCc]);
   const brandOptions = useMemo<FilterOption[]>(
     () => facets.brands.map((b) => ({ value: b.toLowerCase(), label: b })),
     [facets.brands],
@@ -110,12 +111,15 @@ export function PublicFeed({
   const [yearMax, setYearMax] = useState(MAX_YEAR);
   const [kmMin, setKmMin] = useState(0);
   const [kmMax, setKmMax] = useState(kmCap);
+  const [ccMin, setCcMin] = useState(0);
+  const [ccMax, setCcMax] = useState(ccCap);
   const [ratings, setRatings] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [brandsSel, setBrandsSel] = useState<string[]>([]);
   const [page, setPage] = useState(1);
 
-  const invalid = budgetMax < budgetMin || yearMax < yearMin || kmMax < kmMin;
+  const invalid =
+    budgetMax < budgetMin || yearMax < yearMin || kmMax < kmMin || ccMax < ccMin;
   const resetPage = () => setPage(1);
 
   const resetFilters = () => {
@@ -126,6 +130,8 @@ export function PublicFeed({
     setYearMax(MAX_YEAR);
     setKmMin(0);
     setKmMax(kmCap);
+    setCcMin(0);
+    setCcMax(ccCap);
     setRatings([]);
     setCities([]);
     setBrandsSel([]);
@@ -162,6 +168,8 @@ export function PublicFeed({
       yearMax,
       mileageMin: kmMin,
       mileageMax: kmMax >= kmCap ? 0 : kmMax,
+      ccMin,
+      ccMax: ccMax >= ccCap ? 0 : ccMax,
       ratings,
       cities,
       brands: brandsSel,
@@ -185,11 +193,14 @@ export function PublicFeed({
     yearMax,
     kmMin,
     kmMax,
+    ccMin,
+    ccMax,
     ratings,
     cities,
     brandsSel,
     invalid,
     kmCap,
+    ccCap,
   ]);
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -308,6 +319,38 @@ export function PublicFeed({
                 value={kmMax}
                 onChange={(e) => {
                   setKmMax(Number(e.target.value));
+                  resetPage();
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="sidebar-section">
+          <h3 className="sidebar-title">Displacement (cc)</h3>
+          <div className="sidebar-row">
+            <label>
+              <span>Min</span>
+              <input
+                type="number"
+                min={0}
+                step={50}
+                value={ccMin}
+                onChange={(e) => {
+                  setCcMin(Number(e.target.value));
+                  resetPage();
+                }}
+              />
+            </label>
+            <label>
+              <span>Max</span>
+              <input
+                type="number"
+                min={0}
+                step={50}
+                value={ccMax}
+                onChange={(e) => {
+                  setCcMax(Number(e.target.value));
                   resetPage();
                 }}
               />

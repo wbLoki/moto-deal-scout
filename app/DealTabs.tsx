@@ -180,13 +180,20 @@ export function DealTabs({
     [facets.cities],
   );
 
+  const ccCap = useMemo(
+    () => (facets.maxCc > 0 ? Math.ceil(facets.maxCc / 50) * 50 : 1300),
+    [facets.maxCc],
+  );
+
   const [kmMin, setKmMin] = useState(0);
   const [kmMax, setKmMax] = useState(kmCap);
+  const [ccMin, setCcMin] = useState(0);
+  const [ccMax, setCcMax] = useState(ccCap);
   const [ratings, setRatings] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [brandsSel, setBrandsSel] = useState<string[]>([]);
 
-  const kmInvalid = kmMax < kmMin;
+  const rangeInvalid = kmMax < kmMin || ccMax < ccMin;
 
   // Any control change returns to page 1; only the pager itself keeps a page.
   const resetPage = () => setPage(1);
@@ -194,6 +201,8 @@ export function DealTabs({
     setQuery('');
     setKmMin(0);
     setKmMax(kmCap);
+    setCcMin(0);
+    setCcMax(ccCap);
     setRatings([]);
     setCities([]);
     setBrandsSel([]);
@@ -218,7 +227,7 @@ export function DealTabs({
       firstRender.current = false;
       return;
     }
-    if (kmInvalid) {
+    if (rangeInvalid) {
       setDeals([]);
       setTotal(0);
       return;
@@ -229,6 +238,8 @@ export function DealTabs({
       mileageMin: kmMin,
       // Slider pinned at the data's max means "no upper bound".
       mileageMax: kmMax >= kmCap ? 0 : kmMax,
+      ccMin,
+      ccMax: ccMax >= ccCap ? 0 : ccMax,
       ratings,
       cities,
       brands: brandsSel,
@@ -243,7 +254,8 @@ export function DealTabs({
         setCounts(res.tabCounts);
       }
     });
-  }, [active, debouncedQuery, sort, page, kmMin, kmMax, ratings, cities, brandsSel, refreshKey]);
+    // prettier-ignore
+  }, [active, debouncedQuery, sort, page, kmMin, kmMax, ccMin, ccMax, ratings, cities, brandsSel, refreshKey]);
 
   const toggleWatch = (modelId: string) => {
     const willWatch = !watched.has(modelId);
@@ -343,6 +355,38 @@ export function DealTabs({
           </div>
         </div>
 
+        <div className="sidebar-section">
+          <h3 className="sidebar-title">Displacement (cc)</h3>
+          <div className="sidebar-row">
+            <label>
+              <span>Min</span>
+              <input
+                type="number"
+                min={0}
+                step={50}
+                value={ccMin}
+                onChange={(e) => {
+                  setCcMin(Number(e.target.value));
+                  resetPage();
+                }}
+              />
+            </label>
+            <label>
+              <span>Max</span>
+              <input
+                type="number"
+                min={0}
+                step={50}
+                value={ccMax}
+                onChange={(e) => {
+                  setCcMax(Number(e.target.value));
+                  resetPage();
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
         <MultiSelect
           label="Deal rating"
           options={RATING_OPTIONS}
@@ -376,7 +420,9 @@ export function DealTabs({
           allLabel="All cities"
         />
 
-        {kmInvalid && <p className="settings-error">Max must be greater than or equal to min.</p>}
+        {rangeInvalid && (
+          <p className="settings-error">Max must be greater than or equal to min.</p>
+        )}
       </aside>
 
       <div className="browse-main">

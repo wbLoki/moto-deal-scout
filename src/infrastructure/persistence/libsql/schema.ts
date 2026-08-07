@@ -19,6 +19,7 @@ export const MIGRATIONS: readonly string[] = [
     price_mad         REAL    NOT NULL,
     year              INTEGER,
     mileage_km        INTEGER,
+    displacement_cc   INTEGER,
     city              TEXT    NOT NULL,
     image_url         TEXT,
     posted_at         TEXT,
@@ -163,6 +164,7 @@ export const ADDITIVE_COLUMNS: ReadonlyArray<{
   { table: 'models', column: 'calibrated_samples', definition: 'INTEGER' },
   { table: 'models', column: 'discovered_at', definition: 'TEXT' },
   { table: 'listings', column: 'previous_price_mad', definition: 'REAL' },
+  { table: 'listings', column: 'displacement_cc', definition: 'INTEGER' },
 ];
 
 /**
@@ -179,6 +181,7 @@ const INSERT_COLUMNS = [
   'price_mad',
   'year',
   'mileage_km',
+  'displacement_cc',
   'city',
   'image_url',
   'posted_at',
@@ -220,6 +223,7 @@ export function toInsertArgs(scored: ScoredListing): SqlValue[] {
     listing.priceMAD,
     listing.year ?? null,
     listing.mileageKm ?? null,
+    listing.displacementCc ?? null,
     listing.city,
     listing.imageUrl ?? null,
     listing.postedAt?.toISOString() ?? null,
@@ -246,6 +250,7 @@ export interface ListingRow {
   price_mad: number;
   year: number | null;
   mileage_km: number | null;
+  displacement_cc: number | null;
   city: string;
   image_url: string | null;
   posted_at: string | null;
@@ -291,6 +296,7 @@ export function mapRowToScoredListing(
     priceMAD: row.price_mad,
     year: row.year ?? undefined,
     mileageKm: row.mileage_km ?? undefined,
+    displacementCc: row.displacement_cc ?? undefined,
     city: row.city,
     imageUrl: row.image_url ?? undefined,
     postedAt: row.posted_at ? new Date(row.posted_at) : undefined,

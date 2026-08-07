@@ -105,9 +105,10 @@ class InMemoryRepository implements ListingRepository {
     brands: string[];
     cities: string[];
     maxMileage: number;
+    maxCc: number;
     maxPrice: number;
   }> {
-    return Promise.resolve({ brands: [], cities: [], maxMileage: 0, maxPrice: 0 });
+    return Promise.resolve({ brands: [], cities: [], maxMileage: 0, maxCc: 0, maxPrice: 0 });
   }
 
   getPricesForModel(modelId: string): Promise<number[]> {

@@ -150,6 +150,7 @@ export class AvitoSource implements MarketplaceSource {
       priceMAD: parseNumber(raw.price)!,
       year: parseYear(raw.year),
       mileageKm: parseNumber(raw.mileage),
+      displacementCc: undefined,
       city: raw.city || 'Maroc',
       imageUrl: raw.image || undefined,
       postedAt: parseRelativeFrenchDate(raw.relativeDate),

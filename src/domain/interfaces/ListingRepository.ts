@@ -25,6 +25,9 @@ export interface DealQuery {
   readonly mileageMin: number;
   /** Upper mileage bound; `0` means "no upper bound". */
   readonly mileageMax: number;
+  readonly ccMin: number;
+  /** Upper displacement (cc) bound; `0` means "no upper bound". */
+  readonly ccMax: number;
   /** Deal-tier levels to include (e.g. `['hot','great']`). Empty = all. */
   readonly ratings: readonly string[];
   /** Lowercased city keys. Empty = all. */
@@ -55,6 +58,8 @@ export interface DealFacets {
   readonly cities: readonly string[];
   /** Largest mileage seen, for the mileage slider's upper bound. */
   readonly maxMileage: number;
+  /** Largest displacement (cc) seen, for the cc filter's upper bound. */
+  readonly maxCc: number;
   /** Highest price seen, for the public budget slider's upper bound. */
   readonly maxPrice: number;
 }

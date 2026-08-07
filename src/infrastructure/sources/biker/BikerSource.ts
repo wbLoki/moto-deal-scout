@@ -83,15 +83,16 @@ export class BikerSource implements MarketplaceSource {
   }
 
   /**
-   * Fills in `postedAt`, which the search cards omit — only the detail record
-   * carries the publish date. Biker.ma's own detail view is an Angular page that
-   * fetches `/api/v1/moto/detail/{id}`, so we hit that JSON endpoint directly
-   * (its `dateajout` is a clean ISO timestamp) rather than rendering a browser
-   * page. The scanner calls this only for listings it hasn't stored yet. Any
-   * failure returns the listing untouched: a missing date must never drop it.
+   * Fills in `postedAt` and `displacementCc`, which the search cards omit — only
+   * the detail record carries the publish date and engine size. Biker.ma's own
+   * detail view is an Angular page that fetches `/api/v1/moto/detail/{id}`, so we
+   * hit that JSON endpoint directly (its `dateajout` is a clean ISO timestamp,
+   * `cylindre` the displacement in cc) rather than rendering a browser page. The
+   * scanner calls this only for listings it hasn't stored yet. Any failure
+   * returns the listing untouched: a missing field must never drop it.
    */
   async enrich(listing: Listing): Promise<Listing> {
-    if (listing.postedAt) return listing;
+    if (listing.postedAt && listing.displacementCc !== undefined) return listing;
 
     try {
       await delay(this.options.throttleMs);
@@ -99,9 +100,14 @@ export class BikerSource implements MarketplaceSource {
         headers: { accept: 'application/json' },
       });
       if (!res.ok) return listing;
-      const data = (await res.json()) as { dateajout?: string };
-      const postedAt = data.dateajout ? new Date(data.dateajout) : undefined;
-      return postedAt && !Number.isNaN(postedAt.getTime()) ? { ...listing, postedAt } : listing;
+      const data = (await res.json()) as { dateajout?: string; cylindre?: string | number };
+      const posted = data.dateajout ? new Date(data.dateajout) : undefined;
+      const postedAt = posted && !Number.isNaN(posted.getTime()) ? posted : listing.postedAt;
+      // Sellers occasionally enter nonsense ("2", "99999") — keep only plausible
+      // displacements, else leave it unknown so it can't skew the cc filter.
+      const cc = parseNumber(String(data.cylindre ?? ''));
+      const displacementCc = cc && cc >= 25 && cc <= 3500 ? cc : listing.displacementCc;
+      return { ...listing, postedAt, displacementCc };
     } catch (err) {
       this.logger.warn({ err, externalId: listing.externalId }, 'Biker.ma detail enrich failed');
       return listing;
@@ -157,6 +163,8 @@ export class BikerSource implements MarketplaceSource {
       priceMAD: parseNumber(raw.price)!,
       year: parseYear(raw.year),
       mileageKm: parseNumber(raw.mileage),
+      // Displacement (and the post date) live only on the detail record — see enrich().
+      displacementCc: undefined,
       city: raw.city || 'Maroc',
       imageUrl: raw.image || undefined,
       postedAt: undefined,

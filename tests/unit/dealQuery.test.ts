@@ -41,6 +41,7 @@ function scored(over: {
   total?: number;
   priceMin?: number; // model's calibration floor, for tier reconstruction
   postedAt?: Date; // marketplace publish date; undefined => falls back to created_at
+  displacementCc?: number;
 }): ScoredListing {
   const total = over.total ?? 75;
   return {
@@ -49,6 +50,7 @@ function scored(over: {
       priceMAD: over.priceMAD ?? 70000,
       year: over.year ?? 2019,
       mileageKm: over.mileageKm,
+      displacementCc: over.displacementCc,
       city: over.city ?? 'Casablanca',
       postedAt: over.postedAt,
     }),
@@ -76,6 +78,8 @@ function query(over: Partial<DealQuery> = {}): DealQuery {
     search: '',
     mileageMin: 0,
     mileageMax: 0,
+    ccMin: 0,
+    ccMax: 0,
     ratings: [],
     cities: [],
     brands: [],
@@ -157,6 +161,18 @@ describe('LibsqlListingRepository.queryDeals', () => {
     expect(ids).not.toContain('good'); // 45000 excluded
   });
 
+  it('filters by displacement (cc), passing null-cc listings through', async () => {
+    await repo.save(scored({ externalId: 'cc125', displacementCc: 125 }));
+    await repo.save(scored({ externalId: 'cc650', displacementCc: 650 }));
+
+    const { deals } = await repo.queryDeals(query({ ccMin: 100, ccMax: 200 }));
+    const ids = deals.map((d) => d.listing.externalId);
+    expect(ids).toContain('cc125');
+    expect(ids).not.toContain('cc650');
+    // The four seeded listings have no cc and must pass, like the year/mileage nulls.
+    expect(ids).toContain('hot');
+  });
+
   it('filters by deal-rating tier and the calibrating state', async () => {
     expect((await repo.queryDeals(query({ ratings: ['hot'] }))).deals.map((d) => d.listing.externalId)).toEqual(['hot']);
     // 'calib' scores 95 but its model is uncalibrated, so it's calibrating, not hot.
@@ -223,8 +239,8 @@ describe('LibsqlListingRepository.countDealsByTab & getDealFacets', () => {
     await models.upsert(storedModel({ id: 'honda-cb500f', brand: 'Honda', model: 'CB500F' }));
     repo = new LibsqlListingRepository(db, await models.listAll());
 
-    await repo.save(scored({ externalId: 'a', priceMAD: 70000, city: 'Casablanca', mileageKm: 10000 }));
-    await repo.save(scored({ externalId: 'b', modelId: 'honda-cb500f', brand: 'Honda', model: 'CB500F', priceMAD: 60000, city: 'rabat', mileageKm: 55000 }));
+    await repo.save(scored({ externalId: 'a', priceMAD: 70000, city: 'Casablanca', mileageKm: 10000, displacementCc: 125 }));
+    await repo.save(scored({ externalId: 'b', modelId: 'honda-cb500f', brand: 'Honda', model: 'CB500F', priceMAD: 60000, city: 'rabat', mileageKm: 55000, displacementCc: 500 }));
   });
 
   afterEach(() => db.close());
@@ -242,6 +258,7 @@ describe('LibsqlListingRepository.countDealsByTab & getDealFacets', () => {
     expect(facets.brands).toEqual(['Honda', 'Yamaha']);
     expect(facets.cities.map((c) => c.toLowerCase()).sort()).toEqual(['casablanca', 'rabat']);
     expect(facets.maxMileage).toBe(55000);
+    expect(facets.maxCc).toBe(500);
     expect(facets.maxPrice).toBe(70000);
   });
 });
