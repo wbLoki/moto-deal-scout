@@ -98,21 +98,23 @@ export function DealCardShell({
           <span>{data.mileageKm !== null ? `${data.mileageKm} km` : 'km n/a'}</span>
           <span>{data.city}</span>
         </div>
-        {postedLabel && (
-          <div className="card-date">
-            <CalendarIcon size={13} aria-label="Posted" />
-            <span>{postedLabel}</span>
-          </div>
-        )}
         {matchPct !== undefined && (
           <div className="badges">
             <span className="badge">match {matchPct}%</span>
           </div>
         )}
-        <a className="card-link" href={data.url} target="_blank" rel="noopener noreferrer">
-          View listing
-          <ExternalLinkIcon className="icon-trail" size={15} />
-        </a>
+        <div className="card-footer">
+          <a className="card-link" href={data.url} target="_blank" rel="noopener noreferrer">
+            View listing
+            <ExternalLinkIcon className="icon-trail" size={15} />
+          </a>
+          {postedLabel && (
+            <span className="card-date">
+              <CalendarIcon size={13} aria-label="Posted" />
+              <span>{postedLabel}</span>
+            </span>
+          )}
+        </div>
       </div>
     </article>
   );

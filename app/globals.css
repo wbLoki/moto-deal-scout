@@ -514,10 +514,10 @@ textarea:focus-visible,
 .card-date {
   color: var(--muted);
   font-size: 0.78rem;
-  margin-top: 0.1rem;
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  white-space: nowrap;
 }
 
 .badges {
@@ -539,8 +539,15 @@ textarea:focus-visible,
   font-weight: 600;
 }
 
-.card-link {
+.card-footer {
   margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.card-link {
   display: inline-flex;
   align-items: center;
   text-decoration: none;
