@@ -99,10 +99,11 @@ export function DealCardShell({
           <span>{data.city}</span>
         </div>
         {postedLabel && <div className="card-date">Posted {postedLabel}</div>}
-        <div className="badges">
-          <span className="badge">{data.sourceId}</span>
-          {matchPct !== undefined && <span className="badge">match {matchPct}%</span>}
-        </div>
+        {matchPct !== undefined && (
+          <div className="badges">
+            <span className="badge">match {matchPct}%</span>
+          </div>
+        )}
         <a className="card-link" href={data.url} target="_blank" rel="noopener noreferrer">
           View listing
           <ExternalLinkIcon className="icon-trail" size={15} />
