@@ -53,6 +53,13 @@ class InMemoryRepository implements ListingRepository {
     return Promise.resolve(this.seen.has(`${sourceId}:${externalId}`));
   }
 
+  lastScrapedAt(sourceId: MarketplaceId): Promise<Date | undefined> {
+    const times = this.saved
+      .filter((s) => s.listing.sourceId === sourceId)
+      .map((s) => s.listing.scrapedAt.getTime());
+    return Promise.resolve(times.length ? new Date(Math.max(...times)) : undefined);
+  }
+
   save(scored: ScoredListing): Promise<void> {
     const key = `${scored.listing.sourceId}:${scored.listing.externalId}`;
     this.seen.add(key);

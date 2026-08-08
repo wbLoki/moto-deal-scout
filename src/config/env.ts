@@ -23,6 +23,13 @@ const envSchema = z.object({
   /** IANA timezone the cron expression is evaluated in. */
   SCAN_TIMEZONE: z.string().min(1).default('Africa/Casablanca'),
 
+  /**
+   * Comma-separated marketplace source ids to scrape (e.g. `avito,biker`).
+   * Both run when unset. Used to split the crawl across environments while
+   * Avito is blocked on datacenter IPs: the scheduled jobs set `biker`, and
+   * Avito is run locally/on a home box. A `--source` CLI flag overrides it.
+   */
+  SCRAPE_SOURCES: z.string().min(1).optional(),
   /** Milliseconds to wait between requests to the same marketplace, to stay polite. */
   SCRAPE_THROTTLE_MS: z.coerce.number().int().nonnegative().default(2000),
   /** Whether Playwright launches Chromium headless (true) or visibly (false, for debugging). */

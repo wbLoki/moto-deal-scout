@@ -22,6 +22,13 @@ export interface SourceQuery {
    * the end.
    */
   readonly maxPages?: number;
+  /**
+   * Incremental watermark: stop paginating once listings are older than this
+   * (see {@link CrawlOptions.postedAfter}). The scanner passes the last time it
+   * scraped this source, so a re-run only fetches listings posted since. Only
+   * effective where the source's cards carry a post date (Avito).
+   */
+  readonly postedAfter?: Date;
 }
 
 /**

@@ -73,6 +73,13 @@ export interface ListingRepository {
   /** True if this exact listing (by source + external id) has been stored before. */
   hasSeen(sourceId: MarketplaceId, externalId: string): Promise<boolean>;
 
+  /**
+   * The most recent `scraped_at` for a source, i.e. roughly the last time we
+   * scraped it — or undefined if we never have. The incremental crawl uses it
+   * as a watermark to stop paginating past listings it already holds.
+   */
+  lastScrapedAt(sourceId: MarketplaceId): Promise<Date | undefined>;
+
   /** Persist a newly-seen, scored listing. Upserts if called twice. */
   save(scored: ScoredListing): Promise<void>;
 

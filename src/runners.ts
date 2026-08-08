@@ -16,18 +16,27 @@ import type { DailyReport } from './domain/entities/DailyReport.js';
  * refreshed from all prior market data. Per-user watchlist alerts run last,
  * after the scan's database connection is closed.
  */
-export async function runScan(): Promise<DailyReport> {
+/** Optional overrides shared by the CLI-invoked runs. */
+export interface RunOptions {
+  /** Marketplace source ids to scrape; defaults to `SCRAPE_SOURCES`, then all. */
+  readonly sources?: readonly string[];
+}
+
+export async function runScan(options: RunOptions = {}): Promise<DailyReport> {
   await calibrateModels();
-  const report = await scanAndNotify();
+  const report = await scanAndNotify(options);
   await runUserAlerts(report);
   return report;
 }
 
-async function scanAndNotify(): Promise<DailyReport> {
+async function scanAndNotify(options: RunOptions): Promise<DailyReport> {
   // Only models someone follows — this is the daily run, and it has to fit
   // inside Vercel's function timeout. The weekly discovery crawl is what
   // covers the rest of the market.
-  const container = await buildContainer({ onlyWatched: true });
+  const container = await buildContainer({
+    onlyWatched: true,
+    ...(options.sources ? { sources: options.sources } : {}),
+  });
   try {
     const report = await container.scanner.scan();
     await container.dispatcher.dispatch(report);
@@ -49,12 +58,24 @@ async function scanAndNotify(): Promise<DailyReport> {
  * *this* crawl, which has now collected enough listings, leave "Calibrating"
  * immediately instead of waiting a week for the next run.
  */
-export async function runDiscovery(maxPages?: number): Promise<DailyReport> {
+/** Discovery adds a `--full` bypass of the incremental watermark. */
+export interface DiscoveryRunOptions extends RunOptions {
+  readonly full?: boolean;
+}
+
+export async function runDiscovery(
+  maxPages?: number,
+  options: DiscoveryRunOptions = {},
+): Promise<DailyReport> {
   assertRemoteDatabaseInCi();
   await calibrateModels();
 
   const container = await buildContainer({
-    discovery: maxPages === undefined ? {} : { maxPages },
+    discovery: {
+      ...(maxPages === undefined ? {} : { maxPages }),
+      ...(options.full ? { full: true } : {}),
+    },
+    ...(options.sources ? { sources: options.sources } : {}),
   });
   let report: DailyReport;
   try {
@@ -99,9 +120,12 @@ export interface DryRunResult {
  * permanent model row that users can follow, and reading a couple of hundred
  * `title -> id` lines is the cheapest way to catch that.
  */
-export async function runDiscoveryDryRun(maxPages?: number): Promise<DryRunResult> {
+export async function runDiscoveryDryRun(
+  maxPages?: number,
+  options: RunOptions = {},
+): Promise<DryRunResult> {
   const resolver = new CatalogModelResolver();
-  const container = await buildContainer();
+  const container = await buildContainer(options.sources ? { sources: options.sources } : {});
   const existing = new Set(container.criteria.models.map((m) => m.id));
   const wouldCreate = new Map<string, string[]>();
   let scanned = 0;

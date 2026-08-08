@@ -51,7 +51,16 @@ export interface ContainerOptions {
    */
   readonly onlyWatched?: boolean;
   /** Wires up discovery (catalog resolver + model sink) and sets crawl depth. */
-  readonly discovery?: { readonly maxPages?: number };
+  readonly discovery?: {
+    readonly maxPages?: number;
+    /** Ignore the per-source scrape watermark and crawl in full (`discover --full`). */
+    readonly full?: boolean;
+  };
+  /**
+   * Which marketplace sources to scrape (by id). Falls back to `SCRAPE_SOURCES`
+   * in the env, then to all sources. Lets a run target just Avito or just Biker.
+   */
+  readonly sources?: readonly string[];
 }
 
 export async function buildContainer(options: ContainerOptions = {}): Promise<Container> {
@@ -93,10 +102,13 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
 
   const browserManager = createBrowserManager(env);
   const sourceOptions = { throttleMs: env.SCRAPE_THROTTLE_MS };
-  const sources: MarketplaceSource[] = [
+  const allSources: MarketplaceSource[] = [
     new AvitoSource(browserManager, sourceOptions, logger.child({ source: 'avito' })),
     new BikerSource(browserManager, sourceOptions, logger.child({ source: 'biker' })),
   ];
+  const selection = options.sources ?? parseSourceList(env.SCRAPE_SOURCES);
+  const sources = selection ? selectSources(allSources, selection) : allSources;
+  logger.info({ sources: sources.map((s) => s.id) }, 'scraping sources');
 
   const notifiers: NotificationProvider[] = [
     new ConsoleNotificationProvider(),
@@ -108,6 +120,7 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
     repository,
     criteria,
     logger,
+    incremental: !options.discovery?.full,
     ...(options.discovery
       ? {
           resolver: new CatalogModelResolver(),
@@ -144,6 +157,33 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
 // of truth now lives in the Database module so the web/auth layer can open a
 // client without importing this Playwright-heavy composition root.
 export { resolveDatabaseConfig };
+
+/** Splits a `SCRAPE_SOURCES`-style csv into normalized ids, or undefined if empty. */
+function parseSourceList(csv: string | undefined): string[] | undefined {
+  if (!csv) return undefined;
+  const ids = csv
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return ids.length > 0 ? ids : undefined;
+}
+
+/** Picks the requested sources by id, in the requested order, erroring on an unknown id. */
+function selectSources(
+  all: readonly MarketplaceSource[],
+  ids: readonly string[],
+): MarketplaceSource[] {
+  const byId = new Map(all.map((s) => [s.id, s]));
+  return ids.map((id) => {
+    const source = byId.get(id as MarketplaceSource['id']);
+    if (!source) {
+      throw new Error(
+        `Unknown source "${id}". Known sources: ${[...byId.keys()].join(', ')}.`,
+      );
+    }
+    return source;
+  });
+}
 
 /**
  * On Vercel, Chromium ships as a Lambda layer via @sparticuz/chromium and

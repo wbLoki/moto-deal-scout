@@ -79,6 +79,7 @@ export class AvitoSource implements MarketplaceSource {
       return await crawlPages({
         maxPages,
         throttleMs: this.options.throttleMs,
+        ...(query.postedAfter ? { postedAfter: query.postedAfter } : {}),
         fetchPage: (pageNumber) => this.scrapePage(page, buildAvitoUrl(slug, pageNumber)),
         onError: (err, pageNumber) =>
           this.logger.error({ err, slug, pageNumber }, 'Avito scrape failed'),

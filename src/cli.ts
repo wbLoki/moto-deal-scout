@@ -13,11 +13,18 @@ program
     'Daily scanner for Moroccan motorcycle marketplaces — notifies you about good deals only',
   );
 
+const parseSources = (v: string): string[] =>
+  v
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
 program
   .command('scan')
   .description('Run one scan immediately, persist results, and notify about any good deals found')
-  .action(async () => {
-    await runScan();
+  .option('--source <ids>', 'Only scrape these marketplaces (csv, e.g. "avito")', parseSources)
+  .action(async (opts: { source?: string[] }) => {
+    await runScan(opts.source ? { sources: opts.source } : {});
   });
 
 program
@@ -26,13 +33,16 @@ program
     'Crawl both marketplaces end to end, auto-create any catalog models found, and score the listings',
   )
   .option('--max-pages <n>', 'How deep to paginate each source', (v) => Number.parseInt(v, 10))
+  .option('--source <ids>', 'Only scrape these marketplaces (csv, e.g. "avito")', parseSources)
+  .option('--full', 'Ignore the last-scrape watermark and crawl every page (full re-crawl)')
   .option('--dry-run', 'Only print how titles would resolve; write nothing to the database')
-  .action(async (opts: { maxPages?: number; dryRun?: boolean }) => {
+  .action(async (opts: { maxPages?: number; source?: string[]; full?: boolean; dryRun?: boolean }) => {
+    const sources = opts.source ? { sources: opts.source } : {};
     if (opts.dryRun) {
-      await runDiscoveryDryRun(opts.maxPages);
+      await runDiscoveryDryRun(opts.maxPages, sources);
       return;
     }
-    await runDiscovery(opts.maxPages);
+    await runDiscovery(opts.maxPages, { ...sources, ...(opts.full ? { full: true } : {}) });
   });
 
 program

@@ -46,4 +46,8 @@ jobs:
           # A datacenter IP is a different traffic profile than a laptop, so
           # back off further than the local default.
           SCRAPE_THROTTLE_MS: '3000'
+          # Avito's Datadome blocks datacenter IPs, so this crawl only does
+          # Biker. Avito is scraped from a residential connection (locally, and
+          # later a Raspberry Pi) — see `discover --source avito`.
+          SCRAPE_SOURCES: biker
           NODE_ENV: production

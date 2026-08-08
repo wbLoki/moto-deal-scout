@@ -42,6 +42,12 @@ export interface DealScannerDeps {
   readonly modelSink?: (model: StoredModel) => Promise<boolean>;
   /** How deep the discovery crawl paginates. Ignored by {@link DealScanner.scan}. */
   readonly discoveryMaxPages?: number;
+  /**
+   * When true (the default), each source is crawled only back to the last time
+   * we scraped it (its `scraped_at` watermark), so a re-run skips listings it
+   * already holds. Set false to force a full crawl (the `discover --full` flag).
+   */
+  readonly incremental?: boolean;
 }
 
 /**
@@ -60,6 +66,7 @@ export class DealScanner {
   private readonly resolver: CatalogModelResolver | undefined;
   private readonly modelSink: ((model: StoredModel) => Promise<boolean>) | undefined;
   private readonly discoveryMaxPages: number | undefined;
+  private readonly incremental: boolean;
 
   constructor(deps: DealScannerDeps) {
     this.sources = deps.sources;
@@ -71,6 +78,12 @@ export class DealScanner {
     this.resolver = deps.resolver;
     this.modelSink = deps.modelSink;
     this.discoveryMaxPages = deps.discoveryMaxPages;
+    this.incremental = deps.incremental ?? true;
+  }
+
+  /** The incremental watermark for a source, or undefined for a full crawl. */
+  private async watermarkFor(source: MarketplaceSource): Promise<Date | undefined> {
+    return this.incremental ? this.repository.lastScrapedAt(source.id) : undefined;
   }
 
   /** Price drops found on already-seen listings during the current scan. */
@@ -142,8 +155,11 @@ export class DealScanner {
       const scored: ScoredListing[] = [];
 
       try {
-        const query: SourceQuery =
-          this.discoveryMaxPages === undefined ? {} : { maxPages: this.discoveryMaxPages };
+        const postedAfter = await this.watermarkFor(source);
+        const query: SourceQuery = {
+          ...(this.discoveryMaxPages === undefined ? {} : { maxPages: this.discoveryMaxPages }),
+          ...(postedAfter ? { postedAfter } : {}),
+        };
         const listings = await source.fetchListings(query);
         listingsFound = listings.length;
 
@@ -216,8 +232,12 @@ export class DealScanner {
     const scored: ScoredListing[] = [];
 
     try {
+      const postedAfter = await this.watermarkFor(source);
       for (const model of this.criteria.models) {
-        const listings = await source.fetchListings({ criteria: model });
+        const listings = await source.fetchListings({
+          criteria: model,
+          ...(postedAfter ? { postedAfter } : {}),
+        });
         listingsFound += listings.length;
 
         for (const listing of listings) {

@@ -21,6 +21,16 @@ export interface CrawlOptions {
    * pages to one 30s timeout is a poor trade.
    */
   readonly retries?: number;
+  /**
+   * Incremental watermark: skip listings posted on or before this date, and
+   * stop once a whole page falls below it. Because the marketplace lists
+   * newest-first, everything past that point is older than our last scrape, so
+   * re-crawling it is wasted work. Listings with no post date are treated as
+   * recent (never trimmed), so a source whose cards omit the date — Biker,
+   * where the date arrives later via enrich() — is unaffected. Undefined runs
+   * a full crawl (first run, or a forced re-crawl).
+   */
+  readonly postedAfter?: Date;
 }
 
 /**
@@ -75,7 +85,16 @@ export async function crawlPages(opts: CrawlOptions): Promise<Listing[]> {
     }
     if (fresh.length === 0) break;
 
-    collected.push(...fresh);
+    // Incremental crawl: keep only listings newer than the watermark, and stop
+    // once a whole page is older — everything after it is older still. We check
+    // "the whole page is old", not "the first old card", because marketplaces
+    // pin old sponsored ads to the top; one such card must not truncate a crawl
+    // that still has fresh listings below it.
+    const recent = opts.postedAfter
+      ? fresh.filter((l) => l.postedAt === undefined || l.postedAt > opts.postedAfter!)
+      : fresh;
+    collected.push(...recent);
+    if (opts.postedAfter && recent.length === 0) break;
 
     if (pageNumber < opts.maxPages) await delay(opts.throttleMs);
   }

@@ -167,6 +167,15 @@ export class LibsqlListingRepository implements ListingRepository {
     return result.rows.length > 0;
   }
 
+  async lastScrapedAt(sourceId: MarketplaceId): Promise<Date | undefined> {
+    const result = await this.client.execute({
+      sql: 'SELECT MAX(scraped_at) AS last FROM listings WHERE source_id = ?',
+      args: [sourceId],
+    });
+    const last = (result.rows[0] as unknown as { last: string | null } | undefined)?.last;
+    return last ? new Date(last) : undefined;
+  }
+
   async save(scored: ScoredListing): Promise<void> {
     await this.client.execute({ sql: UPSERT_SQL, args: toInsertArgs(scored) });
   }
