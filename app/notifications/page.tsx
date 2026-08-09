@@ -1,7 +1,9 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '../../auth.js';
-import { listUserNotifications, markAllNotificationsRead } from '../../src/notificationsModel.js';
-import { SiteHeader } from '../SiteHeader.js';
+import { loadNotificationsPage } from '../../src/notificationsModel.js';
+import { ListingImage } from '../ListingImage.js';
+import { PageShell } from '../PageShell.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,24 +21,29 @@ function whenLabel(iso: string): string {
   return `${Math.round(hrs / 24)}d ago`;
 }
 
-export default async function NotificationsPage() {
+export default function NotificationsPage() {
+  return (
+    <PageShell>
+      <NotificationsBody />
+    </PageShell>
+  );
+}
+
+async function NotificationsBody() {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
 
-  // Read the list first (so unread styling reflects state on arrival), then
-  // clear the unread flag so the header bell resets on this render.
-  const items = await listUserNotifications(session.user.id);
-  await markAllNotificationsRead(session.user.id);
+  // List then mark read in one DB session (unread styling still reflects arrival).
+  const items = await loadNotificationsPage(session.user.id);
 
   return (
-    <main className="container">
-      <SiteHeader />
+    <>
       <h1 className="title">Notifications</h1>
       <p className="subtitle">
         Alerts for the models you follow. Follow more on your{' '}
-        <a className="card-link" href="/profile">
+        <Link className="card-link" href="/profile">
           profile
-        </a>
+        </Link>
         .
       </p>
 
@@ -51,7 +58,7 @@ export default async function NotificationsPage() {
             <li key={n.id} className={n.readAt ? 'notif' : 'notif unread'}>
               <a href={n.url} target="_blank" rel="noopener noreferrer" className="notif-link">
                 {n.imageUrl ? (
-                  <img className="notif-img" src={n.imageUrl} alt="" loading="lazy" />
+                  <ListingImage className="notif-img" src={n.imageUrl} alt="" width={64} height={48} />
                 ) : (
                   <div className="notif-img notif-img-empty" />
                 )}
@@ -69,6 +76,6 @@ export default async function NotificationsPage() {
           ))}
         </ul>
       )}
-    </main>
+    </>
   );
 }

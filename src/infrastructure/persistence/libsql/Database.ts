@@ -15,23 +15,99 @@ export interface DatabaseConfig {
   readonly authToken?: string;
 }
 
-/**
- * Opens (creating if needed) the database and applies migrations. The same
- * code path serves the local CLI (a `file:` URL) and Vercel (a Turso
- * `libsql://` URL) — only the config differs.
- */
-export async function openDatabase(config: DatabaseConfig): Promise<Client> {
-  ensureLocalDirectoryExists(config.url);
+/** URLs that already had migrations applied in this process. */
+const migratedUrls = new Set<string>();
+/** In-flight migration promises, keyed by URL, so concurrent opens share one run. */
+const migrateInFlight = new Map<string, Promise<void>>();
+/** Process-scoped clients for durable URLs (key = url + auth token). */
+const sharedClients = new Map<string, Client>();
 
-  const client = createClient(
+/**
+ * `:memory:` (and memory-mode file URLs) get a fresh empty DB per client, so
+ * migrations must run on every open. Durable URLs only need them once per
+ * process — re-running ~20 remote round-trips on every Vercel request was
+ * the main reason soft navigations felt multi-second.
+ */
+function shouldCacheMigration(url: string): boolean {
+  if (url === ':memory:') return false;
+  if (url.startsWith('file:') && /[?&]mode=memory\b/i.test(url)) return false;
+  return true;
+}
+
+function sharedClientKey(config: DatabaseConfig): string {
+  return `${config.url}\0${config.authToken ?? ''}`;
+}
+
+function createDbClient(config: DatabaseConfig): Client {
+  return createClient(
     config.authToken ? { url: config.url, authToken: config.authToken } : { url: config.url },
   );
+}
 
+/** Shared durable clients ignore close() so existing finally-blocks stay safe. */
+function wrapSharedClient(client: Client): Client {
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      if (prop === 'close') return () => undefined;
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+async function applyMigrations(client: Client): Promise<void> {
   for (const statement of MIGRATIONS) {
     await client.execute(statement);
   }
   await ensureColumns(client);
+}
 
+async function ensureMigrated(config: DatabaseConfig): Promise<void> {
+  if (!shouldCacheMigration(config.url)) return;
+  if (migratedUrls.has(config.url)) return;
+
+  let pending = migrateInFlight.get(config.url);
+  if (!pending) {
+    pending = (async () => {
+      const client = createDbClient(config);
+      try {
+        await applyMigrations(client);
+        migratedUrls.add(config.url);
+      } finally {
+        client.close();
+        migrateInFlight.delete(config.url);
+      }
+    })();
+    migrateInFlight.set(config.url, pending);
+  }
+  await pending;
+}
+
+/**
+ * Opens (creating if needed) the database and applies migrations. The same
+ * code path serves the local CLI (a `file:` URL) and Vercel (a Turso
+ * `libsql://` URL) — only the config differs.
+ *
+ * For durable databases, schema migrations run at most once per process and
+ * a single shared client is reused (close is a no-op). `:memory:` still gets
+ * a fresh migrated client per open for test isolation.
+ */
+export async function openDatabase(config: DatabaseConfig): Promise<Client> {
+  ensureLocalDirectoryExists(config.url);
+
+  if (shouldCacheMigration(config.url)) {
+    await ensureMigrated(config);
+    const key = sharedClientKey(config);
+    let shared = sharedClients.get(key);
+    if (!shared) {
+      shared = createDbClient(config);
+      sharedClients.set(key, shared);
+    }
+    return wrapSharedClient(shared);
+  }
+
+  const client = createDbClient(config);
+  await applyMigrations(client);
   return client;
 }
 

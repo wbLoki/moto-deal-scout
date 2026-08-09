@@ -1,9 +1,15 @@
+import { unstable_cache } from 'next/cache';
 import { loadCriteria } from './config/loadCriteria.js';
 import { loadEnv } from './config/env.js';
 import { resolveDatabaseConfig } from './container.js';
 import { DEFAULT_SORT, PAGE_SIZE, type SortKey } from './domain/entities/DealSort.js';
+import type { StoredModel } from './domain/entities/Model.js';
 import type { ScoredListing } from './domain/entities/ScoredListing.js';
-import type { SearchCriteria, SearchRange } from './domain/entities/SearchCriteria.js';
+import type {
+  ModelCriteria,
+  SearchCriteria,
+  SearchRange,
+} from './domain/entities/SearchCriteria.js';
 import type {
   DealFacets,
   DealQuery,
@@ -16,7 +22,11 @@ import { LibsqlModelRepository } from './infrastructure/persistence/libsql/Libsq
 import { LibsqlSavedListingRepository } from './infrastructure/persistence/libsql/LibsqlSavedListingRepository.js';
 import { LibsqlUserProfileRepository } from './infrastructure/persistence/libsql/LibsqlUserProfileRepository.js';
 import { LibsqlUserSearchRangeRepository } from './infrastructure/persistence/libsql/LibsqlUserSearchRangeRepository.js';
+import { seedModelsOnce } from './infrastructure/persistence/libsql/seedModelsOnce.js';
 import { DEFAULT_SEARCH_RANGE } from './settingsModel.js';
+
+/** Cache tag for the anonymous homepage; invalidate after scans/admin model edits. */
+export const PUBLIC_DASHBOARD_TAG = 'public-dashboard';
 
 /** The order tabs are auto-selected in for first paint — first non-empty wins. */
 const TAB_PRIORITY: readonly DealTab[] = ['daily', 'watched', 'saved', 'all'];
@@ -65,6 +75,22 @@ export interface DashboardData {
   /** First page of `initialTab`, already filtered and sorted in SQL. */
   readonly initialDeals: readonly ScoredListing[];
   readonly initialTotal: number;
+}
+
+/** Derive enabled scan criteria from a single listAll() result (avoids a second query). */
+function enabledCriteriaFrom(allModels: readonly StoredModel[]): ModelCriteria[] {
+  return allModels
+    .filter((m) => m.enabled)
+    .map(
+      ({
+        enabled: _e,
+        autoCalibrate: _a,
+        calibratedAt: _at,
+        calibratedSamples: _n,
+        discoveredAt: _d,
+        ...criteria
+      }) => criteria,
+    );
 }
 
 /** The neutral, unfiltered page-1 request used for first paint and facets/counts. */
@@ -128,20 +154,21 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
   const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
   try {
-    const modelRepo = new LibsqlModelRepository(db);
-    await modelRepo.seedIfEmpty(config.models);
-    const allModels = await modelRepo.listAll();
-    const enabledModels = await modelRepo.listEnabledCriteria();
+    await seedModelsOnce(db, config.models);
+    const allModels = await new LibsqlModelRepository(db).listAll();
+    const enabledModels = enabledCriteriaFrom(allModels);
     const listings = new LibsqlListingRepository(db, allModels);
 
     const profileRepo = new LibsqlUserProfileRepository(db);
-    const [onboarded, watchedModelIds] = await Promise.all([
+    const rangeRepo = new LibsqlUserSearchRangeRepository(db);
+    const savedRepo = new LibsqlSavedListingRepository(db);
+    const [onboarded, watchedModelIds, storedRange, savedKeys] = await Promise.all([
       profileRepo.isOnboarded(userId),
       profileRepo.getWatchedModelIds(userId),
+      rangeRepo.get(userId),
+      savedRepo.listSavedKeys(userId),
     ]);
-    const storedRange = await new LibsqlUserSearchRangeRepository(db).get(userId);
     const searchRange = storedRange ?? DEFAULT_SEARCH_RANGE;
-    const savedKeys = await new LibsqlSavedListingRepository(db).listSavedKeys(userId);
 
     const ctx = {
       range: searchRange,
@@ -186,13 +213,14 @@ export async function getDealsPage(userId: string, input: DealsPageInput): Promi
   const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
   try {
-    const modelRepo = new LibsqlModelRepository(db);
-    await modelRepo.seedIfEmpty(config.models);
-    const allModels = await modelRepo.listAll();
+    // No seed on filter clicks — models exist after first paint / scan / admin.
+    const allModels = await new LibsqlModelRepository(db).listAll();
     const listings = new LibsqlListingRepository(db, allModels);
 
-    const storedRange = await new LibsqlUserSearchRangeRepository(db).get(userId);
-    const watchedModelIds = await new LibsqlUserProfileRepository(db).getWatchedModelIds(userId);
+    const [storedRange, watchedModelIds] = await Promise.all([
+      new LibsqlUserSearchRangeRepository(db).get(userId),
+      new LibsqlUserProfileRepository(db).getWatchedModelIds(userId),
+    ]);
     const ctx = {
       range: storedRange ?? DEFAULT_SEARCH_RANGE,
       minPriceFactor: config.global.minPriceFactor,
@@ -280,19 +308,13 @@ function toPublicDealQuery(input: PublicDealsInput, minPriceFactor: number): Dea
   };
 }
 
-/**
- * Public homepage first paint: the first page of the whole plausible catalog
- * (no budget/year filter applied yet) plus the filter facets and slider bounds.
- * Same SQL path as the member dashboard, minus the per-user scoping.
- */
-export async function getPublicDashboard(): Promise<PublicDashboardData> {
+async function loadPublicDashboardUncached(): Promise<PublicDashboardData> {
   const env = loadEnv();
   const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
   try {
-    const modelRepo = new LibsqlModelRepository(db);
-    await modelRepo.seedIfEmpty(config.models);
-    const allModels = await modelRepo.listAll();
+    await seedModelsOnce(db, config.models);
+    const allModels = await new LibsqlModelRepository(db).listAll();
     const listings = new LibsqlListingRepository(db, allModels);
 
     const wide = toPublicDealQuery(
@@ -324,6 +346,16 @@ export async function getPublicDashboard(): Promise<PublicDashboardData> {
   }
 }
 
+/**
+ * Public homepage first paint: cached briefly so anonymous `/` is not a full
+ * Turso round-trip on every visit. Invalidate via {@link PUBLIC_DASHBOARD_TAG}.
+ */
+export const getPublicDashboard = unstable_cache(
+  loadPublicDashboardUncached,
+  ['public-dashboard'],
+  { revalidate: 60, tags: [PUBLIC_DASHBOARD_TAG] },
+);
+
 /** Answers one filter/sort/page request from the anonymous public feed. */
 export async function getPublicDealsPage(
   input: PublicDealsInput,
@@ -332,9 +364,7 @@ export async function getPublicDealsPage(
   const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
   try {
-    const modelRepo = new LibsqlModelRepository(db);
-    await modelRepo.seedIfEmpty(config.models);
-    const allModels = await modelRepo.listAll();
+    const allModels = await new LibsqlModelRepository(db).listAll();
     const listings = new LibsqlListingRepository(db, allModels);
     // Must await before the finally closes the client — returning the pending
     // promise would let db.close() fire mid-query ("Client was closed").

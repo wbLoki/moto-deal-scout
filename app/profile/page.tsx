@@ -1,27 +1,29 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../../auth.js';
-import { getAccount } from '../../src/auth/userService.js';
-import { getUserProfile, listTrackedModels } from '../../src/watchlist.js';
+import { getProfilePageData } from '../../src/watchlist.js';
 import { AccountSettings } from '../AccountSettings.js';
-import { SiteHeader } from '../SiteHeader.js';
+import { PageShell } from '../PageShell.js';
 import { WatchedModelsForm } from '../WatchedModelsForm.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export default async function ProfilePage() {
+export default function ProfilePage() {
+  return (
+    <PageShell fallback={<p className="subtitle">Loading profile…</p>}>
+      <ProfileBody />
+    </PageShell>
+  );
+}
+
+async function ProfileBody() {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
 
-  const [account, models, profile] = await Promise.all([
-    getAccount(session.user.id),
-    listTrackedModels(),
-    getUserProfile(session.user.id),
-  ]);
+  const { account, models, profile } = await getProfilePageData(session.user.id);
 
   return (
-    <main className="container">
-      <SiteHeader />
+    <>
       <h1 className="title">Profile</h1>
       <p className="subtitle">Manage your account and the models you follow.</p>
 
@@ -47,6 +49,6 @@ export default async function ProfilePage() {
           mode="profile"
         />
       </section>
-    </main>
+    </>
   );
 }

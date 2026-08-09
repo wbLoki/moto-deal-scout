@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { SiteHeader } from './SiteHeader.js';
 import { PublicFeed } from './PublicFeed.js';
 import type { DealView } from './dealView.js';
 import type { SortKey } from './dealSort.js';
@@ -10,6 +9,8 @@ import type { DealFacets } from '../src/domain/interfaces/ListingRepository.js';
  * dashboard — the same filter panel, search bar and card grid — so browsing
  * feels like the real app. A slim banner explains what signing in unlocks
  * (following models, saving bikes, and deal alerts).
+ *
+ * Header chrome lives in {@link PageShell}; this is body-only.
  */
 export function PublicHome({
   initialDeals,
@@ -23,9 +24,7 @@ export function PublicHome({
   facets: DealFacets;
 }) {
   return (
-    <main className="container">
-      <SiteHeader />
-
+    <>
       <div className="signup-banner">
         <span>
           Browse every deal free. <strong>Create an account</strong> to follow models, save bikes
@@ -49,9 +48,9 @@ export function PublicHome({
       />
 
       <div className="footer">
-        Data scraped from Avito.ma and Biker.ma. Prices can contain seller typos — always
-        verify on the listing before acting.
+        Data scraped from Avito.ma and Biker.ma. Prices can contain seller typos — always verify on
+        the listing before acting.
       </div>
-    </main>
+    </>
   );
 }

@@ -189,11 +189,15 @@ export function DealTabs({
   const [kmMax, setKmMax] = useState(kmCap);
   const [ccMin, setCcMin] = useState(0);
   const [ccMax, setCcMax] = useState(ccCap);
+  const [debouncedKmMin, setDebouncedKmMin] = useState(0);
+  const [debouncedKmMax, setDebouncedKmMax] = useState(kmCap);
+  const [debouncedCcMin, setDebouncedCcMin] = useState(0);
+  const [debouncedCcMax, setDebouncedCcMax] = useState(ccCap);
   const [ratings, setRatings] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [brandsSel, setBrandsSel] = useState<string[]>([]);
 
-  const rangeInvalid = kmMax < kmMin || ccMax < ccMin;
+  const rangeInvalid = debouncedKmMax < debouncedKmMin || debouncedCcMax < debouncedCcMin;
 
   // Any control change returns to page 1; only the pager itself keeps a page.
   const resetPage = () => setPage(1);
@@ -209,14 +213,18 @@ export function DealTabs({
     resetPage();
   };
 
-  // Debounce the search box into `debouncedQuery` (which the fetch depends on).
+  // Debounce search + numeric filters so typing doesn't hit the server per keystroke.
   useEffect(() => {
     const t = setTimeout(() => {
       setDebouncedQuery(query);
+      setDebouncedKmMin(kmMin);
+      setDebouncedKmMax(kmMax);
+      setDebouncedCcMin(ccMin);
+      setDebouncedCcMax(ccMax);
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, kmMin, kmMax, ccMin, ccMax]);
 
   // The one place we talk to the server: whenever the tab, search, sort, page,
   // filters or a watch/save toggle (refreshKey) change, fetch that exact page.
@@ -235,11 +243,11 @@ export function DealTabs({
     const input: DealsPageInput = {
       tab: active,
       search: debouncedQuery.trim(),
-      mileageMin: kmMin,
+      mileageMin: debouncedKmMin,
       // Slider pinned at the data's max means "no upper bound".
-      mileageMax: kmMax >= kmCap ? 0 : kmMax,
-      ccMin,
-      ccMax: ccMax >= ccCap ? 0 : ccMax,
+      mileageMax: debouncedKmMax >= kmCap ? 0 : debouncedKmMax,
+      ccMin: debouncedCcMin,
+      ccMax: debouncedCcMax >= ccCap ? 0 : debouncedCcMax,
       ratings,
       cities,
       brands: brandsSel,
@@ -255,7 +263,7 @@ export function DealTabs({
       }
     });
     // prettier-ignore
-  }, [active, debouncedQuery, sort, page, kmMin, kmMax, ccMin, ccMax, ratings, cities, brandsSel, refreshKey]);
+  }, [active, debouncedQuery, sort, page, debouncedKmMin, debouncedKmMax, debouncedCcMin, debouncedCcMax, ratings, cities, brandsSel, refreshKey, kmCap, ccCap, rangeInvalid]);
 
   const toggleWatch = (modelId: string) => {
     const willWatch = !watched.has(modelId);
@@ -333,10 +341,7 @@ export function DealTabs({
                 min={0}
                 step={1000}
                 value={kmMin}
-                onChange={(e) => {
-                  setKmMin(Number(e.target.value));
-                  resetPage();
-                }}
+                onChange={(e) => setKmMin(Number(e.target.value))}
               />
             </label>
             <label>
@@ -346,10 +351,7 @@ export function DealTabs({
                 min={0}
                 step={1000}
                 value={kmMax}
-                onChange={(e) => {
-                  setKmMax(Number(e.target.value));
-                  resetPage();
-                }}
+                onChange={(e) => setKmMax(Number(e.target.value))}
               />
             </label>
           </div>
@@ -365,10 +367,7 @@ export function DealTabs({
                 min={0}
                 step={50}
                 value={ccMin}
-                onChange={(e) => {
-                  setCcMin(Number(e.target.value));
-                  resetPage();
-                }}
+                onChange={(e) => setCcMin(Number(e.target.value))}
               />
             </label>
             <label>
@@ -378,10 +377,7 @@ export function DealTabs({
                 min={0}
                 step={50}
                 value={ccMax}
-                onChange={(e) => {
-                  setCcMax(Number(e.target.value));
-                  resetPage();
-                }}
+                onChange={(e) => setCcMax(Number(e.target.value))}
               />
             </label>
           </div>

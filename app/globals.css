@@ -452,11 +452,15 @@ textarea:focus-visible,
   border-color: var(--border-strong);
 }
 
-.card-media {
+.card-media-wrap {
+  position: relative;
   aspect-ratio: 4 / 3;
   background: var(--panel-2);
+  overflow: hidden;
+}
+
+.card-media {
   object-fit: cover;
-  width: 100%;
   transition: transform 0.35s ease;
 }
 

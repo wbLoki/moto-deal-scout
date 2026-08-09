@@ -5,6 +5,9 @@ import type { StoredModel } from './domain/entities/Model.js';
 import { modelId } from './domain/services/provisionalModel.js';
 import { openDatabaseFromEnv } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
+import { seedModelsOnce } from './infrastructure/persistence/libsql/seedModelsOnce.js';
+import type { ModelRequest } from './domain/entities/ModelRequest.js';
+import { LibsqlModelRequestRepository } from './infrastructure/persistence/libsql/LibsqlModelRequestRepository.js';
 
 export const modelFormSchema = z
   .object({
@@ -43,12 +46,30 @@ function toStoredModel(input: ModelFormInput): StoredModel {
 export async function listAllModels(): Promise<StoredModel[]> {
   const db = await openDatabaseFromEnv();
   try {
-    const repo = new LibsqlModelRepository(db);
     // Seed from the config file the first time, so the admin always sees the
     // starter models even before the first scan or dashboard load.
     const config = await loadCriteria(loadEnv().CRITERIA_CONFIG_PATH);
-    await repo.seedIfEmpty(config.models);
-    return await repo.listAll();
+    await seedModelsOnce(db, config.models);
+    return await new LibsqlModelRepository(db).listAll();
+  } finally {
+    db.close();
+  }
+}
+
+/** Admin models home: tracked models + pending requests in one DB session. */
+export async function getAdminModelsPage(): Promise<{
+  models: StoredModel[];
+  pending: ModelRequest[];
+}> {
+  const db = await openDatabaseFromEnv();
+  try {
+    const config = await loadCriteria(loadEnv().CRITERIA_CONFIG_PATH);
+    await seedModelsOnce(db, config.models);
+    const [models, pending] = await Promise.all([
+      new LibsqlModelRepository(db).listAll(),
+      new LibsqlModelRequestRepository(db).listPending(),
+    ]);
+    return { models, pending };
   } finally {
     db.close();
   }

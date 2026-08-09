@@ -1,12 +1,13 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { auth } from '../auth.js';
 import {
   approveModelRequest,
   rejectModelRequest,
   submitModelRequest,
 } from '../src/requestService.js';
+import { PUBLIC_DASHBOARD_TAG } from '../src/readModel.js';
 
 export interface RequestFormState {
   ok?: boolean;
@@ -52,6 +53,7 @@ export async function approveRequestAction(formData: FormData): Promise<void> {
   await approveModelRequest(str(formData, 'id'), adminId);
   revalidatePath('/admin');
   revalidatePath('/');
+  revalidateTag(PUBLIC_DASHBOARD_TAG);
 }
 
 export async function rejectRequestAction(formData: FormData): Promise<void> {

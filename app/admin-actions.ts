@@ -1,9 +1,15 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { auth } from '../auth.js';
 import { removeModel, saveModel, setModelEnabled } from '../src/adminService.js';
 import { calibrateModels } from '../src/calibration.js';
+import { PUBLIC_DASHBOARD_TAG } from '../src/readModel.js';
+
+function revalidatePublicHome(): void {
+  revalidatePath('/');
+  revalidateTag(PUBLIC_DASHBOARD_TAG);
+}
 
 async function requireAdmin(): Promise<void> {
   const session = await auth();
@@ -41,7 +47,7 @@ export async function saveModelAction(formData: FormData): Promise<void> {
   await requireAdmin();
   await saveModel(modelInputFrom(formData));
   revalidatePath('/admin');
-  revalidatePath('/');
+  revalidatePublicHome();
 }
 
 export interface AdminModelState {
@@ -53,14 +59,14 @@ export async function toggleModelAction(formData: FormData): Promise<void> {
   await requireAdmin();
   await setModelEnabled(str(formData, 'id'), str(formData, 'enabled') === 'true');
   revalidatePath('/admin');
-  revalidatePath('/');
+  revalidatePublicHome();
 }
 
 export async function deleteModelAction(formData: FormData): Promise<void> {
   await requireAdmin();
   await removeModel(str(formData, 'id'));
   revalidatePath('/admin');
-  revalidatePath('/');
+  revalidatePublicHome();
 }
 
 /** Recomputes fair-value ranges from market data now (admin-only). */
@@ -70,7 +76,7 @@ export async function recalibrateAction(): Promise<AdminModelState> {
   try {
     const { calibrated, skipped } = await calibrateModels();
     revalidatePath('/admin');
-    revalidatePath('/');
+    revalidatePublicHome();
     return {
       ok: true,
       message: `Calibrated ${calibrated} model(s); ${skipped} skipped (not enough data).`,

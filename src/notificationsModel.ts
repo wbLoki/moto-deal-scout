@@ -34,3 +34,22 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
     db.close();
   }
 }
+
+/**
+ * Notifications page load: list then mark read in one DB session so the
+ * unread styling reflects arrival state without a second open/close.
+ */
+export async function loadNotificationsPage(
+  userId: string,
+  limit = 50,
+): Promise<StoredNotification[]> {
+  const db = await openDatabase(resolveDatabaseConfig(loadEnv()));
+  try {
+    const repo = new LibsqlNotificationRepository(db);
+    const items = await repo.listForUser(userId, limit);
+    await repo.markAllRead(userId);
+    return items;
+  } finally {
+    db.close();
+  }
+}

@@ -9,6 +9,13 @@ export interface DealView extends DealCardData {
   matchConfidence: number;
 }
 
+/** Dates become ISO strings after `unstable_cache` round-trips; accept both. */
+function toIso(value: Date | string | undefined | null): string | null {
+  if (value == null) return null;
+  if (typeof value === 'string') return value;
+  return value.toISOString();
+}
+
 /**
  * Maps a domain {@link ScoredListing} to the flat card view the client renders.
  * Shared by the server component's first paint and the paging server action so
@@ -31,8 +38,8 @@ export function toDealView(scored: ScoredListing): DealView {
     imageUrl: listing.imageUrl ?? null,
     matchConfidence: match.confidence,
     score: score.total,
-    createdAt: listing.firstSeenAt ?? listing.scrapedAt.toISOString(),
-    postedAt: listing.postedAt?.toISOString() ?? null,
+    createdAt: listing.firstSeenAt ?? toIso(listing.scrapedAt) ?? '',
+    postedAt: toIso(listing.postedAt),
     tierLabel: tier.label,
     tierLevel: tier.level,
   };

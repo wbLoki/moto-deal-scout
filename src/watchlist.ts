@@ -4,20 +4,27 @@ import type { StoredModel } from './domain/entities/Model.js';
 import { openDatabaseFromEnv } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
 import { LibsqlUserProfileRepository } from './infrastructure/persistence/libsql/LibsqlUserProfileRepository.js';
+import { LibsqlUserRepository } from './infrastructure/persistence/libsql/LibsqlUserRepository.js';
+import { seedModelsOnce } from './infrastructure/persistence/libsql/seedModelsOnce.js';
 
 export interface UserProfile {
   readonly onboarded: boolean;
   readonly watchedModelIds: readonly string[];
 }
 
+export interface ProfilePageData {
+  readonly account: { email: string; name: string | undefined; hasPassword: boolean } | null;
+  readonly models: StoredModel[];
+  readonly profile: UserProfile;
+}
+
 /** The enabled models a user can choose to follow (id/brand/model matter for the picker). */
 export async function listTrackedModels(): Promise<StoredModel[]> {
   const db = await openDatabaseFromEnv();
   try {
-    const repo = new LibsqlModelRepository(db);
     const config = await loadCriteria(loadEnv().CRITERIA_CONFIG_PATH);
-    await repo.seedIfEmpty(config.models);
-    return (await repo.listAll()).filter((m) => m.enabled);
+    await seedModelsOnce(db, config.models);
+    return (await new LibsqlModelRepository(db).listAll()).filter((m) => m.enabled);
   } finally {
     db.close();
   }
@@ -32,6 +39,38 @@ export async function getUserProfile(userId: string): Promise<UserProfile> {
       repo.getWatchedModelIds(userId),
     ]);
     return { onboarded, watchedModelIds };
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Single DB open for the profile page (account + model picker + watchlist).
+ * Avoids three separate open/close cycles on one navigation.
+ */
+export async function getProfilePageData(userId: string): Promise<ProfilePageData> {
+  const db = await openDatabaseFromEnv();
+  try {
+    const users = new LibsqlUserRepository(db);
+    const models = new LibsqlModelRepository(db);
+    const profiles = new LibsqlUserProfileRepository(db);
+    const config = await loadCriteria(loadEnv().CRITERIA_CONFIG_PATH);
+    await seedModelsOnce(db, config.models);
+
+    const [user, allModels, onboarded, watchedModelIds] = await Promise.all([
+      users.findById(userId),
+      models.listAll(),
+      profiles.isOnboarded(userId),
+      profiles.getWatchedModelIds(userId),
+    ]);
+
+    return {
+      account: user
+        ? { email: user.email, name: user.name, hasPassword: Boolean(user.passwordHash) }
+        : null,
+      models: allModels.filter((m) => m.enabled),
+      profile: { onboarded, watchedModelIds },
+    };
   } finally {
     db.close();
   }

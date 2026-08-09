@@ -265,38 +265,59 @@ export class LibsqlListingRepository implements ListingRepository {
 
   async getDealFacets(q: DealQuery): Promise<DealFacets> {
     // Filter options come from the whole in-range set, not one page or tab.
+    // Aggregate in SQL — pulling every listing row over Turso was a major TTFB cost.
     const parts = buildParts(q, { tab: 'all', applyRange: true, applyFilters: false });
-    const where = parts.where ? `WHERE ${parts.where}` : '';
-    const res = await this.client.execute({
-      sql: `SELECT m.brand AS brand, l.city AS city, l.mileage_km AS mileage,
-                   l.displacement_cc AS cc, l.price_mad AS price
-            FROM listings l ${parts.joins} ${where}`,
-      args: [...parts.joinArgs, ...parts.whereArgs],
-    });
+    const from = `FROM listings l ${parts.joins}`;
+    const args = [...parts.joinArgs, ...parts.whereArgs];
+    const withPred = (extra: string): string =>
+      parts.where ? `WHERE ${parts.where} AND ${extra}` : `WHERE ${extra}`;
+
+    const [brandsRes, citiesRes, maxRes] = await Promise.all([
+      this.client.execute({
+        sql: `SELECT DISTINCT TRIM(m.brand) AS brand ${from}
+              ${withPred(`TRIM(m.brand) != ''`)}
+              ORDER BY brand COLLATE NOCASE`,
+        args,
+      }),
+      this.client.execute({
+        sql: `SELECT DISTINCT TRIM(l.city) AS city ${from}
+              ${withPred(`TRIM(l.city) != ''`)}
+              ORDER BY city COLLATE NOCASE`,
+        args,
+      }),
+      this.client.execute({
+        sql: `SELECT MAX(l.mileage_km) AS maxMileage,
+                     MAX(l.displacement_cc) AS maxCc,
+                     MAX(l.price_mad) AS maxPrice
+              ${from}${parts.where ? ` WHERE ${parts.where}` : ''}`,
+        args,
+      }),
+    ]);
 
     const brandByKey = new Map<string, string>();
-    const cityByKey = new Map<string, string>();
-    let maxMileage = 0;
-    let maxCc = 0;
-    let maxPrice = 0;
-    for (const row of res.rows as unknown as {
-      brand: string;
-      city: string;
-      mileage: number | null;
-      cc: number | null;
-      price: number;
-    }[]) {
-      const brand = row.brand.trim();
+    for (const row of brandsRes.rows as unknown as { brand: string }[]) {
+      const brand = row.brand?.trim();
       if (brand) brandByKey.set(brand.toLowerCase(), brand);
-      const city = row.city.trim();
-      if (city) cityByKey.set(city.toLowerCase(), city);
-      if (row.mileage !== null && row.mileage > maxMileage) maxMileage = row.mileage;
-      if (row.cc !== null && row.cc > maxCc) maxCc = row.cc;
-      if (row.price > maxPrice) maxPrice = row.price;
     }
+    const cityByKey = new Map<string, string>();
+    for (const row of citiesRes.rows as unknown as { city: string }[]) {
+      const city = row.city?.trim();
+      if (city) cityByKey.set(city.toLowerCase(), city);
+    }
+    const maxRow = maxRes.rows[0] as unknown as {
+      maxMileage: number | null;
+      maxCc: number | null;
+      maxPrice: number | null;
+    };
     const sorted = (m: Map<string, string>): string[] =>
       [...m.values()].sort((a, b) => a.localeCompare(b));
-    return { brands: sorted(brandByKey), cities: sorted(cityByKey), maxMileage, maxCc, maxPrice };
+    return {
+      brands: sorted(brandByKey),
+      cities: sorted(cityByKey),
+      maxMileage: Number(maxRow?.maxMileage ?? 0),
+      maxCc: Number(maxRow?.maxCc ?? 0),
+      maxPrice: Number(maxRow?.maxPrice ?? 0),
+    };
   }
 
   async getListingsSince(sinceDate: Date): Promise<ScoredListing[]> {

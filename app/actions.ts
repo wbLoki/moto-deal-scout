@@ -1,8 +1,9 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { auth } from '../auth.js';
 import type { SearchRange } from '../src/domain/entities/SearchCriteria.js';
+import { PUBLIC_DASHBOARD_TAG } from '../src/readModel.js';
 import { saveUserSearchRange } from '../src/userSettings.js';
 import { runScan } from '../src/runners.js';
 
@@ -39,6 +40,7 @@ export async function scanNowAction(): Promise<ActionResult> {
   try {
     const report = await runScan();
     revalidatePath('/');
+    revalidateTag(PUBLIC_DASHBOARD_TAG);
     return {
       ok: true,
       message: `Scan complete: ${report.newListingsSeen} new, ${report.goodDeals.length} good deal(s).`,

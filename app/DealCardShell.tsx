@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { CalendarIcon, ExternalLinkIcon } from './icons.js';
+import { ListingImage } from './ListingImage.js';
 
 const madFmt = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
 const dateFmt = new Intl.DateTimeFormat('fr-MA', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -77,12 +78,15 @@ export function DealCardShell({
         {data.tierLabel}
       </span>
       {data.imageUrl ? (
-        <img
-          className="card-media"
-          src={data.imageUrl}
-          alt={`${data.brand} ${data.model}`}
-          loading="lazy"
-        />
+        <div className="card-media-wrap">
+          <ListingImage
+            className="card-media"
+            src={data.imageUrl}
+            alt={`${data.brand} ${data.model}`}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1100px) 50vw, 33vw"
+          />
+        </div>
       ) : (
         <div className="card-media-empty">No image</div>
       )}

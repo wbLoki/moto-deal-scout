@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../../auth.js';
-import { getUserProfile, listTrackedModels } from '../../src/watchlist.js';
+import { getProfilePageData } from '../../src/watchlist.js';
 import { WatchedModelsForm } from '../WatchedModelsForm.js';
 import { SparklesIcon } from '../icons.js';
 
@@ -11,10 +11,7 @@ export default async function OnboardingPage() {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
 
-  const [models, profile] = await Promise.all([
-    listTrackedModels(),
-    getUserProfile(session.user.id),
-  ]);
+  const { models, profile } = await getProfilePageData(session.user.id);
 
   return (
     <main className="auth-container">
