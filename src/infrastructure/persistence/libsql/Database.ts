@@ -47,10 +47,13 @@ function createDbClient(config: DatabaseConfig): Client {
 /** Shared durable clients ignore close() so existing finally-blocks stay safe. */
 function wrapSharedClient(client: Client): Client {
   return new Proxy(client, {
-    get(target, prop, receiver) {
-      if (prop === 'close') return () => undefined;
-      const value = Reflect.get(target, prop, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
+    get(target, prop, receiver): unknown {
+      if (prop === 'close') return (): void => undefined;
+      const value: unknown = Reflect.get(target, prop, receiver);
+      if (typeof value === 'function') {
+        return (value as (...args: unknown[]) => unknown).bind(target);
+      }
+      return value;
     },
   });
 }
