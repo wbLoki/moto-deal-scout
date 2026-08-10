@@ -39,9 +39,37 @@ GitHub Actions and on your local/residential box.
 
 ## Deploying
 
-- **Preferred:** push to `main` → the **Deploy to Cloudflare** workflow builds and
-  deploys on Linux.
-- **Manual (Linux/WSL only):** `npm run cf:deploy`.
+### Preferred: GitHub Actions
+
+Push to `main` → the **Deploy to Cloudflare** workflow (`.github/workflows/deploy.yml`)
+runs `opennextjs-cloudflare build && opennextjs-cloudflare deploy` on Linux.
+
+Repo secrets needed: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+
+### Alternative: Cloudflare Workers Builds (dashboard Git integration)
+
+If the Worker is connected to GitHub in the Cloudflare dashboard, **do not** use
+the default `npm run build` + `wrangler deploy`. That only produces `.next/` and
+then fails with:
+
+```text
+The entry-point file at ".open-next/worker.js" was not found.
+```
+
+In **Workers → your worker → Settings → Build**, set:
+
+| Field | Value |
+| --- | --- |
+| **Build command** | `npx opennextjs-cloudflare build` |
+| **Deploy command** | `npx opennextjs-cloudflare deploy` |
+
+(`npm run cf:build` / `npm run cf:deploy` are fine too.)
+
+### Manual (Linux/WSL only)
+
+```bash
+npm run cf:deploy
+```
 
 > ⚠️ **Do not build on native Windows.** OpenNext warns it "is not fully compatible
 > with Windows," and the build fails there while copying `node_modules` files
