@@ -19,6 +19,7 @@ export async function SiteHeader() {
       </Link>
       <nav className="site-nav">
         <ThemeToggle />
+        <Link href="/compare">Compare a bike</Link>
         {user ? (
           <>
             <Link

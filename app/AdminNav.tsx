@@ -4,10 +4,11 @@ const TABS = [
   { id: 'models', label: 'Models', href: '/admin' },
   { id: 'users', label: 'Users', href: '/admin/users' },
   { id: 'analytics', label: 'Analytics', href: '/admin/analytics' },
+  { id: 'price-review', label: 'Price review', href: '/admin/price-review' },
 ] as const;
 
 /** Sub-navigation shown at the top of the admin pages. */
-export function AdminNav({ active }: { active: 'models' | 'users' | 'analytics' }) {
+export function AdminNav({ active }: { active: 'models' | 'users' | 'analytics' | 'price-review' }) {
   return (
     <nav className="admin-nav">
       {TABS.map((t) => (

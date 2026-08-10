@@ -29,6 +29,8 @@
     "playwright:install": "playwright install chromium"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
+    "@google/genai": "^2.16.0",
     "@libsql/client": "^0.17.4",
     "@sparticuz/chromium": "^149.0.0",
     "@vercel/analytics": "^2.0.1",

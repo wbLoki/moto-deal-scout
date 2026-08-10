@@ -41,6 +41,24 @@ const envSchema = z.object({
   DISCORD_WEBHOOK_URL: z.string().url().optional(),
 
   /**
+   * Which AI provider the pricing features call. `gemini` has a free tier
+   * (default); `anthropic` uses Claude. Either way the features degrade to a
+   * clear "AI not configured" state when the chosen provider's key is unset —
+   * the deterministic engine is unaffected.
+   */
+  AI_PROVIDER: z.enum(['gemini', 'anthropic']).default('gemini'),
+
+  /** Anthropic API key, required only when AI_PROVIDER=anthropic. */
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  /** Claude model the AI features call. Override to trade cost for capability. */
+  ANTHROPIC_MODEL: z.string().min(1).default('claude-sonnet-5'),
+
+  /** Google Gemini API key (free tier at aistudio.google.com), required when AI_PROVIDER=gemini. */
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  /** Gemini model the AI features call. `gemini-2.5-flash` is fast and on the free tier. */
+  GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
+
+  /**
    * Resend API key for emailing watchlist alert digests. When unset, email
    * delivery is skipped (in-app notifications still work). Get one at
    * resend.com and verify a sender domain.
