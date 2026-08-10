@@ -1,26 +1,32 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../../auth.js';
-import { listAllModels } from '../../src/adminService.js';
-import { listPendingRequests } from '../../src/requestService.js';
+import { getAdminModelsPage } from '../../src/adminService.js';
 import { AdminNav } from '../AdminNav.js';
 import { ModelsList } from '../ModelsList.js';
+import { PageShell } from '../PageShell.js';
 import { RecalibrateButton } from '../RecalibrateButton.js';
-import { SiteHeader } from '../SiteHeader.js';
 import { approveRequestAction, rejectRequestAction } from '../request-actions.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export default async function AdminPage() {
+export default function AdminPage() {
+  return (
+    <PageShell>
+      <AdminBody />
+    </PageShell>
+  );
+}
+
+async function AdminBody() {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
   if (session.user.role !== 'admin') redirect('/');
 
-  const [models, pending] = await Promise.all([listAllModels(), listPendingRequests()]);
+  const { models, pending } = await getAdminModelsPage();
 
   return (
-    <main className="container">
-      <SiteHeader />
+    <>
       <h1 className="title">Admin · Models</h1>
       <AdminNav active="models" />
       <p className="subtitle">
@@ -74,6 +80,6 @@ export default async function AdminPage() {
           <ModelsList models={models} />
         )}
       </section>
-    </main>
+    </>
   );
 }

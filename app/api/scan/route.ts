@@ -1,3 +1,5 @@
+import { revalidatePath, revalidateTag } from 'next/cache';
+import { PUBLIC_DASHBOARD_TAG } from '../../../src/readModel.js';
 import { runScan } from '../../../src/runners.js';
 import { checkCronAuth } from '../_auth.js';
 
@@ -12,6 +14,8 @@ async function handle(request: Request): Promise<Response> {
   if (unauthorized) return unauthorized;
 
   const report = await runScan();
+  revalidatePath('/');
+  revalidateTag(PUBLIC_DASHBOARD_TAG);
   return Response.json({
     ok: true,
     runAt: report.runAt.toISOString(),

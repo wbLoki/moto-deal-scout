@@ -1,21 +1,28 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../../auth.js';
 import { listUserRequests } from '../../src/requestService.js';
-import { SiteHeader } from '../SiteHeader.js';
+import { PageShell } from '../PageShell.js';
 import { RequestForm } from './RequestForm.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export default async function RequestsPage() {
+export default function RequestsPage() {
+  return (
+    <PageShell>
+      <RequestsBody />
+    </PageShell>
+  );
+}
+
+async function RequestsBody() {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
 
   const requests = await listUserRequests(session.user.id);
 
   return (
-    <main className="container">
-      <SiteHeader />
+    <>
       <h1 className="title">Request a model</h1>
       <p className="subtitle">
         Suggest a motorcycle model for the scanner to track. An admin reviews and approves it before
@@ -42,6 +49,6 @@ export default async function RequestsPage() {
           ))
         )}
       </section>
-    </main>
+    </>
   );
 }

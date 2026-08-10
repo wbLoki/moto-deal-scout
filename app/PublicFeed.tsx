@@ -113,13 +113,22 @@ export function PublicFeed({
   const [kmMax, setKmMax] = useState(kmCap);
   const [ccMin, setCcMin] = useState(0);
   const [ccMax, setCcMax] = useState(ccCap);
+  const [debouncedBudgetMin, setDebouncedBudgetMin] = useState(0);
+  const [debouncedBudgetMax, setDebouncedBudgetMax] = useState(priceCap);
+  const [debouncedKmMin, setDebouncedKmMin] = useState(0);
+  const [debouncedKmMax, setDebouncedKmMax] = useState(kmCap);
+  const [debouncedCcMin, setDebouncedCcMin] = useState(0);
+  const [debouncedCcMax, setDebouncedCcMax] = useState(ccCap);
   const [ratings, setRatings] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [brandsSel, setBrandsSel] = useState<string[]>([]);
   const [page, setPage] = useState(1);
 
   const invalid =
-    budgetMax < budgetMin || yearMax < yearMin || kmMax < kmMin || ccMax < ccMin;
+    debouncedBudgetMax < debouncedBudgetMin ||
+    yearMax < yearMin ||
+    debouncedKmMax < debouncedKmMin ||
+    debouncedCcMax < debouncedCcMin;
   const resetPage = () => setPage(1);
 
   const resetFilters = () => {
@@ -138,14 +147,20 @@ export function PublicFeed({
     resetPage();
   };
 
-  // Debounce the search box into the value the fetch depends on.
+  // Debounce search + numeric filters so typing doesn't hit the server per keystroke.
   useEffect(() => {
     const t = setTimeout(() => {
       setDebouncedQuery(query);
+      setDebouncedBudgetMin(budgetMin);
+      setDebouncedBudgetMax(budgetMax);
+      setDebouncedKmMin(kmMin);
+      setDebouncedKmMax(kmMax);
+      setDebouncedCcMin(ccMin);
+      setDebouncedCcMax(ccMax);
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, budgetMin, budgetMax, kmMin, kmMax, ccMin, ccMax]);
 
   // Fetch the exact page from the server whenever a control changes. The first
   // render is skipped — its data arrived server-rendered as props.
@@ -162,14 +177,14 @@ export function PublicFeed({
     }
     const input: PublicDealsInput = {
       search: debouncedQuery.trim(),
-      budgetMin,
-      budgetMax,
+      budgetMin: debouncedBudgetMin,
+      budgetMax: debouncedBudgetMax,
       yearMin,
       yearMax,
-      mileageMin: kmMin,
-      mileageMax: kmMax >= kmCap ? 0 : kmMax,
-      ccMin,
-      ccMax: ccMax >= ccCap ? 0 : ccMax,
+      mileageMin: debouncedKmMin,
+      mileageMax: debouncedKmMax >= kmCap ? 0 : debouncedKmMax,
+      ccMin: debouncedCcMin,
+      ccMax: debouncedCcMax >= ccCap ? 0 : debouncedCcMax,
       ratings,
       cities,
       brands: brandsSel,
@@ -187,14 +202,14 @@ export function PublicFeed({
     debouncedQuery,
     sort,
     page,
-    budgetMin,
-    budgetMax,
+    debouncedBudgetMin,
+    debouncedBudgetMax,
     yearMin,
     yearMax,
-    kmMin,
-    kmMax,
-    ccMin,
-    ccMax,
+    debouncedKmMin,
+    debouncedKmMax,
+    debouncedCcMin,
+    debouncedCcMax,
     ratings,
     cities,
     brandsSel,
@@ -234,10 +249,7 @@ export function PublicFeed({
                 min={0}
                 step={1000}
                 value={budgetMin}
-                onChange={(e) => {
-                  setBudgetMin(Number(e.target.value));
-                  resetPage();
-                }}
+                onChange={(e) => setBudgetMin(Number(e.target.value))}
               />
             </label>
             <label>
@@ -247,10 +259,7 @@ export function PublicFeed({
                 min={0}
                 step={1000}
                 value={budgetMax}
-                onChange={(e) => {
-                  setBudgetMax(Number(e.target.value));
-                  resetPage();
-                }}
+                onChange={(e) => setBudgetMax(Number(e.target.value))}
               />
             </label>
           </div>
@@ -304,10 +313,7 @@ export function PublicFeed({
                 min={0}
                 step={1000}
                 value={kmMin}
-                onChange={(e) => {
-                  setKmMin(Number(e.target.value));
-                  resetPage();
-                }}
+                onChange={(e) => setKmMin(Number(e.target.value))}
               />
             </label>
             <label>
@@ -317,10 +323,7 @@ export function PublicFeed({
                 min={0}
                 step={1000}
                 value={kmMax}
-                onChange={(e) => {
-                  setKmMax(Number(e.target.value));
-                  resetPage();
-                }}
+                onChange={(e) => setKmMax(Number(e.target.value))}
               />
             </label>
           </div>
@@ -336,10 +339,7 @@ export function PublicFeed({
                 min={0}
                 step={50}
                 value={ccMin}
-                onChange={(e) => {
-                  setCcMin(Number(e.target.value));
-                  resetPage();
-                }}
+                onChange={(e) => setCcMin(Number(e.target.value))}
               />
             </label>
             <label>
@@ -349,10 +349,7 @@ export function PublicFeed({
                 min={0}
                 step={50}
                 value={ccMax}
-                onChange={(e) => {
-                  setCcMax(Number(e.target.value));
-                  resetPage();
-                }}
+                onChange={(e) => setCcMax(Number(e.target.value))}
               />
             </label>
           </div>

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '../../../auth.js';
 import { getAdminMetrics, type LabeledCount } from '../../../src/adminMetrics.js';
 import { AdminNav } from '../../AdminNav.js';
-import { SiteHeader } from '../../SiteHeader.js';
+import { PageShell } from '../../PageShell.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,7 +35,15 @@ function BarList({ rows, empty }: { rows: readonly LabeledCount[]; empty: string
   );
 }
 
-export default async function AdminAnalyticsPage() {
+export default function AdminAnalyticsPage() {
+  return (
+    <PageShell>
+      <AdminAnalyticsBody />
+    </PageShell>
+  );
+}
+
+async function AdminAnalyticsBody() {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
   if (session.user.role !== 'admin') redirect('/');
@@ -43,8 +51,7 @@ export default async function AdminAnalyticsPage() {
   const m = await getAdminMetrics();
 
   return (
-    <main className="container">
-      <SiteHeader />
+    <>
       <h1 className="title">Admin · Analytics</h1>
       <AdminNav active="analytics" />
 
@@ -106,6 +113,6 @@ export default async function AdminAnalyticsPage() {
         <h2 className="settings-title">Listings by source</h2>
         <BarList rows={m.listings.bySource} empty="No listings yet." />
       </section>
-    </main>
+    </>
   );
 }

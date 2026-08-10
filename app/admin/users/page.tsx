@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '../../../auth.js';
 import { listUsers } from '../../../src/adminMetrics.js';
 import { AdminNav } from '../../AdminNav.js';
-import { SiteHeader } from '../../SiteHeader.js';
+import { PageShell } from '../../PageShell.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,7 +12,15 @@ function formatDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(0, 10);
 }
 
-export default async function AdminUsersPage() {
+export default function AdminUsersPage() {
+  return (
+    <PageShell>
+      <AdminUsersBody />
+    </PageShell>
+  );
+}
+
+async function AdminUsersBody() {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
   if (session.user.role !== 'admin') redirect('/');
@@ -20,8 +28,7 @@ export default async function AdminUsersPage() {
   const users = await listUsers();
 
   return (
-    <main className="container">
-      <SiteHeader />
+    <>
       <h1 className="title">Admin · Users</h1>
       <AdminNav active="users" />
 
@@ -62,6 +69,6 @@ export default async function AdminUsersPage() {
           </div>
         )}
       </section>
-    </main>
+    </>
   );
 }
