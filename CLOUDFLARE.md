@@ -76,6 +76,11 @@ npm run cf:deploy
 > (e.g. libsql's `workerd` exports). Use WSL or CI (the deploy workflow). Plain
 > `next build` and `npm run dev` work fine on Windows.
 
+`@libsql/isomorphic-ws` must stay in `serverExternalPackages` in
+[`next.config.mjs`](next.config.mjs) so OpenNext copies its `workerd` entry
+(`web.mjs`) into `.open-next`. Without that, Cloudflare builds fail with
+`Could not resolve "@libsql/isomorphic-ws"`.
+
 ## Local development
 
 Unchanged: `npm run dev` (Turso via `DATABASE_URL` in `.env`). To preview the
