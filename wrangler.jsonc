@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "moto-deal-scout",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2024-12-30",
+  // Required by OpenNext so Node built-ins (buffer, crypto, etc.) work on Workers.
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  }
+  // Secrets (DATABASE_URL, AUTH_SECRET, GEMINI_API_KEY, GITHUB_DISPATCH_TOKEN, …)
+  // are set with `wrangler secret put <NAME>`, not committed here.
+  // For durable ISR caching later, add an R2 bucket binding and wire it in
+  // open-next.config.ts.
+}

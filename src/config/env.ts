@@ -70,11 +70,18 @@ const envSchema = z.object({
   APP_BASE_URL: z.string().url().default('https://motosnipe.com'),
 
   /**
-   * Shared secret protecting the /api/scan and /api/report routes. Vercel
-   * Cron sends it as `Authorization: Bearer <CRON_SECRET>`. If unset, the
-   * routes are unprotected — always set it in production.
+   * Where scans run. On Cloudflare the web host can't run Playwright, so the
+   * admin "Scan now" button triggers a GitHub Actions workflow instead. Set
+   * `GITHUB_REPO` ("owner/repo") and a `GITHUB_DISPATCH_TOKEN` (a PAT with the
+   * `actions:write` scope) to enable it; unset, the button reports that it's
+   * not configured.
    */
-  CRON_SECRET: z.string().min(1).optional(),
+  GITHUB_REPO: z.string().min(1).optional(),
+  GITHUB_DISPATCH_TOKEN: z.string().min(1).optional(),
+  /** Workflow file to dispatch for an on-demand scan. */
+  GITHUB_SCAN_WORKFLOW: z.string().min(1).default('scan.yml'),
+  /** Git ref the dispatched workflow runs on. */
+  GITHUB_DEFAULT_BRANCH: z.string().min(1).default('main'),
 
   /**
    * Email address that gets the `admin` role on sign-up / first OAuth login.

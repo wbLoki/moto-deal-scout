@@ -1,0 +1,44 @@
+name: Daily scan
+
+# The daily re-check of watched models. Runs here (not on the web host) because
+# scraping needs Playwright + a real browser, which Cloudflare Workers can't do.
+# Biker only — Avito blocks datacenter IPs, so Avito is scraped from a
+# residential connection separately.
+on:
+  schedule:
+    - cron: '0 7 * * *' # every day, 07:00 UTC
+  workflow_dispatch: # also triggered by the admin "Scan now" button
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Scan watched models
+        run: npm run scan
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          # Avito is blocked from datacenter IPs; scrape only Biker here.
+          SCRAPE_SOURCES: biker
+          SCRAPE_THROTTLE_MS: '3000'
+          NODE_ENV: production

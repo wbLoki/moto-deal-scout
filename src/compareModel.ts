@@ -1,11 +1,10 @@
 import { loadCriteria } from './config/loadCriteria.js';
 import { loadEnv } from './config/env.js';
-import { resolveDatabaseConfig } from './container.js';
 import { estimateAndEvaluate } from './application/services/aiPriceEstimator.js';
 import { parseListing } from './application/services/aiListingParser.js';
 import { evaluateBike, type BikeEvaluation, type BikeInput } from './application/services/evaluateBike.js';
 import { createAiExtractor } from './infrastructure/ai/aiExtractor.js';
-import { openDatabase } from './infrastructure/persistence/libsql/Database.js';
+import { openDatabase, resolveDatabaseConfig } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
 
 export type { BikeEvaluation, BikeInput } from './application/services/evaluateBike.js';

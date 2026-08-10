@@ -1,0 +1,34 @@
+name: Deploy to Cloudflare
+
+# The OpenNext → Workers build must run on Linux (it's not reliable on native
+# Windows), so deploys happen here rather than from a dev machine. App secrets
+# (DATABASE_URL, AUTH_SECRET, GEMINI_API_KEY, …) live on the Worker itself
+# (`wrangler secret put`), not in this workflow.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build & deploy (OpenNext → Workers)
+        run: npx opennextjs-cloudflare build && npx opennextjs-cloudflare deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

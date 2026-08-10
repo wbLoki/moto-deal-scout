@@ -1,7 +1,6 @@
 import { loadEnv } from './config/env.js';
-import { resolveDatabaseConfig } from './container.js';
 import type { StoredNotification } from './domain/entities/Notification.js';
-import { openDatabase } from './infrastructure/persistence/libsql/Database.js';
+import { openDatabase, resolveDatabaseConfig } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlNotificationRepository } from './infrastructure/persistence/libsql/LibsqlNotificationRepository.js';
 
 /** Web-facing helpers over the notification store; each opens the DB per call. */
