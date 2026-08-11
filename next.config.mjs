@@ -6,12 +6,14 @@ const nextConfig = {
   // (and friends) publish a `workerd` export (`web.mjs`) that OpenNext only
   // copies into `.open-next` when listed here — otherwise Cloudflare builds
   // fail with "Could not resolve @libsql/isomorphic-ws".
+  // Do not list playwright / playwright-core here: the compare web path must
+  // not pull them into OpenNext (esbuild then fails on chromium-bidi). CLI/scan
+  // code imports them only from Node entrypoints outside the Worker graph.
   serverExternalPackages: [
     '@libsql/client',
     '@libsql/hrana-client',
     '@libsql/isomorphic-ws',
     '@sparticuz/chromium',
-    'playwright-core',
     'pino',
   ],
 

@@ -109,7 +109,10 @@ actual Worker build locally, use WSL: `npm run cf:preview`.
 
 **Verified locally:** `next build` compiles all routes with no Playwright in the
 web bundle; `tsc`, `eslint`, and the full test suite pass; the OpenNext build
-proceeds through bundling (only the Windows file-copy step fails).
+proceeds through bundling (only the Windows file-copy step fails). Do not import
+`playwright` / `playwright-core` from any module the Worker serves (compare uses
+DB lookup for Avito links) — OpenNext’s esbuild step fails on unresolved
+`chromium-bidi` paths inside playwright-core.
 
 **Not yet verified (needs a Linux deploy):** the Worker runtime itself — Turso
 over the web client in production, NextAuth on `workerd`, and the AI calls. Run

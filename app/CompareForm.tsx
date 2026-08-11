@@ -251,7 +251,7 @@ export function CompareForm({
       <details className="compare-paste panel">
         <summary>Or paste a listing link / ad text{signedIn ? '' : ' (sign in)'}</summary>
         <p className="settings-hint">
-          Paste an Avito or Biker listing link to scan it live (price, year, km…), or paste the ad
+          Paste a Biker link to scan it live, an Avito link we&apos;ve already scraped, or the ad
           text and let AI read it.
         </p>
         <textarea

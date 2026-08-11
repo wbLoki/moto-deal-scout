@@ -125,7 +125,9 @@ export function adFromNextData(nextData: unknown): AvitoAd {
 
 /**
  * Opens an Avito listing URL in Playwright and returns a normalized {@link Listing}.
- * Requires a real Chromium (local `next-dev` / Node). Cloudflare Workers cannot run this.
+ * Node/CLI only — never import this from the Cloudflare Worker graph (OpenNext
+ * cannot bundle playwright-core / chromium-bidi). The public compare paste path
+ * resolves Avito links from the scraped listings DB instead.
  */
 export async function fetchAvitoListing(url: string): Promise<Listing> {
   const parsed = parseListingUrl(url);
