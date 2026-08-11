@@ -20,14 +20,14 @@ describe('price factor forward/inverse', () => {
     const { goodAt, badAt } = fairPriceBounds(model);
     expect(goodAt).toBe(65000);
     expect(badAt).toBe(114000);
-    expect(priceForScore(40, model)).toBe(goodAt);
+    expect(priceForScore(50, model)).toBe(goodAt);
     expect(priceForScore(0, model)).toBe(badAt);
   });
 
   it('round-trips a mid-band price through score and back', () => {
     const price = 89500; // midpoint of 65 000..114 000
-    expect(scorePriceValue(price, model)).toBe(20);
-    expect(priceForScore(20, model)).toBe(price);
+    expect(scorePriceValue(price, model)).toBe(25);
+    expect(priceForScore(25, model)).toBe(price);
   });
 
   it('clamps points outside [0, PRICE_WEIGHT]', () => {
@@ -38,8 +38,8 @@ describe('price factor forward/inverse', () => {
 
 describe('suggestPrice', () => {
   it('returns reachable ceilings for good non-price factors', () => {
-    // mileage 25 + year 20 + city 15 = 60 other points.
-    const s = suggestPrice(model, breakdown({ mileage: 25, year: 20, city: 15 }));
+    // mileage 27 + year 20 + city 3 = 50 other points.
+    const s = suggestPrice(model, breakdown({ mileage: 27, year: 20, city: 3 }));
     expect(s.fairMin).toBe(65000);
     expect(s.fairMax).toBe(95000);
 
@@ -54,7 +54,7 @@ describe('suggestPrice', () => {
   });
 
   it('marks a tier unreachable when mileage/age already sink the score', () => {
-    // 0 other points: even a free bike tops out at 40 < 72.
+    // 0 other points: even a free bike tops out at 50 < 72.
     const s = suggestPrice(model, breakdown({ mileage: 0, year: 0, city: 0 }));
     for (const t of s.targets) {
       expect(t.reachable).toBe(false);

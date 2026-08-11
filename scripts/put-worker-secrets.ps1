@@ -1,5 +1,8 @@
-# Uploads Worker secrets from local .env via `wrangler versions secret put`.
+# Uploads Worker secrets from local .env via `wrangler secret put`.
 # Non-secret vars live in wrangler.jsonc. Never commit .env.
+#
+# Uses `secret put` (not `versions secret put`) so secrets apply to the live
+# Worker immediately and persist across later `wrangler deploy`s.
 #
 # Usage:
 #   npm run cf:secrets              # production Worker (motosnipe)
@@ -49,7 +52,7 @@ $secretKeys = @(
 )
 
 $target = if ($preview) { 'preview' } else { 'production' }
-Write-Host "Uploading secrets to $target Worker (versions secret put)..."
+Write-Host "Uploading secrets to $target Worker (secret put)..."
 
 foreach ($key in $secretKeys) {
   if (-not $values.ContainsKey($key) -or [string]::IsNullOrWhiteSpace($values[$key])) {
@@ -57,10 +60,10 @@ foreach ($key in $secretKeys) {
     continue
   }
   Write-Host "  put $key"
-  $values[$key] | npx --yes wrangler versions secret put $key $wranglerEnvFlag
+  $values[$key] | npx --yes wrangler secret put $key $wranglerEnvFlag
   if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to put $key"
   }
 }
 
-Write-Host "Done. Deploy (or promote the version) so the Worker picks up these secrets."
+Write-Host "Done. Secrets are live on the Worker (no redeploy required for secret-only changes)."

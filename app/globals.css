@@ -2068,102 +2068,27 @@ textarea:focus-visible,
   margin: 0;
 }
 
-.compare-matched {
-  font-size: 0.9rem;
-  color: var(--muted);
-  margin: 0;
-}
-
-.compare-verdict {
+.compare-summary {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
 }
 
-.compare-score {
-  font-size: 1.15rem;
+.compare-bike-name {
+  margin: 0;
+  font-size: 1.25rem;
   font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
-.compare-position {
-  margin: 0.6rem 0 0;
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-
-.compare-position.pos-below {
-  color: var(--good);
-}
-.compare-position.pos-above {
-  color: var(--warn);
-}
-
-.factors {
-  display: grid;
-  gap: 0.7rem;
-  margin-top: 1rem;
-}
-
-.factor-head {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.85rem;
-  margin-bottom: 0.3rem;
-}
-
-.factor-pts {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.factor-track {
-  height: 8px;
-  background: var(--panel-2);
-  border-radius: var(--pill);
-  overflow: hidden;
-}
-
-.factor-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: var(--pill);
-}
-
-.factor-reasons {
-  margin: 1rem 0 0;
-  padding-left: 1.1rem;
-  display: grid;
-  gap: 0.3rem;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-.compare-suggestion {
-  border-top: 1px solid var(--border);
-  padding-top: 1.1rem;
-  display: grid;
-  gap: 0.6rem;
+.compare-details {
+  margin: 0;
 }
 
 .compare-range {
   margin: 0;
   font-size: 0.95rem;
-}
-
-.compare-targets {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.55rem;
-  font-size: 0.95rem;
-}
-
-.compare-targets li {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
 .muted {

@@ -54,16 +54,18 @@ describe('aiListingParser', () => {
         model: ' MT-07 ',
         year: 2019,
         mileageKm: 15000,
+        displacementCc: 689,
         priceMAD: 60000,
         city: 'Casablanca',
       }),
-      'Yamaha MT-07 2019, 15000 km, 60000 dh, Casablanca',
+      'Yamaha MT-07 2019, 15000 km, 689cc, 60000 dh, Casablanca',
     );
     expect(input).toEqual({
       brand: 'Yamaha',
       model: 'MT-07',
       year: 2019,
       mileageKm: 15000,
+      displacementCc: 689,
       priceMAD: 60000,
       city: 'Casablanca',
     });
@@ -71,7 +73,15 @@ describe('aiListingParser', () => {
 
   it('omits fields the ad did not state (nulls become undefined)', async () => {
     const input = await parseListing(
-      fakeAi({ brand: 'Honda', model: 'CB500F', year: null, mileageKm: null, priceMAD: null, city: null }),
+      fakeAi({
+        brand: 'Honda',
+        model: 'CB500F',
+        year: null,
+        mileageKm: null,
+        displacementCc: null,
+        priceMAD: null,
+        city: null,
+      }),
       'CB500F à vendre',
     );
     expect(input).toEqual({ brand: 'Honda', model: 'CB500F' });

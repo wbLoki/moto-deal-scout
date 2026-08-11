@@ -1,4 +1,7 @@
-import { GoogleGenAI, Type, type Schema } from '@google/genai';
+// Use the web entry — the Node build pulls in `fs`/`ws`/`google-auth-library`
+// and breaks on Cloudflare Workers (OpenNext resolves the `node` export under
+// `nodejs_compat`). Same pattern as `@libsql/client/web`.
+import { GoogleGenAI, Type, type Schema } from '@google/genai/web';
 import { AiError, type AiExtractor, type ExtractArgs, type JsonObjectSchema } from './AnthropicClient.js';
 
 /** The subset of JSON Schema our feature tools use, before conversion to Gemini's shape. */

@@ -52,7 +52,11 @@ Repo secrets needed: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
 
 Preview notes:
 
-- Attach `preview.motosnipe.com` to the **`motosnipe-preview`** Worker in the dashboard.
+- Attach `preview.motosnipe.com` to the **`motosnipe-preview`** Worker (and
+  `motosnipe.com` / `www` to **`motosnipe`**). `wrangler.jsonc` declares these
+  as `routes` with `custom_domain: true` so deploys keep them on the right Worker.
+  If the subdomain was previously on production, remove it there first or the
+  preview deploy will fail to claim it.
 - Upload preview secrets once: `npm run cf:secrets -- --preview`
 - One shared preview URL means the **latest** non-`main` push wins.
 
@@ -105,7 +109,10 @@ actual Worker build locally, use WSL: `npm run cf:preview`.
 
 **Verified locally:** `next build` compiles all routes with no Playwright in the
 web bundle; `tsc`, `eslint`, and the full test suite pass; the OpenNext build
-proceeds through bundling (only the Windows file-copy step fails).
+proceeds through bundling (only the Windows file-copy step fails). Do not import
+`playwright` / `playwright-core` from any module the Worker serves (compare uses
+DB lookup for Avito links) — OpenNext’s esbuild step fails on unresolved
+`chromium-bidi` paths inside playwright-core.
 
 **Not yet verified (needs a Linux deploy):** the Worker runtime itself — Turso
 over the web client in production, NextAuth on `workerd`, and the AI calls. Run

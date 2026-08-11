@@ -129,6 +129,15 @@ export interface ListingRepository {
   /** The stored price of a listing, or undefined if it isn't stored yet. */
   getStoredPrice(sourceId: MarketplaceId, externalId: string): Promise<number | undefined>;
 
+  /**
+   * Full scored listing by marketplace id, or undefined when we haven't
+   * scraped it (or its matched model was removed from criteria).
+   */
+  findBySourceExternalId(
+    sourceId: MarketplaceId,
+    externalId: string,
+  ): Promise<ScoredListing | undefined>;
+
   /** Records a price drop on an already-stored listing (updates price, keeps the old one). */
   recordPriceDrop(
     sourceId: MarketplaceId,

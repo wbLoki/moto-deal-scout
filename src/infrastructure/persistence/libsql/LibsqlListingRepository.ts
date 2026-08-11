@@ -345,6 +345,19 @@ export class LibsqlListingRepository implements ListingRepository {
     return row ? Number(row.price_mad) : undefined;
   }
 
+  async findBySourceExternalId(
+    sourceId: MarketplaceId,
+    externalId: string,
+  ): Promise<ScoredListing | undefined> {
+    const result = await this.client.execute({
+      sql: 'SELECT * FROM listings WHERE source_id = ? AND external_id = ? LIMIT 1',
+      args: [sourceId, externalId],
+    });
+    const row = result.rows[0];
+    if (!row) return undefined;
+    return mapRowToScoredListing(row as unknown as ListingRow, this.modelsById, this.logger);
+  }
+
   async recordPriceDrop(
     sourceId: MarketplaceId,
     externalId: string,

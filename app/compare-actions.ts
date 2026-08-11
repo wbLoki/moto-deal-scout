@@ -6,6 +6,7 @@ import {
   getAiEstimate,
   getBikeEvaluation,
   getPastedListingEvaluation,
+  ListingUrlScanError,
   type BikeEvaluation,
   type BikeInput,
 } from '../src/compareModel.js';
@@ -13,18 +14,32 @@ import { AiUnavailableError } from '../src/infrastructure/ai/AnthropicClient.js'
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+/** Empty / nullish wire values → omitted; otherwise coerce to an int in range. */
+function optionalInt(min: number, max: number) {
+  return z.preprocess((value) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    if (typeof value === 'number' && Number.isNaN(value)) return undefined;
+    return value;
+  }, z.coerce.number().int().min(min).max(max).optional());
+}
+
 /**
  * Input guard for the public evaluate action. Everything but brand/model is
  * optional; blank numeric fields arrive omitted, not as 0. `coerce` lets the
- * client pass strings straight from the form inputs.
+ * client pass strings straight from the form inputs. Nulls from the server-action
+ * wire format are treated as omitted (empty optional fields).
  */
 const schema = z.object({
   brand: z.string().trim().min(1).max(60),
   model: z.string().trim().min(1).max(60),
-  year: z.coerce.number().int().min(1950).max(CURRENT_YEAR + 1).optional(),
-  mileageKm: z.coerce.number().int().min(0).max(2_000_000).optional(),
-  priceMAD: z.coerce.number().int().min(0).max(100_000_000).optional(),
-  city: z.string().trim().max(60).optional(),
+  year: optionalInt(1950, CURRENT_YEAR + 1),
+  mileageKm: optionalInt(0, 2_000_000),
+  displacementCc: optionalInt(25, 3500),
+  priceMAD: optionalInt(0, 100_000_000),
+  city: z.preprocess(
+    (value) => (value === '' || value === null || value === undefined ? undefined : value),
+    z.string().trim().max(60).optional(),
+  ),
 });
 
 export interface EvaluateResult {
@@ -71,7 +86,7 @@ export async function estimateWithAiAction(raw: unknown): Promise<AiEvaluateResu
     const evaluation = await getAiEstimate(parsed.data);
     return { ok: true, evaluation };
   } catch (err) {
-    if (err instanceof AiUnavailableError) {
+    if (err instanceof AiUnavailableError || (err instanceof Error && err.name === 'AiUnavailableError')) {
       return { ok: false, reason: 'ai-unavailable', error: 'AI estimates aren’t configured yet.' };
     }
     return { ok: false, reason: 'error', error: 'The AI estimate failed. Try again.' };
@@ -105,9 +120,24 @@ export async function evaluatePastedListingAction(
     const { extracted, evaluation } = await getPastedListingEvaluation(parsed.data);
     return { ok: true, extracted, evaluation };
   } catch (err) {
-    if (err instanceof AiUnavailableError) {
+    // `instanceof` can fail across OpenNext chunk boundaries; also match by name.
+    if (err instanceof AiUnavailableError || (err instanceof Error && err.name === 'AiUnavailableError')) {
       return { ok: false, reason: 'ai-unavailable', error: 'The AI reader isn’t configured yet.' };
     }
+    if (
+      err instanceof ListingUrlScanError ||
+      (err instanceof Error && err.name === 'ListingUrlScanError')
+    ) {
+      return {
+        ok: false,
+        reason: 'invalid',
+        error: err instanceof Error ? err.message : 'Could not scan that listing link.',
+      };
+    }
+    console.error(
+      'evaluatePastedListingAction failed:',
+      err instanceof Error ? err.message : err,
+    );
     return { ok: false, reason: 'error', error: 'Couldn’t read that listing. Try again.' };
   }
 }

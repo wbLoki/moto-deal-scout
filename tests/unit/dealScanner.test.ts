@@ -72,6 +72,17 @@ class InMemoryRepository implements ListingRepository {
     return Promise.resolve(this.prices.get(`${sourceId}:${externalId}`));
   }
 
+  findBySourceExternalId(
+    sourceId: MarketplaceId,
+    externalId: string,
+  ): Promise<ScoredListing | undefined> {
+    return Promise.resolve(
+      this.saved.find(
+        (s) => s.listing.sourceId === sourceId && s.listing.externalId === externalId,
+      ),
+    );
+  }
+
   recordPriceDrop(sourceId: MarketplaceId, externalId: string, newPriceMAD: number): Promise<void> {
     this.prices.set(`${sourceId}:${externalId}`, newPriceMAD);
     return Promise.resolve();
