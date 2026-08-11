@@ -108,6 +108,11 @@ export async function evaluatePastedListingAction(
     if (err instanceof AiUnavailableError) {
       return { ok: false, reason: 'ai-unavailable', error: 'The AI reader isn’t configured yet.' };
     }
+    // Surface enough for Cloudflare logs without leaking raw provider payloads to the UI.
+    console.error(
+      'evaluatePastedListingAction failed:',
+      err instanceof Error ? err.message : err,
+    );
     return { ok: false, reason: 'error', error: 'Couldn’t read that listing. Try again.' };
   }
 }

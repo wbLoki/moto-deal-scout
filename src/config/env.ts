@@ -55,8 +55,8 @@ const envSchema = z.object({
 
   /** Google Gemini API key (free tier at aistudio.google.com), required when AI_PROVIDER=gemini. */
   GEMINI_API_KEY: z.string().min(1).optional(),
-  /** Gemini model the AI features call. `gemini-2.5-flash` is fast and on the free tier. */
-  GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
+  /** Gemini model the AI features call. `gemini-3.5-flash` is fast; 2.5 is blocked for new keys. */
+  GEMINI_MODEL: z.string().min(1).default('gemini-3.5-flash'),
 
   /**
    * Resend API key for emailing watchlist alert digests. When unset, email

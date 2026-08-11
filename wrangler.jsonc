@@ -21,7 +21,7 @@
     "ADMIN_EMAIL": "wailbouymaj@gmail.com",
     "ALERT_FROM_EMAIL": "Moto Deal Scout <alerts@motosnipe.com>",
     "AI_PROVIDER": "gemini",
-    "GEMINI_MODEL": "gemini-2.5-flash",
+    "GEMINI_MODEL": "gemini-3.5-flash",
     "GITHUB_REPO": "wbLoki/moto-deal-scout",
     "GITHUB_SCAN_WORKFLOW": "scan.yml",
     "GITHUB_DEFAULT_BRANCH": "main"
@@ -36,7 +36,7 @@
         "ADMIN_EMAIL": "wailbouymaj@gmail.com",
         "ALERT_FROM_EMAIL": "Moto Deal Scout <alerts@motosnipe.com>",
         "AI_PROVIDER": "gemini",
-        "GEMINI_MODEL": "gemini-2.5-flash",
+        "GEMINI_MODEL": "gemini-3.5-flash",
         "GITHUB_REPO": "wbLoki/moto-deal-scout",
         "GITHUB_SCAN_WORKFLOW": "scan.yml",
         "GITHUB_DEFAULT_BRANCH": "main"
