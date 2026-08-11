@@ -1,7 +1,6 @@
 import { unstable_cache } from 'next/cache';
 import { loadCriteria } from './config/loadCriteria.js';
 import { loadEnv } from './config/env.js';
-import { resolveDatabaseConfig } from './container.js';
 import { DEFAULT_SORT, PAGE_SIZE, type SortKey } from './domain/entities/DealSort.js';
 import type { StoredModel } from './domain/entities/Model.js';
 import type { ScoredListing } from './domain/entities/ScoredListing.js';
@@ -16,7 +15,7 @@ import type {
   DealTab,
   TabCounts,
 } from './domain/interfaces/ListingRepository.js';
-import { openDatabase } from './infrastructure/persistence/libsql/Database.js';
+import { openDatabase, resolveDatabaseConfig } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
 import { LibsqlSavedListingRepository } from './infrastructure/persistence/libsql/LibsqlSavedListingRepository.js';

@@ -1,0 +1,18 @@
+diff --git a/node_modules/@opennextjs/cloudflare/dist/cli/build/utils/workerd.js b/node_modules/@opennextjs/cloudflare/dist/cli/build/utils/workerd.js
+index 2567f7c..2f0f48c 100644
+--- a/node_modules/@opennextjs/cloudflare/dist/cli/build/utils/workerd.js
++++ b/node_modules/@opennextjs/cloudflare/dist/cli/build/utils/workerd.js
+@@ -67,7 +67,12 @@ export async function copyWorkerdPackages(options, nodePackages) {
+             const pkgJson = JSON.parse(await fs.readFile(path.join(src, "package.json"), "utf8"));
+             const { transformed, hasBuildCondition } = transformPackageJson(pkgJson);
+             const match = src.match(isNodeModuleRegex);
+-            if (match?.groups?.pkg && externalPackages.includes(match.groups.pkg) && hasBuildCondition) {
++            // Windows paths leave backslashes in the captured package name
++            // (e.g. "@libsql\\isomorphic-ws"), which never matches serverExternalPackages.
++            const normalizedPkg = match?.groups?.pkg?.replaceAll("\\", "/") ?? "";
++            const parts = normalizedPkg.split("/").filter(Boolean);
++            const pkgName = parts[0]?.startsWith("@") ? parts.slice(0, 2).join("/") : (parts[0] ?? "");
++            if (pkgName && externalPackages.includes(pkgName) && hasBuildCondition) {
+                 logger.debug(`Copying package using a workerd condition: ${path.relative(options.appPath, src)} -> ${path.relative(options.appPath, dst)}`);
+                 await fs.cp(src, dst, { recursive: true, force: true });
+                 // Overwrite with  the transformed package.json

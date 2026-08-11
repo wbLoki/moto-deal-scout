@@ -5,6 +5,11 @@ data/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+
+# Cloudflare / OpenNext build output + generated types
+.open-next/
+.wrangler/
+cloudflare-env.d.ts
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal

@@ -1,6 +1,5 @@
 import type { Client } from '@libsql/client';
 import { loadEnv } from './config/env.js';
-import { resolveDatabaseConfig } from './container.js';
 import type { DailyReport, PriceDrop } from './domain/entities/DailyReport.js';
 import type { NewNotification } from './domain/entities/Notification.js';
 import type { ScoredListing } from './domain/entities/ScoredListing.js';
@@ -10,7 +9,7 @@ import {
   EmailAlertProvider,
   type DigestItem,
 } from './infrastructure/notifications/EmailAlertProvider.js';
-import { openDatabase } from './infrastructure/persistence/libsql/Database.js';
+import { openDatabase, resolveDatabaseConfig } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlNotificationRepository } from './infrastructure/persistence/libsql/LibsqlNotificationRepository.js';
 import { LibsqlUserSearchRangeRepository } from './infrastructure/persistence/libsql/LibsqlUserSearchRangeRepository.js';
 import { DEFAULT_SEARCH_RANGE } from './settingsModel.js';

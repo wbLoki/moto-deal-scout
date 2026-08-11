@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { createClient, type Client } from '@libsql/client';
+import type { Client } from '@libsql/client';
 import type { Env } from '../../../config/env.js';
 import { loadEnv } from '../../../config/env.js';
 import { ADDITIVE_COLUMNS, MIGRATIONS } from './schema.js';
@@ -38,7 +38,28 @@ function sharedClientKey(config: DatabaseConfig): string {
   return `${config.url}\0${config.authToken ?? ''}`;
 }
 
-function createDbClient(config: DatabaseConfig): Client {
+/** The libsql client factory, as both the native and web entry points expose it. */
+type CreateClient = (config: { url: string; authToken?: string }) => Client;
+
+/** True for remote Turso URLs (libsql://, https://, wss://) — anything but a local file/memory DB. */
+function isRemoteUrl(url: string): boolean {
+  return !url.startsWith('file:') && url !== ':memory:';
+}
+
+/**
+ * Loads the right libsql client factory for the URL. Remote Turso uses the
+ * fetch-based `web` client — the only one that runs on Cloudflare Workers — and
+ * importing that subpath explicitly is also what makes the bundler ship it.
+ * Local `file:`/`:memory:` DBs (CLI, tests) use the native Node client, which is
+ * never reached on Workers.
+ */
+async function loadCreateClient(url: string): Promise<CreateClient> {
+  if (isRemoteUrl(url)) return (await import('@libsql/client/web')).createClient;
+  return (await import('@libsql/client')).createClient;
+}
+
+async function createDbClient(config: DatabaseConfig): Promise<Client> {
+  const createClient = await loadCreateClient(config.url);
   return createClient(
     config.authToken ? { url: config.url, authToken: config.authToken } : { url: config.url },
   );
@@ -72,7 +93,7 @@ async function ensureMigrated(config: DatabaseConfig): Promise<void> {
   let pending = migrateInFlight.get(config.url);
   if (!pending) {
     pending = (async () => {
-      const client = createDbClient(config);
+      const client = await createDbClient(config);
       try {
         await applyMigrations(client);
         migratedUrls.add(config.url);
@@ -103,13 +124,13 @@ export async function openDatabase(config: DatabaseConfig): Promise<Client> {
     const key = sharedClientKey(config);
     let shared = sharedClients.get(key);
     if (!shared) {
-      shared = createDbClient(config);
+      shared = await createDbClient(config);
       sharedClients.set(key, shared);
     }
     return wrapSharedClient(shared);
   }
 
-  const client = createDbClient(config);
+  const client = await createDbClient(config);
   await applyMigrations(client);
   return client;
 }

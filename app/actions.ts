@@ -1,11 +1,10 @@
 'use server';
 
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath } from 'next/cache';
 import { auth } from '../auth.js';
 import type { SearchRange } from '../src/domain/entities/SearchCriteria.js';
-import { PUBLIC_DASHBOARD_TAG } from '../src/readModel.js';
 import { saveUserSearchRange } from '../src/userSettings.js';
-import { runScan } from '../src/runners.js';
+import { dispatchScanWorkflow } from '../src/infrastructure/github/dispatchScanWorkflow.js';
 
 export interface ActionResult {
   ok: boolean;
@@ -29,8 +28,10 @@ export async function saveSearchRangeAction(range: SearchRange): Promise<ActionR
 }
 
 /**
- * Runs a scan immediately. Admin-only: scanning is a shared, expensive
- * operation, not something each user triggers.
+ * Starts a scan on demand. Admin-only. Scraping (Playwright) can't run on the
+ * Cloudflare web host, so this triggers the scan GitHub Actions workflow; its
+ * results land in the database when the run finishes, and the dashboard picks
+ * them up on the next load.
  */
 export async function scanNowAction(): Promise<ActionResult> {
   const session = await auth();
@@ -38,14 +39,12 @@ export async function scanNowAction(): Promise<ActionResult> {
     return { ok: false, message: 'Only an admin can run a scan.' };
   }
   try {
-    const report = await runScan();
-    revalidatePath('/');
-    revalidateTag(PUBLIC_DASHBOARD_TAG);
+    await dispatchScanWorkflow();
     return {
       ok: true,
-      message: `Scan complete: ${report.newListingsSeen} new, ${report.goodDeals.length} good deal(s).`,
+      message: 'Scan started on GitHub Actions — results appear here once it finishes.',
     };
   } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : 'Scan failed.' };
+    return { ok: false, message: err instanceof Error ? err.message : 'Could not start the scan.' };
   }
 }
