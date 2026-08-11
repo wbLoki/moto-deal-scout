@@ -12,19 +12,35 @@
   "observability": {
     "enabled": true
   },
+  // Non-secret config (safe to commit). Secrets are uploaded with
+  // `npm run cf:secrets` / `wrangler secret put` — never put API keys here.
   "vars": {
-    "APP_BASE_URL": "https://motosnipe.com"
+    "NODE_ENV": "production",
+    "LOG_LEVEL": "info",
+    "APP_BASE_URL": "https://motosnipe.com",
+    "ADMIN_EMAIL": "wailbouymaj@gmail.com",
+    "ALERT_FROM_EMAIL": "Moto Deal Scout <alerts@motosnipe.com>",
+    "AI_PROVIDER": "gemini",
+    "GEMINI_MODEL": "gemini-2.5-flash",
+    "GITHUB_REPO": "wbLoki/moto-deal-scout",
+    "GITHUB_SCAN_WORKFLOW": "scan.yml",
+    "GITHUB_DEFAULT_BRANCH": "main"
   },
   "env": {
     "preview": {
-      "name": "moto-deal-scout-preview",
+      "name": "motosnipe-preview",
       "vars": {
-        "APP_BASE_URL": "https://preview.motosnipe.com"
+        "NODE_ENV": "production",
+        "LOG_LEVEL": "info",
+        "APP_BASE_URL": "https://preview.motosnipe.com",
+        "ADMIN_EMAIL": "wailbouymaj@gmail.com",
+        "ALERT_FROM_EMAIL": "Moto Deal Scout <alerts@motosnipe.com>",
+        "AI_PROVIDER": "gemini",
+        "GEMINI_MODEL": "gemini-2.5-flash",
+        "GITHUB_REPO": "wbLoki/moto-deal-scout",
+        "GITHUB_SCAN_WORKFLOW": "scan.yml",
+        "GITHUB_DEFAULT_BRANCH": "main"
       }
     }
   }
-  // Secrets (DATABASE_URL, AUTH_SECRET, GEMINI_API_KEY, GITHUB_DISPATCH_TOKEN, …)
-  // are set with `wrangler secret put <NAME>`, not committed here.
-  // For durable ISR caching later, add an R2 bucket binding and wire it in
-  // open-next.config.ts.
 }

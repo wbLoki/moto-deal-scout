@@ -30,6 +30,7 @@
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf:secrets": "powershell -ExecutionPolicy Bypass -File ./scripts/put-worker-secrets.ps1",
     "cf:typegen": "wrangler types"
   },
   "dependencies": {
