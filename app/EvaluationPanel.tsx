@@ -8,7 +8,7 @@ const fmtMAD = (n: number): string => `${mad.format(n)} MAD`;
 /** Year · cc · mileage · price · city — only fields that are present. */
 export function bikeDetailBits(
   bike: BikeInput,
-  askingPrice?: number | undefined,
+  askingPrice?: number,
 ): string[] {
   const price = askingPrice ?? bike.priceMAD;
   return [
@@ -62,6 +62,7 @@ export function EvaluationPanel({
   const isAi = evaluation.status === 'ai-estimated';
   const brand = evaluation.matched?.brand ?? bike?.brand;
   const model = evaluation.matched?.model ?? bike?.model;
+  const askingPrice = evaluation.rating?.askingPriceMAD ?? bike?.priceMAD;
 
   return (
     <div className="compare-result panel">
@@ -89,7 +90,7 @@ export function EvaluationPanel({
       {bike && (
         <BikeDetails
           bike={bike}
-          askingPrice={evaluation.rating?.askingPriceMAD ?? bike.priceMAD}
+          {...(askingPrice != null ? { askingPrice } : {})}
         />
       )}
 
@@ -110,7 +111,7 @@ function BikeDetails({
   askingPrice,
 }: {
   bike: BikeInput;
-  askingPrice?: number | undefined;
+  askingPrice?: number;
 }) {
   const bits = bikeDetailBits(bike, askingPrice);
   if (bits.length === 0) return null;

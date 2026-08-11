@@ -14,7 +14,7 @@ describe('listingFromAvitoAd', () => {
         listId: '58415881',
         subject: 'BMW GT 400',
         description: 'À vendre',
-        price: { value: 108000, currency: 'DH' },
+        price: { value: 108000 },
         location: { city: { name: 'Casablanca' } },
         params: {
           primary: [],

@@ -277,7 +277,7 @@ export function CompareForm({
         <CompareResult
           evaluation={result.evaluation}
           bike={result.bike}
-          fromPaste={result.fromPaste}
+          {...(result.fromPaste ? { fromPaste: true } : {})}
           brand={result.bike.brand}
           model={result.bike.model}
           onEstimateAi={estimateWithAi}
@@ -301,7 +301,7 @@ function CompareResult({
 }: {
   evaluation: BikeEvaluation;
   bike: BikeInput;
-  fromPaste?: boolean | undefined;
+  fromPaste?: boolean;
   brand: string;
   model: string;
   onEstimateAi: () => void;

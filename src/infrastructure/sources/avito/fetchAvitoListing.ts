@@ -133,17 +133,9 @@ export async function fetchAvitoListing(url: string): Promise<Listing> {
     throw new AvitoListingFetchError('URL must be an Avito.ma motorcycle listing link.');
   }
 
-  let chromium: typeof import('playwright').chromium;
+  let browser: Awaited<ReturnType<typeof launchChromium>> | undefined;
   try {
-    ({ chromium } = await import('playwright'));
-  } catch {
-    throw new AvitoListingFetchError(
-      'Live Avito scan needs Playwright (run locally with `npm run next-dev`).',
-    );
-  }
-
-  const browser = await chromium.launch({ headless: true });
-  try {
+    browser = await launchChromium();
     const page = await browser.newPage({
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
@@ -161,6 +153,17 @@ export async function fetchAvitoListing(url: string): Promise<Listing> {
       err instanceof Error ? err.message : 'Failed to open that Avito listing.',
     );
   } finally {
-    await browser.close();
+    await browser?.close();
+  }
+}
+
+async function launchChromium() {
+  try {
+    const playwright = await import('playwright');
+    return playwright.chromium.launch({ headless: true });
+  } catch {
+    throw new AvitoListingFetchError(
+      'Live Avito scan needs Playwright (run locally with `npm run next-dev`).',
+    );
   }
 }
