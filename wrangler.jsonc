@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "moto-deal-scout",
+  "name": "motosnipe",
   "main": ".open-next/worker.js",
   "compatibility_date": "2024-12-30",
   // Required by OpenNext so Node built-ins (buffer, crypto, etc.) work on Workers.
@@ -11,6 +11,17 @@
   },
   "observability": {
     "enabled": true
+  },
+  "vars": {
+    "APP_BASE_URL": "https://motosnipe.com"
+  },
+  "env": {
+    "preview": {
+      "name": "moto-deal-scout-preview",
+      "vars": {
+        "APP_BASE_URL": "https://preview.motosnipe.com"
+      }
+    }
   }
   // Secrets (DATABASE_URL, AUTH_SECRET, GEMINI_API_KEY, GITHUB_DISPATCH_TOKEN, …)
   // are set with `wrangler secret put <NAME>`, not committed here.
