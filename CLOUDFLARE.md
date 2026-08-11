@@ -41,10 +41,20 @@ GitHub Actions and on your local/residential box.
 
 ### Preferred: GitHub Actions
 
-Push to `main` → the **Deploy to Cloudflare** workflow (`.github/workflows/deploy.yml`)
-runs `opennextjs-cloudflare build && opennextjs-cloudflare deploy` on Linux.
+Push to any branch → `.github/workflows/deploy.yml` builds with OpenNext on Linux:
+
+| Branch | Worker | Typical URL |
+| --- | --- | --- |
+| `main` | `motosnipe` | `https://motosnipe.com` |
+| any other | `motosnipe-preview` | `https://preview.motosnipe.com` |
 
 Repo secrets needed: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+
+Preview notes:
+
+- Attach `preview.motosnipe.com` to the **`motosnipe-preview`** Worker in the dashboard.
+- Upload preview secrets once: `npm run cf:secrets -- --preview`
+- One shared preview URL means the **latest** non-`main` push wins.
 
 ### Alternative: Cloudflare Workers Builds (dashboard Git integration)
 
