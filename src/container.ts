@@ -20,6 +20,7 @@ import { LibsqlListingRepository } from './infrastructure/persistence/libsql/Lib
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
 import { LibsqlUserProfileRepository } from './infrastructure/persistence/libsql/LibsqlUserProfileRepository.js';
 import { CatalogModelResolver } from './application/services/CatalogModelResolver.js';
+import { createRenderedHtmlFetcher } from './infrastructure/browser/createRenderedHtmlFetcher.js';
 import type { BrowserManager } from './infrastructure/sources/shared/BrowserManager.js';
 import { PlaywrightBrowserManager } from './infrastructure/sources/shared/PlaywrightBrowserManager.js';
 import { ServerlessPlaywrightBrowserManager } from './infrastructure/sources/shared/ServerlessPlaywrightBrowserManager.js';
@@ -101,9 +102,17 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
   const repository = new LibsqlListingRepository(db, allModels, logger);
 
   const browserManager = createBrowserManager(env);
+  const htmlFetcher = await createRenderedHtmlFetcher({
+    cloudflareAccountId: env.CLOUDFLARE_ACCOUNT_ID,
+    cloudflareApiToken: env.CLOUDFLARE_API_TOKEN,
+  });
   const sourceOptions = { throttleMs: env.SCRAPE_THROTTLE_MS };
+  const avitoOptions = {
+    throttleMs: env.SCRAPE_THROTTLE_MS,
+    ...(env.AVITO_MAX_PAGES !== undefined ? { maxPages: env.AVITO_MAX_PAGES } : {}),
+  };
   const allSources: MarketplaceSource[] = [
-    new AvitoSource(browserManager, sourceOptions, logger.child({ source: 'avito' })),
+    new AvitoSource(htmlFetcher, avitoOptions, logger.child({ source: 'avito' })),
     new BikerSource(browserManager, sourceOptions, logger.child({ source: 'biker' })),
   ];
   const selection = options.sources ?? parseSourceList(env.SCRAPE_SOURCES);

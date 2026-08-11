@@ -1,9 +1,9 @@
 name: Weekly model discovery
 
-# The deep crawl walks both marketplaces' entire motorcycle category — tens of
-# pages per source with a polite pause between each — which is far longer than
-# a Vercel function may run. So it lives here instead, and Vercel's daily cron
-# is left to re-check only the models users actually follow.
+# The deep crawl walks Biker's entire motorcycle category — tens of pages with
+# a polite pause — which is far longer than Workers Free Browser Rendering
+# allows (~10 min/day). Avito discovery stays local/Playwright when needed
+# (`discover --source avito`). Daily watched-model Avito uses BR in scan.yml.
 on:
   schedule:
     - cron: '0 3 * * 1' # Mondays, 03:00 UTC

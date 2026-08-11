@@ -6,9 +6,9 @@ const nextConfig = {
   // (and friends) publish a `workerd` export (`web.mjs`) that OpenNext only
   // copies into `.open-next` when listed here — otherwise Cloudflare builds
   // fail with "Could not resolve @libsql/isomorphic-ws".
-  // Do not list playwright / playwright-core here: the compare web path must
-  // not pull them into OpenNext (esbuild then fails on chromium-bidi). CLI/scan
-  // code imports them only from Node entrypoints outside the Worker graph.
+  // Do not list playwright / playwright-core here: the Worker graph must not
+  // pull them in (esbuild fails on chromium-bidi). Avito uses Browser Rendering;
+  // CLI/Biker Playwright stays outside OpenNext.
   serverExternalPackages: [
     '@libsql/client',
     '@libsql/hrana-client',

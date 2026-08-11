@@ -25,13 +25,23 @@ const envSchema = z.object({
 
   /**
    * Comma-separated marketplace source ids to scrape (e.g. `avito,biker`).
-   * Both run when unset. Used to split the crawl across environments while
-   * Avito is blocked on datacenter IPs: the scheduled jobs set `biker`, and
-   * Avito is run locally/on a home box. A `--source` CLI flag overrides it.
+   * Both run when unset. GHA daily scan uses Browser Rendering for Avito
+   * (capped) plus Playwright for Biker. A `--source` CLI flag overrides it.
    */
   SCRAPE_SOURCES: z.string().min(1).optional(),
   /** Milliseconds to wait between requests to the same marketplace, to stay polite. */
   SCRAPE_THROTTLE_MS: z.coerce.number().int().nonnegative().default(2000),
+  /**
+   * Cap Avito pagination (Free Browser Rendering budget). Unset → AvitoSource
+   * default (3). GHA sets `1` so watched-models × 1 page fits ~10 min/day.
+   */
+  AVITO_MAX_PAGES: z.coerce.number().int().positive().max(40).optional(),
+  /**
+   * Cloudflare account id + API token (Browser Rendering - Edit) for the REST
+   * `/content` path used by GHA / local when no Workers `BROWSER` binding.
+   */
+  CLOUDFLARE_ACCOUNT_ID: z.string().min(1).optional(),
+  CLOUDFLARE_API_TOKEN: z.string().min(1).optional(),
   /** Whether Playwright launches Chromium headless (true) or visibly (false, for debugging). */
   PLAYWRIGHT_HEADLESS: z
     .enum(['true', 'false'])

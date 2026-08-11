@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   adFromNextData,
   listingFromAvitoAd,
+  listingFromAvitoHtml,
 } from '../../src/infrastructure/sources/avito/fetchAvitoListing.js';
+import { parseAvitoSearchCards } from '../../src/infrastructure/sources/avito/parseAvitoSearchCards.js';
 import { listingFromBikerDetail } from '../../src/infrastructure/sources/biker/fetchBikerListing.js';
 
 describe('listingFromAvitoAd', () => {
@@ -58,6 +60,60 @@ describe('listingFromAvitoAd', () => {
       },
     });
     expect(ad.listId).toBe('9');
+  });
+
+  it('listingFromAvitoHtml extracts __NEXT_DATA__ from rendered HTML', () => {
+    const next = {
+      props: {
+        pageProps: {
+          componentProps: {
+            adInfo: {
+              ad: {
+                listId: '42',
+                subject: 'MT-07',
+                price: { value: 65000 },
+                location: { city: { name: 'Rabat' } },
+              },
+            },
+          },
+        },
+      },
+    };
+    const html = `<html><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(next)}</script></html>`;
+    const listing = listingFromAvitoHtml(html, url);
+    expect(listing).toMatchObject({
+      externalId: '42',
+      title: 'MT-07',
+      priceMAD: 65000,
+      city: 'Rabat',
+    });
+  });
+});
+
+describe('parseAvitoSearchCards', () => {
+  it('maps card markup into listings', () => {
+    const html = `
+      <a data-testid="ad-card-v2-1" href="/fr/casa/motos/Yamaha_MT-07_111.htm">
+        <h3>Yamaha MT-07</h3>
+        <span title="Année-Modèle">2022</span>
+        <span title="Kilométrage">12 000</span>
+        <img src="https://example.com/a.jpg" />
+        <span>65 000</span><span>DH</span>
+        <span>Casablanca</span>
+        <span>il y a 2 jours</span>
+      </a>
+    `;
+    const listings = parseAvitoSearchCards(html, new Date('2026-01-01T00:00:00Z'));
+    expect(listings).toHaveLength(1);
+    expect(listings[0]).toMatchObject({
+      sourceId: 'avito',
+      externalId: '111',
+      title: 'Yamaha MT-07',
+      priceMAD: 65000,
+      year: 2022,
+      mileageKm: 12000,
+      city: 'Casablanca',
+    });
   });
 });
 

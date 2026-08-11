@@ -1,6 +1,13 @@
 import type { Listing } from '../../../domain/entities/Listing.js';
 import { parseNumber, parseYear } from '../shared/textParsing.js';
 import { parseListingUrl } from '../../../application/services/parseListingUrl.js';
+import {
+  RestBrowserHtmlFetcher,
+  tryGetWorkersBrowserBinding,
+  WorkersBrowserHtmlFetcher,
+} from '../../browser/cloudflareRenderedHtml.js';
+import type { RenderedHtmlFetcher } from '../../browser/RenderedHtmlFetcher.js';
+import { loadEnv } from '../../../config/env.js';
 
 /** One Avito ad param (primary/secondary), value may be string or number. */
 interface AvitoParam {
@@ -54,7 +61,7 @@ function findParam(
 
 /**
  * Maps Avito `__NEXT_DATA__` ad JSON onto our {@link Listing} shape.
- * Exported for unit tests — the Playwright fetcher only loads the page.
+ * Exported for unit tests.
  */
 export function listingFromAvitoAd(
   ad: AvitoAd,
@@ -123,11 +130,26 @@ export function adFromNextData(nextData: unknown): AvitoAd {
   return ad;
 }
 
+/** Parses `__NEXT_DATA__` from rendered listing HTML into a {@link Listing}. */
+export function listingFromAvitoHtml(
+  html: string,
+  pageUrl: string,
+  scrapedAt: Date = new Date(),
+): Listing {
+  const match = html.match(
+    /<script id="__NEXT_DATA__" type="application\/json">(\{[\s\S]*?\})<\/script>/,
+  );
+  if (!match?.[1]) {
+    throw new AvitoListingFetchError('Avito page had no listing data (__NEXT_DATA__).');
+  }
+  const ad = adFromNextData(JSON.parse(match[1]));
+  return listingFromAvitoAd(ad, pageUrl, scrapedAt);
+}
+
 /**
- * Opens an Avito listing URL in Playwright and returns a normalized {@link Listing}.
- * Node/CLI only — never import this from the Cloudflare Worker graph (OpenNext
- * cannot bundle playwright-core / chromium-bidi). The public compare paste path
- * resolves Avito links from the scraped listings DB instead.
+ * Opens an Avito listing URL via Cloudflare Browser Rendering (Workers binding
+ * or REST) and returns a normalized {@link Listing}. Does not import Playwright
+ * (safe for the OpenNext Worker graph).
  */
 export async function fetchAvitoListing(url: string): Promise<Listing> {
   const parsed = parseListingUrl(url);
@@ -135,37 +157,31 @@ export async function fetchAvitoListing(url: string): Promise<Listing> {
     throw new AvitoListingFetchError('URL must be an Avito.ma motorcycle listing link.');
   }
 
-  let browser: Awaited<ReturnType<typeof launchChromium>> | undefined;
   try {
-    browser = await launchChromium();
-    const page = await browser.newPage({
-      userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      locale: 'fr-MA',
+    const fetcher = await resolveCompareHtmlFetcher();
+    const html = await fetcher.fetchRenderedHtml(parsed.url, {
+      waitForSelector: '#__NEXT_DATA__',
+      timeoutMs: 45_000,
     });
-    await page.goto(parsed.url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-    await page.waitForSelector('#__NEXT_DATA__', { state: 'attached', timeout: 15_000 });
-    const raw = await page.$eval('#__NEXT_DATA__', (el) => el.textContent);
-    if (!raw) throw new AvitoListingFetchError('Avito page had no listing data.');
-    const ad = adFromNextData(JSON.parse(raw));
-    return listingFromAvitoAd(ad, parsed.url);
+    return listingFromAvitoHtml(html, parsed.url);
   } catch (err) {
     if (err instanceof AvitoListingFetchError) throw err;
     throw new AvitoListingFetchError(
       err instanceof Error ? err.message : 'Failed to open that Avito listing.',
     );
-  } finally {
-    await browser?.close();
   }
 }
 
-async function launchChromium() {
-  try {
-    const playwright = await import('playwright');
-    return playwright.chromium.launch({ headless: true });
-  } catch {
-    throw new AvitoListingFetchError(
-      'Live Avito scan needs Playwright (run locally with `npm run next-dev`).',
-    );
+async function resolveCompareHtmlFetcher(): Promise<RenderedHtmlFetcher> {
+  const binding = await tryGetWorkersBrowserBinding();
+  if (binding) return new WorkersBrowserHtmlFetcher(binding);
+
+  const env = loadEnv();
+  if (env.CLOUDFLARE_ACCOUNT_ID && env.CLOUDFLARE_API_TOKEN) {
+    return new RestBrowserHtmlFetcher(env.CLOUDFLARE_ACCOUNT_ID, env.CLOUDFLARE_API_TOKEN);
   }
+
+  throw new AvitoListingFetchError(
+    'Avito live scan needs Cloudflare Browser Rendering (Worker BROWSER binding or CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN).',
+  );
 }

@@ -59,6 +59,13 @@ async function fetchWithRetries(
       return await opts.fetchPage(pageNumber);
     } catch (err) {
       opts.onError?.(err, pageNumber);
+      // Browser Rendering Free quota — do not burn retries; abort the crawl.
+      if (
+        err instanceof Error &&
+        (err.name === 'BrowserRenderingQuotaError' || /quota exceeded|time limit/i.test(err.message))
+      ) {
+        throw err;
+      }
       // Back off before retrying; a stalled page is often busy, not broken.
       if (attempt < attempts) await delay(opts.throttleMs);
     }
