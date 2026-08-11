@@ -10,7 +10,7 @@ describe('ListingScorer', () => {
   it('scores a listing at/below the fair price minimum with full price points', () => {
     const listing = makeListing({ priceMAD: 60000 });
     const score = scorer.score(listing, model, global);
-    expect(score.price).toBe(40);
+    expect(score.price).toBe(50);
   });
 
   it('gives zero price points once the price is far above the fair range', () => {
@@ -25,7 +25,7 @@ describe('ListingScorer', () => {
     // market hasn't told us anything about yet.
     const uncalibrated = makeModelCriteria({ priceRangeMAD: { min: 0, max: 300000 } });
     const score = scorer.score(makeListing({ priceMAD: 60000 }), uncalibrated, global);
-    expect(score.price).toBe(20);
+    expect(score.price).toBe(25);
     expect(score.reasons.some((r) => r.includes('not calibrated'))).toBe(true);
   });
 
@@ -38,7 +38,7 @@ describe('ListingScorer', () => {
 
   it('treats missing mileage as average, not a penalty or bonus', () => {
     const score = scorer.score(makeListing({ mileageKm: undefined }), model, global);
-    expect(score.mileage).toBe(Math.round(25 * 0.5));
+    expect(score.mileage).toBe(Math.round(27 * 0.5));
   });
 
   it('scores newer years higher than older years', () => {

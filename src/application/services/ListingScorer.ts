@@ -5,10 +5,11 @@ import { isCalibrated } from '../../domain/services/calibrationState.js';
 
 /** Points available per factor. Must sum to 100. */
 const WEIGHTS = {
-  price: 40,
-  mileage: 25,
+  price: 50,
+  mileage: 27,
   year: 20,
-  city: 15,
+  // City is a weak preference signal — almost never should swing a deal tier.
+  city: 3,
 } as const;
 
 /** Points each factor contributes to the 0-100 total. Read by the compare page's breakdown bars. */
@@ -171,14 +172,18 @@ export class ListingScorer {
     const mileage = scoreMileage(listing, model, reasons);
     const year = scoreYear(listing, model, reasons);
     const city = scoreCity(listing, global, reasons);
-    const total = Math.round(price + mileage + year + city);
+    const pricePts = Math.round(price);
+    const mileagePts = Math.round(mileage);
+    const yearPts = Math.round(year);
+    const cityPts = Math.round(city);
 
     return {
-      price: Math.round(price),
-      mileage: Math.round(mileage),
-      year: Math.round(year),
-      city: Math.round(city),
-      total,
+      price: pricePts,
+      mileage: mileagePts,
+      year: yearPts,
+      city: cityPts,
+      // Sum of the rounded parts so the UI breakdown always adds to `total`.
+      total: pricePts + mileagePts + yearPts + cityPts,
       reasons,
     };
   }

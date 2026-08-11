@@ -52,7 +52,11 @@ Repo secrets needed: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
 
 Preview notes:
 
-- Attach `preview.motosnipe.com` to the **`motosnipe-preview`** Worker in the dashboard.
+- Attach `preview.motosnipe.com` to the **`motosnipe-preview`** Worker (and
+  `motosnipe.com` / `www` to **`motosnipe`**). `wrangler.jsonc` declares these
+  as `routes` with `custom_domain: true` so deploys keep them on the right Worker.
+  If the subdomain was previously on production, remove it there first or the
+  preview deploy will fail to claim it.
 - Upload preview secrets once: `npm run cf:secrets -- --preview`
 - One shared preview URL means the **latest** non-`main` push wins.
 

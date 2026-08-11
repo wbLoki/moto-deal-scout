@@ -12,6 +12,12 @@
   "observability": {
     "enabled": true
   },
+  // Bind the apex to production so preview.motosnipe.com is free for the
+  // preview Worker (it was previously attached to this Worker by mistake).
+  "routes": [
+    { "pattern": "motosnipe.com", "custom_domain": true },
+    { "pattern": "www.motosnipe.com", "custom_domain": true }
+  ],
   // Non-secret config (safe to commit). Secrets are uploaded with
   // `npm run cf:secrets` / `wrangler secret put` — never put API keys here.
   "vars": {
@@ -29,6 +35,9 @@
   "env": {
     "preview": {
       "name": "motosnipe-preview",
+      "routes": [
+        { "pattern": "preview.motosnipe.com", "custom_domain": true }
+      ],
       "vars": {
         "NODE_ENV": "production",
         "LOG_LEVEL": "info",

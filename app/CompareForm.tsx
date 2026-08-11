@@ -7,6 +7,7 @@ import {
   evaluateBikeAction,
   evaluatePastedListingAction,
 } from './compare-actions.js';
+import { EvaluationPanel } from './EvaluationPanel.js';
 import { SignInModal } from './SignInModal.js';
 import type { BikeEvaluation, BikeInput } from '../src/compareModel.js';
 
@@ -20,12 +21,6 @@ const fmtMAD = (n: number): string => `${mad.format(n)} MAD`;
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: CURRENT_YEAR + 1 - 1990 + 1 }, (_, i) => CURRENT_YEAR + 1 - i);
-
-const POSITION_NOTE: Record<'below' | 'within' | 'above', string> = {
-  below: 'Below the fair range — a good sign for a buyer.',
-  within: 'Within the fair market range.',
-  above: 'Above the fair range — likely overpriced.',
-};
 
 /** What the result panel shows: our evaluation, plus AI-extracted fields when pasted. */
 interface ResultState {
@@ -279,7 +274,7 @@ function CompareResult({
     return (
       <div className="compare-result panel">
         {extracted && <ExtractedNote extracted={extracted} />}
-        <h2 className="compare-heading">We don&apos;t track this model yet</h2>
+        <h2 className="compare-heading">Evaluation</h2>
         <p className="subtitle">
           We couldn&apos;t match “{brand} {model}” to a model we price. You can{' '}
           <Link href="/requests" className="card-link">
@@ -296,35 +291,24 @@ function CompareResult({
     return (
       <div className="compare-result panel">
         {extracted && <ExtractedNote extracted={extracted} />}
+        <h2 className="compare-heading">Evaluation</h2>
         <span className="tag tag-calibrating">Calibrating</span>
-        <h2 className="compare-heading">
-          {evaluation.matched?.brand} {evaluation.matched?.model}
-        </h2>
         <p className="subtitle">
-          We matched this model but don&apos;t have enough recent listings to know its fair price
-          yet — get an AI estimate in the meantime.
+          Matched {evaluation.matched?.brand} {evaluation.matched?.model}, but we don&apos;t have
+          enough recent listings for a fair price yet — get an AI estimate in the meantime.
         </p>
         <AiEstimateCta onEstimateAi={onEstimateAi} aiPending={aiPending} />
       </div>
     );
   }
 
-  const isAi = evaluation.status === 'ai-estimated';
   return (
-    <div className="compare-result panel">
+    <EvaluationPanel evaluation={evaluation} showTargets>
       {extracted && <ExtractedNote extracted={extracted} />}
-      {evaluation.matched && (
-        <p className="compare-matched">
-          {isAi ? 'AI estimate for' : 'Matched to'}{' '}
-          <strong>
-            {evaluation.matched.brand} {evaluation.matched.model}
-          </strong>
-        </p>
+      {evaluation.status === 'ai-estimated' && evaluation.ai && (
+        <AiBanner confidence={evaluation.ai.confidence} rationale={evaluation.ai.rationale} />
       )}
-      {isAi && evaluation.ai && <AiBanner confidence={evaluation.ai.confidence} rationale={evaluation.ai.rationale} />}
-      {evaluation.rating && <RatingBlock rating={evaluation.rating} />}
-      {evaluation.suggestion && <SuggestionBlock suggestion={evaluation.suggestion} ai={isAi} />}
-    </div>
+    </EvaluationPanel>
   );
 }
 
@@ -363,84 +347,5 @@ function AiEstimateCta({ onEstimateAi, aiPending }: { onEstimateAi: () => void; 
     <button className="btn" type="button" onClick={onEstimateAi} disabled={aiPending}>
       {aiPending ? 'Estimating…' : 'Estimate with AI (beta)'}
     </button>
-  );
-}
-
-function RatingBlock({ rating }: { rating: NonNullable<BikeEvaluation['rating']> }) {
-  return (
-    <div className="compare-rating">
-      <div className="compare-verdict">
-        <span className={`tag tag-${rating.tierLevel}`}>{rating.tierLabel}</span>
-        <span className="compare-score">{rating.score}/100</span>
-      </div>
-      <p className={`compare-position pos-${rating.pricePosition}`}>
-        {POSITION_NOTE[rating.pricePosition]}
-      </p>
-
-      <div className="factors">
-        {rating.factors.map((f) => (
-          <div key={f.label} className="factor">
-            <div className="factor-head">
-              <span>{f.label}</span>
-              <span className="factor-pts">
-                {f.points}/{f.max}
-              </span>
-            </div>
-            <div className="factor-track">
-              <div
-                className="factor-fill"
-                style={{ width: `${f.max > 0 ? (f.points / f.max) * 100 : 0}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {rating.reasons.length > 0 && (
-        <ul className="factor-reasons">
-          {rating.reasons.map((r, i) => (
-            <li key={i}>{r}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function SuggestionBlock({
-  suggestion,
-  ai,
-}: {
-  suggestion: NonNullable<BikeEvaluation['suggestion']>;
-  ai: boolean;
-}) {
-  return (
-    <div className="compare-suggestion">
-      <h3 className="compare-heading">Fair price{ai ? ' (AI estimate)' : ''}</h3>
-      <p className="compare-range">
-        This model normally sells for{' '}
-        <strong>
-          {fmtMAD(suggestion.fairMin)} – {fmtMAD(suggestion.fairMax)}
-        </strong>
-        .
-      </p>
-      <ul className="compare-targets">
-        {suggestion.targets.map((t) => (
-          <li key={t.level}>
-            {t.reachable && t.maxPrice !== null ? (
-              <>
-                <span className={`tag tag-${t.level}`}>{t.label}</span> at or below{' '}
-                <strong>{fmtMAD(t.maxPrice)}</strong>
-              </>
-            ) : (
-              <>
-                <span className={`tag tag-${t.level}`}>{t.label}</span>{' '}
-                <span className="muted">out of reach — mileage/age hold this bike back</span>
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
