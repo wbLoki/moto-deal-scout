@@ -7,7 +7,7 @@ import {
   evaluateBikeAction,
   evaluatePastedListingAction,
 } from './compare-actions.js';
-import { EvaluationPanel } from './EvaluationPanel.js';
+import { EvaluationPanel, bikeDetailBits } from './EvaluationPanel.js';
 import { SignInModal } from './SignInModal.js';
 import type { BikeEvaluation, BikeInput } from '../src/compareModel.js';
 
@@ -16,16 +16,15 @@ interface CatalogBrand {
   readonly models: readonly string[];
 }
 
-const mad = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
-const fmtMAD = (n: number): string => `${mad.format(n)} MAD`;
-
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: CURRENT_YEAR + 1 - 1990 + 1 }, (_, i) => CURRENT_YEAR + 1 - i);
 
-/** What the result panel shows: our evaluation, plus AI-extracted fields when pasted. */
+/** What the result panel shows: our evaluation, plus the bike we rated. */
 interface ResultState {
   readonly evaluation: BikeEvaluation;
-  readonly extracted?: BikeInput;
+  readonly bike: BikeInput;
+  /** True when fields came from a pasted ad (shows a short note). */
+  readonly fromPaste?: boolean;
 }
 
 /**
@@ -45,6 +44,7 @@ export function CompareForm({
   const [model, setModel] = useState('');
   const [year, setYear] = useState('');
   const [mileage, setMileage] = useState('');
+  const [displacement, setDisplacement] = useState('');
   const [price, setPrice] = useState('');
   const [city, setCity] = useState('');
   const [pasteText, setPasteText] = useState('');
@@ -60,14 +60,25 @@ export function CompareForm({
   );
   const canSubmit = brand.trim() !== '' && model.trim() !== '';
 
-  const buildInput = () => ({
-    brand,
-    model,
-    year: year ? Number(year) : undefined,
-    mileageKm: mileage.trim() ? Number(mileage) : undefined,
-    priceMAD: price.trim() ? Number(price) : undefined,
-    city: city.trim() || undefined,
-  });
+  const buildInput = (): BikeInput => {
+    // Omit empty optionals so the server-action payload never sends `null` for
+    // blank fields (zod coerce would turn those into 0 and fail validation).
+    const input: {
+      brand: string;
+      model: string;
+      year?: number;
+      mileageKm?: number;
+      displacementCc?: number;
+      priceMAD?: number;
+      city?: string;
+    } = { brand, model };
+    if (year) input.year = Number(year);
+    if (mileage.trim()) input.mileageKm = Number(mileage);
+    if (displacement.trim()) input.displacementCc = Number(displacement);
+    if (price.trim()) input.priceMAD = Number(price);
+    if (city.trim()) input.city = city.trim();
+    return input;
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,9 +86,13 @@ export function CompareForm({
     setError(null);
     if (!canSubmit) return;
     startTransition(async () => {
-      const res = await evaluateBikeAction(buildInput());
-      if (res.ok && res.evaluation) setResult({ evaluation: res.evaluation });
-      else setError(res.error ?? 'Something went wrong.');
+      const input = buildInput();
+      const res = await evaluateBikeAction(input);
+      if (res.ok && res.evaluation) setResult({ evaluation: res.evaluation, bike: input });
+      else {
+        setResult(null);
+        setError(res.error ?? 'Something went wrong.');
+      }
     });
   };
 
@@ -88,8 +103,9 @@ export function CompareForm({
     }
     setError(null);
     startTransition(async () => {
-      const res = await estimateWithAiAction(buildInput());
-      if (res.ok && res.evaluation) setResult({ evaluation: res.evaluation });
+      const input = buildInput();
+      const res = await estimateWithAiAction(input);
+      if (res.ok && res.evaluation) setResult({ evaluation: res.evaluation, bike: input });
       else if (res.reason === 'auth') setSignInFeature('get AI price estimates');
       else setError(res.error ?? 'The AI estimate failed.');
     });
@@ -106,7 +122,11 @@ export function CompareForm({
       if (res.ok && res.evaluation) {
         // Fill the form with what Claude read, so the user can correct + re-run.
         if (res.extracted) applyExtracted(res.extracted);
-        setResult({ evaluation: res.evaluation, ...(res.extracted ? { extracted: res.extracted } : {}) });
+        setResult({
+          evaluation: res.evaluation,
+          bike: res.extracted ?? buildInput(),
+          fromPaste: true,
+        });
       } else if (res.reason === 'auth') {
         setSignInFeature('use the AI listing reader');
       } else {
@@ -120,6 +140,7 @@ export function CompareForm({
     setModel(x.model);
     setYear(x.year != null ? String(x.year) : '');
     setMileage(x.mileageKm != null ? String(x.mileageKm) : '');
+    setDisplacement(x.displacementCc != null ? String(x.displacementCc) : '');
     setPrice(x.priceMAD != null ? String(x.priceMAD) : '');
     setCity(x.city ?? '');
   };
@@ -183,6 +204,19 @@ export function CompareForm({
           </label>
 
           <label className="field">
+            <span>Displacement (cc)</span>
+            <input
+              type="number"
+              min={25}
+              max={3500}
+              step={1}
+              value={displacement}
+              placeholder="Optional"
+              onChange={(e) => setDisplacement(e.target.value)}
+            />
+          </label>
+
+          <label className="field">
             <span>Asking price (MAD)</span>
             <input
               type="number"
@@ -215,10 +249,10 @@ export function CompareForm({
       </form>
 
       <details className="compare-paste panel">
-        <summary>Or paste an ad and let AI read it{signedIn ? '' : ' (sign in)'}</summary>
+        <summary>Or paste a listing link / ad text{signedIn ? '' : ' (sign in)'}</summary>
         <p className="settings-hint">
-          Paste the listing text (title + description). Claude extracts the brand, model, year,
-          mileage and price, then we rate it with our engine.
+          Paste an Avito or Biker listing link to scan it live (price, year, km…), or paste the ad
+          text and let AI read it.
         </p>
         <textarea
           className="compare-textarea"
@@ -233,7 +267,7 @@ export function CompareForm({
           disabled={isPending || pasteText.trim().length < 10}
           onClick={evaluatePasted}
         >
-          {isPending ? 'Reading…' : 'Parse & evaluate'}
+          {isPending ? 'Scanning…' : 'Parse & evaluate'}
         </button>
       </details>
 
@@ -242,9 +276,10 @@ export function CompareForm({
       {result && (
         <CompareResult
           evaluation={result.evaluation}
-          extracted={result.extracted}
-          brand={brand}
-          model={model}
+          bike={result.bike}
+          fromPaste={result.fromPaste}
+          brand={result.bike.brand}
+          model={result.bike.model}
           onEstimateAi={estimateWithAi}
           aiPending={isPending}
         />
@@ -257,14 +292,16 @@ export function CompareForm({
 
 function CompareResult({
   evaluation,
-  extracted,
+  bike,
+  fromPaste,
   brand,
   model,
   onEstimateAi,
   aiPending,
 }: {
   evaluation: BikeEvaluation;
-  extracted?: BikeInput | undefined;
+  bike: BikeInput;
+  fromPaste?: boolean | undefined;
   brand: string;
   model: string;
   onEstimateAi: () => void;
@@ -273,8 +310,11 @@ function CompareResult({
   if (evaluation.status === 'not-found') {
     return (
       <div className="compare-result panel">
-        {extracted && <ExtractedNote extracted={extracted} />}
         <h2 className="compare-heading">Evaluation</h2>
+        <p className="compare-bike-name">
+          {brand} {model}
+        </p>
+        <BikeMeta bike={bike} />
         <p className="subtitle">
           We couldn&apos;t match “{brand} {model}” to a model we price. You can{' '}
           <Link href="/requests" className="card-link">
@@ -290,12 +330,15 @@ function CompareResult({
   if (evaluation.status === 'calibrating') {
     return (
       <div className="compare-result panel">
-        {extracted && <ExtractedNote extracted={extracted} />}
         <h2 className="compare-heading">Evaluation</h2>
+        <p className="compare-bike-name">
+          {evaluation.matched?.brand} {evaluation.matched?.model}
+        </p>
         <span className="tag tag-calibrating">Calibrating</span>
+        <BikeMeta bike={bike} />
         <p className="subtitle">
-          Matched {evaluation.matched?.brand} {evaluation.matched?.model}, but we don&apos;t have
-          enough recent listings for a fair price yet — get an AI estimate in the meantime.
+          We don&apos;t have enough recent listings for a fair price yet — get an AI estimate in the
+          meantime.
         </p>
         <AiEstimateCta onEstimateAi={onEstimateAi} aiPending={aiPending} />
       </div>
@@ -303,8 +346,8 @@ function CompareResult({
   }
 
   return (
-    <EvaluationPanel evaluation={evaluation} showTargets>
-      {extracted && <ExtractedNote extracted={extracted} />}
+    <EvaluationPanel evaluation={evaluation} bike={bike}>
+      {fromPaste && <p className="compare-extracted">Read from the ad</p>}
       {evaluation.status === 'ai-estimated' && evaluation.ai && (
         <AiBanner confidence={evaluation.ai.confidence} rationale={evaluation.ai.rationale} />
       )}
@@ -312,15 +355,16 @@ function CompareResult({
   );
 }
 
-function ExtractedNote({ extracted }: { extracted: BikeInput }) {
-  const bits = [
-    `${extracted.brand} ${extracted.model}`,
-    extracted.year != null ? `${extracted.year}` : null,
-    extracted.mileageKm != null ? `${mad.format(extracted.mileageKm)} km` : null,
-    extracted.priceMAD != null ? fmtMAD(extracted.priceMAD) : null,
-    extracted.city ?? null,
-  ].filter(Boolean);
-  return <p className="compare-extracted">Read from the ad: {bits.join(' · ')}</p>;
+function BikeMeta({ bike }: { bike: BikeInput }) {
+  const bits = bikeDetailBits(bike);
+  if (bits.length === 0) return null;
+  return (
+    <div className="compare-details meta">
+      {bits.map((bit) => (
+        <span key={bit}>{bit}</span>
+      ))}
+    </div>
+  );
 }
 
 function AiBanner({

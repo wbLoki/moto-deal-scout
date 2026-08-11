@@ -12,6 +12,8 @@ export interface BikeInput {
   readonly model: string;
   readonly year?: number | undefined;
   readonly mileageKm?: number | undefined;
+  /** Engine size in cc when known (form or AI-parsed ad). */
+  readonly displacementCc?: number | undefined;
   /** Asking price. When omitted we still suggest a fair price but skip the rating verdict. */
   readonly priceMAD?: number | undefined;
   readonly city?: string | undefined;
@@ -67,7 +69,7 @@ function toListing(input: BikeInput, priceMAD: number): Listing {
     priceMAD,
     year: input.year,
     mileageKm: input.mileageKm,
-    displacementCc: undefined,
+    displacementCc: input.displacementCc,
     city: input.city ?? '',
     imageUrl: undefined,
     postedAt: undefined,

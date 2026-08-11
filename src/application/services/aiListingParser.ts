@@ -7,6 +7,7 @@ const parsedSchema = z.object({
   model: z.string().min(1),
   year: z.number().nullable(),
   mileageKm: z.number().nullable(),
+  displacementCc: z.number().nullable(),
   priceMAD: z.number().nullable(),
   city: z.string().nullable(),
 });
@@ -18,17 +19,22 @@ const JSON_SCHEMA: JsonObjectSchema = {
     model: { type: 'string', description: "Model, normalized e.g. 'MT-07', 'CBR500R'." },
     year: { type: ['integer', 'null'], description: 'Model year, or null if not stated.' },
     mileageKm: { type: ['integer', 'null'], description: 'Mileage in km, or null if not stated.' },
+    displacementCc: {
+      type: ['integer', 'null'],
+      description: 'Engine displacement in cc (e.g. 500, 689), or null if not stated.',
+    },
     priceMAD: { type: ['integer', 'null'], description: 'Asking price in MAD, or null if not stated.' },
     city: { type: ['string', 'null'], description: 'City, or null if not stated.' },
   },
-  required: ['brand', 'model', 'year', 'mileageKm', 'priceMAD', 'city'],
+  required: ['brand', 'model', 'year', 'mileageKm', 'displacementCc', 'priceMAD', 'city'],
 };
 
 const SYSTEM = [
   'You extract structured fields from a Moroccan motorcycle classified ad.',
   'The text may be in French, Arabic, or Moroccan darija.',
   "Return the brand and model normalized to their common Latin spelling (e.g. 'Yamaha', 'MT-07').",
-  'Give the model year, mileage in km, asking price in MAD, and city.',
+  'Give the model year, mileage in km, engine displacement in cc, asking price in MAD, and city.',
+  'Asking price may appear as DH, MAD, Dhs, د.م., or “prix”; always extract it when present — never leave priceMAD null if a clear number is in the text.',
   'Use null for anything not clearly stated — never guess a price that is not given, and convert mileage in other units to km.',
 ].join(' ');
 
@@ -52,6 +58,7 @@ export async function parseListing(ai: AiExtractor, text: string): Promise<BikeI
     model: raw.model.trim(),
     ...(raw.year != null ? { year: Math.round(raw.year) } : {}),
     ...(raw.mileageKm != null ? { mileageKm: Math.round(raw.mileageKm) } : {}),
+    ...(raw.displacementCc != null ? { displacementCc: Math.round(raw.displacementCc) } : {}),
     ...(raw.priceMAD != null ? { priceMAD: Math.round(raw.priceMAD) } : {}),
     ...(raw.city && raw.city.trim() ? { city: raw.city.trim() } : {}),
   };
