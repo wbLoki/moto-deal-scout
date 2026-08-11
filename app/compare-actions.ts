@@ -71,7 +71,7 @@ export async function estimateWithAiAction(raw: unknown): Promise<AiEvaluateResu
     const evaluation = await getAiEstimate(parsed.data);
     return { ok: true, evaluation };
   } catch (err) {
-    if (err instanceof AiUnavailableError) {
+    if (err instanceof AiUnavailableError || (err instanceof Error && err.name === 'AiUnavailableError')) {
       return { ok: false, reason: 'ai-unavailable', error: 'AI estimates aren’t configured yet.' };
     }
     return { ok: false, reason: 'error', error: 'The AI estimate failed. Try again.' };
@@ -105,10 +105,10 @@ export async function evaluatePastedListingAction(
     const { extracted, evaluation } = await getPastedListingEvaluation(parsed.data);
     return { ok: true, extracted, evaluation };
   } catch (err) {
-    if (err instanceof AiUnavailableError) {
+    // `instanceof` can fail across OpenNext chunk boundaries; also match by name.
+    if (err instanceof AiUnavailableError || (err instanceof Error && err.name === 'AiUnavailableError')) {
       return { ok: false, reason: 'ai-unavailable', error: 'The AI reader isn’t configured yet.' };
     }
-    // Surface enough for Cloudflare logs without leaking raw provider payloads to the UI.
     console.error(
       'evaluatePastedListingAction failed:',
       err instanceof Error ? err.message : err,

@@ -1,4 +1,4 @@
-import { Type } from '@google/genai';
+import { Type } from '@google/genai/web';
 import { describe, expect, it } from 'vitest';
 import { toGeminiSchema } from '../../src/infrastructure/ai/GeminiClient.js';
 
