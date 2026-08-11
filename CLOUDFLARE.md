@@ -91,6 +91,11 @@ npm run cf:deploy
 (`web.mjs`) into `.open-next`. Without that, Cloudflare builds fail with
 `Could not resolve "@libsql/isomorphic-ws"`.
 
+On **native Windows**, OpenNext 1.20.x also fails to match that package name
+because of path separators (`@libsql\isomorphic-ws`). This repo includes a
+`patch-package` fix under `patches/` (applied on `npm install`). Prefer
+GitHub Actions / WSL for deploys anyway.
+
 ## Local development
 
 Unchanged: `npm run dev` (Turso via `DATABASE_URL` in `.env`). To preview the
