@@ -1,6 +1,5 @@
 import { loadEnv } from './config/env.js';
-import { resolveDatabaseConfig } from './container.js';
-import { openDatabase } from './infrastructure/persistence/libsql/Database.js';
+import { openDatabase, resolveDatabaseConfig } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlSavedListingRepository } from './infrastructure/persistence/libsql/LibsqlSavedListingRepository.js';
 
 /** Bookmark or un-bookmark a single listing for a user. */

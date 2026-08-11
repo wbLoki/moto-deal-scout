@@ -11,6 +11,27 @@ const WEIGHTS = {
   city: 15,
 } as const;
 
+/** Points each factor contributes to the 0-100 total. Read by the compare page's breakdown bars. */
+export const FACTOR_WEIGHTS = WEIGHTS;
+
+/** Points the price factor contributes to the 0-100 total. */
+export const PRICE_WEIGHT = WEIGHTS.price;
+
+/**
+ * How far above a model's fair-range max a price scores zero on price. The
+ * fair range's `min` is where price scores full marks. Both the forward score
+ * and its inverse read this, so a rating and a suggested price can't drift.
+ */
+const PRICE_OVER_FACTOR = 1.2;
+
+/**
+ * The price factor's endpoints for a model: full marks at or below `goodAt`
+ * (the fair min), zero at or above `badAt` (fair max × {@link PRICE_OVER_FACTOR}).
+ */
+export function fairPriceBounds(model: ModelCriteria): { goodAt: number; badAt: number } {
+  return { goodAt: model.priceRangeMAD.min, badAt: model.priceRangeMAD.max * PRICE_OVER_FACTOR };
+}
+
 /**
  * Linear scoring primitive for "lower is better" factors: full marks at or
  * below `goodAt`, zero at or above `badAt`, interpolated linearly between.
@@ -24,6 +45,28 @@ function scoreLowerIsBetter(
   if (value <= goodAt) return maxPoints;
   if (value >= badAt) return 0;
   return (maxPoints * (badAt - value)) / (badAt - goodAt);
+}
+
+/**
+ * The price factor's 0-{@link PRICE_WEIGHT} contribution for a bare price +
+ * model, without the reasons/half-marks logic. Shared by {@link scorePrice}
+ * and the price advisor so both read one definition of "how price scores".
+ * Assumes the model is calibrated (caller checks).
+ */
+export function scorePriceValue(price: number, model: ModelCriteria): number {
+  const { goodAt, badAt } = fairPriceBounds(model);
+  return scoreLowerIsBetter(price, goodAt, badAt, PRICE_WEIGHT);
+}
+
+/**
+ * Inverse of {@link scorePriceValue}: the highest price that still earns
+ * `points` on the price factor. Clamped so `points ≤ 0` returns `badAt` and
+ * `points ≥ PRICE_WEIGHT` returns `goodAt` (the fair min).
+ */
+export function priceForScore(points: number, model: ModelCriteria): number {
+  const { goodAt, badAt } = fairPriceBounds(model);
+  const p = Math.max(0, Math.min(PRICE_WEIGHT, points));
+  return badAt - (p / PRICE_WEIGHT) * (badAt - goodAt);
 }
 
 /** Mirror of {@link scoreLowerIsBetter} for "higher is better" factors. */
@@ -53,8 +96,7 @@ function scorePrice(listing: Listing, model: ModelCriteria, reasons: string[]): 
   }
 
   const { min, max } = model.priceRangeMAD;
-  const badAt = max * 1.2;
-  const points = scoreLowerIsBetter(listing.priceMAD, min, badAt, WEIGHTS.price);
+  const points = scorePriceValue(listing.priceMAD, model);
 
   if (listing.priceMAD <= min) {
     reasons.push(`Price ${listing.priceMAD} MAD is at or below the fair range (${min}-${max}).`);

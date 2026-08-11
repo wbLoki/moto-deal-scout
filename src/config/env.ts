@@ -41,6 +41,24 @@ const envSchema = z.object({
   DISCORD_WEBHOOK_URL: z.string().url().optional(),
 
   /**
+   * Which AI provider the pricing features call. `gemini` has a free tier
+   * (default); `anthropic` uses Claude. Either way the features degrade to a
+   * clear "AI not configured" state when the chosen provider's key is unset —
+   * the deterministic engine is unaffected.
+   */
+  AI_PROVIDER: z.enum(['gemini', 'anthropic']).default('gemini'),
+
+  /** Anthropic API key, required only when AI_PROVIDER=anthropic. */
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  /** Claude model the AI features call. Override to trade cost for capability. */
+  ANTHROPIC_MODEL: z.string().min(1).default('claude-sonnet-5'),
+
+  /** Google Gemini API key (free tier at aistudio.google.com), required when AI_PROVIDER=gemini. */
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  /** Gemini model the AI features call. `gemini-2.5-flash` is fast and on the free tier. */
+  GEMINI_MODEL: z.string().min(1).default('gemini-2.5-flash'),
+
+  /**
    * Resend API key for emailing watchlist alert digests. When unset, email
    * delivery is skipped (in-app notifications still work). Get one at
    * resend.com and verify a sender domain.
@@ -52,11 +70,18 @@ const envSchema = z.object({
   APP_BASE_URL: z.string().url().default('https://motosnipe.com'),
 
   /**
-   * Shared secret protecting the /api/scan and /api/report routes. Vercel
-   * Cron sends it as `Authorization: Bearer <CRON_SECRET>`. If unset, the
-   * routes are unprotected — always set it in production.
+   * Where scans run. On Cloudflare the web host can't run Playwright, so the
+   * admin "Scan now" button triggers a GitHub Actions workflow instead. Set
+   * `GITHUB_REPO` ("owner/repo") and a `GITHUB_DISPATCH_TOKEN` (a PAT with the
+   * `actions:write` scope) to enable it; unset, the button reports that it's
+   * not configured.
    */
-  CRON_SECRET: z.string().min(1).optional(),
+  GITHUB_REPO: z.string().min(1).optional(),
+  GITHUB_DISPATCH_TOKEN: z.string().min(1).optional(),
+  /** Workflow file to dispatch for an on-demand scan. */
+  GITHUB_SCAN_WORKFLOW: z.string().min(1).default('scan.yml'),
+  /** Git ref the dispatched workflow runs on. */
+  GITHUB_DEFAULT_BRANCH: z.string().min(1).default('main'),
 
   /**
    * Email address that gets the `admin` role on sign-up / first OAuth login.

@@ -1,8 +1,19 @@
+import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // These pull in native binaries / large runtime assets and must stay as
-  // real Node requires at runtime rather than being bundled by webpack.
-  serverExternalPackages: ['@sparticuz/chromium', 'playwright-core', '@libsql/client', 'pino'],
+  // Keep native/heavy packages out of the Next bundle. `@libsql/isomorphic-ws`
+  // (and friends) publish a `workerd` export (`web.mjs`) that OpenNext only
+  // copies into `.open-next` when listed here — otherwise Cloudflare builds
+  // fail with "Could not resolve @libsql/isomorphic-ws".
+  serverExternalPackages: [
+    '@libsql/client',
+    '@libsql/hrana-client',
+    '@libsql/isomorphic-ws',
+    '@sparticuz/chromium',
+    'playwright-core',
+    'pino',
+  ],
 
   // The shared src/ code uses NodeNext-style `.js` import specifiers that
   // actually point at `.ts` files (so the CLI can build with tsc). Teach
@@ -15,5 +26,9 @@ const nextConfig = {
     return config;
   },
 };
+
+// Lets `next dev` see the Cloudflare bindings declared in wrangler.jsonc.
+// No-op during production builds.
+initOpenNextCloudflareForDev();
 
 export default nextConfig;
