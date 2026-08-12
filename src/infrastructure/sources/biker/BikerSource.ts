@@ -74,6 +74,7 @@ export class BikerSource implements MarketplaceSource {
         maxPages,
         throttleMs: this.options.throttleMs,
         ...(query.postedAfter ? { postedAfter: query.postedAfter } : {}),
+        ...(query.seenBefore ? { seenBefore: query.seenBefore } : {}),
         fetchPage: (pageNumber) => this.scrapePage(page, buildBikerUrl(model, pageNumber)),
         onError: (err, pageNumber) =>
           this.logger.error({ err, model, pageNumber }, 'Biker.ma scrape failed'),

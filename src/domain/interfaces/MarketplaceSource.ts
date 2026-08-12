@@ -29,6 +29,13 @@ export interface SourceQuery {
    * effective where the source's cards carry a post date (Avito).
    */
   readonly postedAfter?: Date;
+  /**
+   * "Do we already have this listing?" check, used to stop paginating once a
+   * whole page is already stored (see {@link CrawlOptions.seenBefore}). This is
+   * how a date-less source (Biker) knows when to stop, since {@link postedAfter}
+   * can't trim it.
+   */
+  readonly seenBefore?: (listing: Listing) => Promise<boolean>;
 }
 
 /**

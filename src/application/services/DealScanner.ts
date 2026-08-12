@@ -86,6 +86,30 @@ export class DealScanner {
     return this.incremental ? this.repository.lastScrapedAt(source.id) : undefined;
   }
 
+  /**
+   * The crawl ledger for a source: a `seenBefore` predicate that stops a
+   * date-less crawl (Biker) once it reaches an already-crawled page, plus a
+   * `record` to persist this run's crawled ids afterward. The predicate is
+   * backed by every id crawled in *previous* runs (loaded once), so a fresh
+   * database never trips it and a re-crawl stops as soon as a whole page is old.
+   * A forced full crawl (`discover --full`, `incremental` off) disables both.
+   */
+  private async crawlLedgerFor(source: MarketplaceSource): Promise<{
+    seenBefore?: (listing: Listing) => Promise<boolean>;
+    record: (listings: readonly Listing[]) => Promise<void>;
+  }> {
+    if (!this.incremental) return { record: () => Promise.resolve() };
+    const crawled = await this.repository.crawledExternalIds(source.id);
+    return {
+      seenBefore: (listing) => Promise.resolve(crawled.has(listing.externalId)),
+      record: (listings) =>
+        this.repository.recordCrawled(
+          source.id,
+          listings.map((l) => l.externalId),
+        ),
+    };
+  }
+
   /** Price drops found on already-seen listings during the current scan. */
   private priceDrops: PriceDrop[] = [];
 
@@ -156,11 +180,14 @@ export class DealScanner {
 
       try {
         const postedAfter = await this.watermarkFor(source);
+        const ledger = await this.crawlLedgerFor(source);
         const query: SourceQuery = {
           ...(this.discoveryMaxPages === undefined ? {} : { maxPages: this.discoveryMaxPages }),
           ...(postedAfter ? { postedAfter } : {}),
+          ...(ledger.seenBefore ? { seenBefore: ledger.seenBefore } : {}),
         };
         const listings = await source.fetchListings(query);
+        await ledger.record(listings);
         listingsFound = listings.length;
 
         for (const listing of listings) {
@@ -233,11 +260,14 @@ export class DealScanner {
 
     try {
       const postedAfter = await this.watermarkFor(source);
+      const ledger = await this.crawlLedgerFor(source);
       for (const model of this.criteria.models) {
         const listings = await source.fetchListings({
           criteria: model,
           ...(postedAfter ? { postedAfter } : {}),
+          ...(ledger.seenBefore ? { seenBefore: ledger.seenBefore } : {}),
         });
+        await ledger.record(listings);
         listingsFound += listings.length;
 
         for (const listing of listings) {

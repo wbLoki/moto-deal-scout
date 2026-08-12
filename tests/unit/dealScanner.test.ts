@@ -49,8 +49,22 @@ class InMemoryRepository implements ListingRepository {
   private readonly seen = new Set<string>();
   private readonly prices = new Map<string, number>();
 
+  readonly crawled = new Set<string>();
+
   hasSeen(sourceId: MarketplaceId, externalId: string): Promise<boolean> {
     return Promise.resolve(this.seen.has(`${sourceId}:${externalId}`));
+  }
+
+  crawledExternalIds(sourceId: MarketplaceId): Promise<Set<string>> {
+    const ids = [...this.crawled]
+      .filter((k) => k.startsWith(`${sourceId}:`))
+      .map((k) => k.slice(sourceId.length + 1));
+    return Promise.resolve(new Set(ids));
+  }
+
+  recordCrawled(sourceId: MarketplaceId, externalIds: readonly string[]): Promise<void> {
+    for (const id of externalIds) this.crawled.add(`${sourceId}:${id}`);
+    return Promise.resolve();
   }
 
   lastScrapedAt(sourceId: MarketplaceId): Promise<Date | undefined> {

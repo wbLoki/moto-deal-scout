@@ -39,6 +39,15 @@ export const MIGRATIONS: readonly string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_listings_good_deal_created
      ON listings (is_good_deal, created_at)`,
+  // Ledger of every external id we've crawled per source, matched or not.
+  // Distinct from `listings` (catalog matches only): a date-less source (Biker)
+  // uses this to stop paginating once it reaches an already-crawled page.
+  `CREATE TABLE IF NOT EXISTS crawled_listings (
+    source_id   TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    crawled_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (source_id, external_id)
+  )`,
   // Deprecated: the pre-multi-user global range. Kept so existing databases
   // migrate cleanly; per-user ranges now live in user_search_ranges.
   `CREATE TABLE IF NOT EXISTS search_settings (

@@ -50,12 +50,21 @@ export class AvitoSource implements MarketplaceSource {
     const slug = query.criteria
       ? slugifyForAvito(`${query.criteria.brand} ${query.criteria.model}`)
       : CATEGORY_SLUG;
-    const maxPages = query.maxPages ?? this.options.maxPages ?? DEFAULT_MAX_PAGES;
+    // `options.maxPages` (AVITO_MAX_PAGES) is a hard ceiling, not just a default:
+    // Avito goes through rate-limited Cloudflare Browser Rendering (Free plan),
+    // so a deep discovery crawl (query.maxPages of 20-40) must not run 40 browser
+    // requests here. When the cap is unset (local Playwright), the request wins.
+    const requested = query.maxPages ?? this.options.maxPages ?? DEFAULT_MAX_PAGES;
+    const maxPages =
+      this.options.maxPages !== undefined
+        ? Math.min(requested, this.options.maxPages)
+        : requested;
 
     return crawlPages({
       maxPages,
       throttleMs: this.options.throttleMs,
       ...(query.postedAfter ? { postedAfter: query.postedAfter } : {}),
+      ...(query.seenBefore ? { seenBefore: query.seenBefore } : {}),
       fetchPage: (pageNumber) => this.scrapePage(buildAvitoUrl(slug, pageNumber)),
       onError: (err, pageNumber) =>
         this.logger.error({ err, slug, pageNumber }, 'Avito scrape failed'),

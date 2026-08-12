@@ -29,16 +29,25 @@ export async function runScan(options: RunOptions = {}): Promise<DailyReport> {
   return report;
 }
 
+/**
+ * How deep the daily run paginates each source's category. Avito is capped far
+ * shorter by AVITO_MAX_PAGES (rate-limited Browser Rendering); this is really
+ * the Biker depth. Keep it inside the GHA/Vercel time budget.
+ */
+const DAILY_MAX_PAGES = 20;
+
 async function scanAndNotify(options: RunOptions): Promise<DailyReport> {
-  // Only models someone follows — this is the daily run, and it has to fit
-  // inside Vercel's function timeout. The weekly discovery crawl is what
-  // covers the rest of the market.
+  // Fetch every catalog-matching listing from both marketplaces' whole
+  // category — not just watched models — so the market log stays complete. This
+  // is the discovery pipeline (browse category, resolve titles against the
+  // reference catalog, auto-create models, store all matches), run incrementally
+  // so a re-run only picks up listings posted since the last scrape.
   const container = await buildContainer({
-    onlyWatched: true,
+    discovery: { maxPages: DAILY_MAX_PAGES },
     ...(options.sources ? { sources: options.sources } : {}),
   });
   try {
-    const report = await container.scanner.scan();
+    const report = await container.scanner.discover();
     await container.dispatcher.dispatch(report);
     return report;
   } finally {

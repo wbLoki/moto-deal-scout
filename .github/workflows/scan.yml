@@ -1,8 +1,10 @@
 name: Daily scan
 
-# Watched-model re-check. Biker uses Playwright on the runner; Avito uses
+# Full-catalog crawl of both marketplaces: browse each whole category, resolve
+# titles against the reference catalog, and store every match (not just watched
+# models), incrementally. Biker uses Playwright on the runner; Avito uses
 # Cloudflare Browser Rendering REST (/content) so we stay within Workers Free
-# (~10 browser-minutes/day, 1 request / 10s). Keep Avito shallow (1 page).
+# (~10 browser-minutes/day, 1 request / 10s) — hence AVITO_MAX_PAGES caps it.
 on:
   schedule:
     - cron: '0 7 * * *' # every day, 07:00 UTC
@@ -43,7 +45,8 @@ jobs:
           # if that permission is included; otherwise set BROWSER_RENDERING_API_TOKEN.
           CLOUDFLARE_API_TOKEN: ${{ secrets.BROWSER_RENDERING_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
           SCRAPE_SOURCES: avito,biker
-          # Free REST Quick Actions: 1 request / 10s.
+          # Free REST Quick Actions: 1 request / 10s. AVITO_MAX_PAGES is a hard
+          # ceiling on Avito's browser requests/run (5 pages ≈ 5 requests).
           SCRAPE_THROTTLE_MS: '10000'
-          AVITO_MAX_PAGES: '1'
+          AVITO_MAX_PAGES: '5'
           NODE_ENV: production

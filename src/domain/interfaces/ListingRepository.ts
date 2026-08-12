@@ -74,6 +74,19 @@ export interface ListingRepository {
   hasSeen(sourceId: MarketplaceId, externalId: string): Promise<boolean>;
 
   /**
+   * Every external id we've ever *crawled* for a source, matched or not. This
+   * is a separate ledger from `listings` (which only holds catalog matches):
+   * most Biker/Avito cards are scooters/rentals that never get stored, so
+   * `hasSeen` can't tell a re-crawled page from a fresh one. A date-less crawl
+   * (Biker) uses this set to stop once it reaches a page it has fully crawled
+   * before. Populated by {@link recordCrawled}.
+   */
+  crawledExternalIds(sourceId: MarketplaceId): Promise<Set<string>>;
+
+  /** Records that these external ids were crawled for a source (idempotent upsert). */
+  recordCrawled(sourceId: MarketplaceId, externalIds: readonly string[]): Promise<void>;
+
+  /**
    * The most recent `scraped_at` for a source, i.e. roughly the last time we
    * scraped it — or undefined if we never have. The incremental crawl uses it
    * as a watermark to stop paginating past listings it already holds.
