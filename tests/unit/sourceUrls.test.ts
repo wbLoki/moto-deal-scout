@@ -11,8 +11,8 @@ describe('buildAvitoUrl', () => {
   });
 
   it('uses the category slug for a browse-all crawl', () => {
-    expect(buildAvitoUrl('motos_et_scooters', 2)).toBe(
-      'https://www.avito.ma/fr/maroc/motos_et_scooters?o=2',
+    expect(buildAvitoUrl('motos-à_vendre', 2)).toBe(
+      'https://www.avito.ma/fr/maroc/motos-à_vendre?o=2',
     );
   });
 });

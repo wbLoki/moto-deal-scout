@@ -111,6 +111,9 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
   const htmlFetcher = await createRenderedHtmlFetcher({
     cloudflareAccountId: env.CLOUDFLARE_ACCOUNT_ID,
     cloudflareApiToken: env.CLOUDFLARE_API_TOKEN,
+    preferPlaywright: env.SCRAPE_USE_PLAYWRIGHT,
+    // Share one Chromium with Biker when Avito uses Playwright (Pi/laptop).
+    browserManager,
   });
   const sourceOptions = { throttleMs: env.SCRAPE_THROTTLE_MS };
   const avitoOptions = {

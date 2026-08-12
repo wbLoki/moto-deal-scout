@@ -31,11 +31,12 @@ const AVITO_HEADERS: Record<string, string> = {
 const BOT_CHALLENGE_MARKERS =
   /just a moment|cf-browser-verification|challenge-platform|__cf_chl|cf_chlenge|turnstile|attention required|datadome|captcha-delivery|verify you are (a )?human/i;
 /**
- * Avito's motorcycle category. It occupies the same path slot as a search
- * slug, so browsing the whole category and searching for one model differ
- * only in what goes here. Verified live: ~1400 listings, 38 cards per page.
+ * Avito's "Motos à vendre" category. It occupies the same path slot as a
+ * search slug, so browsing the whole category and searching for one model
+ * differ only in what goes here. Prefer this over `motos_et_scooters` — that
+ * older browse path misses ads that only appear under motos-à_vendre.
  */
-const CATEGORY_SLUG = 'motos_et_scooters';
+const CATEGORY_SLUG = 'motos-à_vendre';
 
 export interface AvitoSourceOptions {
   readonly throttleMs: number;

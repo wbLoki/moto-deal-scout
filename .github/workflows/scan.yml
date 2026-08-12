@@ -1,10 +1,10 @@
 name: Daily scan
 
-# Full-catalog crawl of both marketplaces: browse each whole category, resolve
-# titles against the reference catalog, and store every match (not just watched
-# models), incrementally. Biker uses Playwright on the runner; Avito uses
-# Cloudflare Browser Rendering REST (/content) so we stay within Workers Free
-# (~10 browser-minutes/day, 1 request / 10s) — hence AVITO_MAX_PAGES caps it.
+# Biker-only crawl on GitHub Actions (Playwright). Avito sits behind Cloudflare,
+# which serves a challenge to datacenter IPs — Browser Rendering cannot clear it.
+# Avito runs on a residential runner instead (local laptop or Pi via
+# `npm run scan` / `schedule` with SCRAPE_USE_PLAYWRIGHT=true).
+# Incremental: only listings newer than the last scrape watermark / crawl ledger.
 on:
   schedule:
     - cron: '0 7 * * *' # every day, 07:00 UTC
@@ -28,10 +28,9 @@ jobs:
 
       - run: npm ci
 
-      # Biker still needs Chromium; Avito goes through Browser Rendering REST.
       - run: npx playwright install --with-deps chromium
 
-      - name: Scan watched models
+      - name: Scan Biker (incremental)
         run: npm run scan
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -40,13 +39,5 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
           APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Token needs "Browser Rendering - Edit". May reuse CLOUDFLARE_API_TOKEN
-          # if that permission is included; otherwise set BROWSER_RENDERING_API_TOKEN.
-          CLOUDFLARE_API_TOKEN: ${{ secrets.BROWSER_RENDERING_API_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
-          SCRAPE_SOURCES: avito,biker
-          # Free REST Quick Actions: 1 request / 10s. AVITO_MAX_PAGES is a hard
-          # ceiling on Avito's browser requests/run (5 pages ≈ 5 requests).
-          SCRAPE_THROTTLE_MS: '10000'
-          AVITO_MAX_PAGES: '5'
+          SCRAPE_SOURCES: biker
           NODE_ENV: production

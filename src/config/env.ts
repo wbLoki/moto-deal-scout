@@ -25,23 +25,36 @@ const envSchema = z.object({
 
   /**
    * Comma-separated marketplace source ids to scrape (e.g. `avito,biker`).
-   * Both run when unset. GHA daily scan uses Browser Rendering for Avito
-   * (capped) plus Playwright for Biker. A `--source` CLI flag overrides it.
+   * Both run when unset. GHA daily scan is Biker-only (datacenter IPs can't
+   * clear Avito's Cloudflare challenge). Avito runs on a residential box
+   * (local/Pi Playwright). A `--source` CLI flag overrides it.
    */
   SCRAPE_SOURCES: z.string().min(1).optional(),
   /** Milliseconds to wait between requests to the same marketplace, to stay polite. */
   SCRAPE_THROTTLE_MS: z.coerce.number().int().nonnegative().default(2000),
   /**
-   * Cap Avito pagination (Free Browser Rendering budget). Unset → AvitoSource
-   * default (3). GHA sets `1` so watched-models × 1 page fits ~10 min/day.
+   * Cap Avito pagination. Unset → AvitoSource default (3). Useful on Free
+   * Browser Rendering or to bound a residential crawl.
    */
   AVITO_MAX_PAGES: z.coerce.number().int().positive().max(40).optional(),
   /**
    * Cloudflare account id + API token (Browser Rendering - Edit) for the REST
-   * `/content` path used by GHA / local when no Workers `BROWSER` binding.
+   * `/content` path (Workers compare / optional REST). Ignored for Avito crawl
+   * when SCRAPE_USE_PLAYWRIGHT is true.
    */
   CLOUDFLARE_ACCOUNT_ID: z.string().min(1).optional(),
   CLOUDFLARE_API_TOKEN: z.string().min(1).optional(),
+  /**
+   * Force local Playwright for rendered HTML even when Cloudflare Browser
+   * Rendering REST creds are set. Defaults to true so laptop/Pi residential
+   * crawls don't hit Avito's datacenter Cloudflare challenge. Set false only
+   * if you intentionally want REST BR. Ignored when a Workers `BROWSER`
+   * binding is available (compare on Cloudflare).
+   */
+  SCRAPE_USE_PLAYWRIGHT: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   /** Whether Playwright launches Chromium headless (true) or visibly (false, for debugging). */
   PLAYWRIGHT_HEADLESS: z
     .enum(['true', 'false'])
