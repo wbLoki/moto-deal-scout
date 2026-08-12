@@ -4,10 +4,7 @@ import type {
   MarketplaceSource,
   SourceQuery,
 } from '../../../domain/interfaces/MarketplaceSource.js';
-import {
-  isBrowserRenderingQuotaError,
-  type RenderedHtmlFetcher,
-} from '../../browser/RenderedHtmlFetcher.js';
+import type { RenderedHtmlFetcher } from '../../browser/RenderedHtmlFetcher.js';
 import { crawlPages } from '../shared/crawl.js';
 import { slugifyForAvito } from '../shared/textParsing.js';
 import { parseAvitoSearchCards } from './parseAvitoSearchCards.js';
@@ -26,9 +23,13 @@ const AVITO_HEADERS: Record<string, string> = {
     'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
 };
 
-/** Markers that identify Datadome's bot-wall / CAPTCHA challenge in the HTML. */
-const DATADOME_MARKERS =
-  /datadome|captcha-delivery|geo\.captcha-delivery|interstitial|dd_cookie|verify you are (a )?human|access denied/i;
+/**
+ * Markers of a bot-wall interstitial served instead of listings. Avito sits
+ * behind Cloudflare, whose "Just a moment…" challenge is what Browser Rendering
+ * hits from datacenter IPs; the Datadome patterns are kept in case that changes.
+ */
+const BOT_CHALLENGE_MARKERS =
+  /just a moment|cf-browser-verification|challenge-platform|__cf_chl|cf_chlenge|turnstile|attention required|datadome|captcha-delivery|verify you are (a )?human/i;
 /**
  * Avito's motorcycle category. It occupies the same path slot as a search
  * slug, so browsing the whole category and searching for one model differ
@@ -91,42 +92,27 @@ export class AvitoSource implements MarketplaceSource {
   }
 
   private async scrapePage(url: string): Promise<Listing[]> {
-    const html = await this.fetchAvitoHtml(url);
-    const cards = parseAvitoSearchCards(html);
-    if (cards.length === 0) {
-      // Zero cards on a 200 means either an empty page past the last one, or —
-      // the reason to log — Avito's Datadome bot-wall served a challenge instead
-      // of listings. The snippet makes that unambiguous in the run logs.
-      const likelyBlocked = DATADOME_MARKERS.test(html);
-      this.logger.warn(
-        { url, htmlLength: html.length, likelyBlocked, snippet: html.slice(0, 400) },
-        likelyBlocked ? 'Avito appears bot-blocked (Datadome challenge)' : 'Avito returned no cards',
-      );
-    }
-    return cards;
-  }
-
-  /**
-   * Fetches Avito's rendered HTML, mirroring the local Playwright behaviour that
-   * already works: no *fatal* selector wait (the Browser Rendering REST API 422s
-   * when a `waitForSelector` times out, unlike Playwright's soft wait). Instead
-   * we wait for the network to settle so the client-rendered cards — and any
-   * Datadome JS check — have time to run, sending a real Chrome UA + French
-   * headers to look less like a bot. If that hangs on a challenge page (never
-   * idle), we fall back to the initial HTML so we still parse and can diagnose.
-   */
-  private async fetchAvitoHtml(url: string): Promise<string> {
-    const common = {
+    // A single fast load (a real Chrome UA + fr-MA headers). We deliberately do
+    // NOT wait for network-idle: from datacenter IPs Avito's Cloudflare wall
+    // serves a "Just a moment…" challenge whose network never settles, so idle
+    // just burns the Free-plan browser budget and 401s. If we ever get the real
+    // page, its cards are in the initial HTML; if not, we detect the challenge.
+    const html = await this.htmlFetcher.fetchRenderedHtml(url, {
+      waitUntil: 'domcontentloaded',
       timeoutMs: 30_000,
       userAgent: AVITO_USER_AGENT,
       extraHeaders: AVITO_HEADERS,
-    } as const;
-    try {
-      return await this.htmlFetcher.fetchRenderedHtml(url, { ...common, waitUntil: 'networkidle2' });
-    } catch (err) {
-      if (isBrowserRenderingQuotaError(err)) throw err;
-      this.logger.warn({ err, url }, 'Avito networkidle fetch failed; retrying for raw HTML');
-      return this.htmlFetcher.fetchRenderedHtml(url, { ...common, waitUntil: 'domcontentloaded' });
+    });
+    const cards = parseAvitoSearchCards(html);
+    if (cards.length === 0) {
+      const blocked = BOT_CHALLENGE_MARKERS.test(html);
+      this.logger.warn(
+        { url, htmlLength: html.length, likelyBlocked: blocked, snippet: html.slice(0, 300) },
+        blocked
+          ? 'Avito served a bot challenge (Cloudflare) — needs a residential runner'
+          : 'Avito returned no cards',
+      );
     }
+    return cards;
   }
 }
