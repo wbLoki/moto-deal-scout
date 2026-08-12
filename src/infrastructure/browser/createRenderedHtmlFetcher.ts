@@ -1,3 +1,4 @@
+import type { BrowserManager } from '../sources/shared/BrowserManager.js';
 import {
   RestBrowserHtmlFetcher,
   tryGetWorkersBrowserBinding,
@@ -11,18 +12,23 @@ export interface CreateRenderedHtmlFetcherOptions {
   /** API token with Browser Rendering - Edit (GHA / local). */
   readonly cloudflareApiToken?: string | undefined;
   /**
-   * Prefer Playwright even when REST creds exist (local debugging).
+   * Prefer Playwright even when REST creds exist (residential laptop/Pi).
    * Ignored when a Workers binding is available.
    */
   readonly preferPlaywright?: boolean | undefined;
+  /**
+   * Shared Chromium for Playwright fetches (same instance as Biker). Only
+   * used when Playwright is selected.
+   */
+  readonly browserManager?: BrowserManager | undefined;
 }
 
 /**
  * Picks the best HTML fetcher for this runtime:
  * 1. Workers `BROWSER` binding (compare on Cloudflare)
- * 2. REST Browser Rendering (GHA daily Avito) when account + token are set
- * 3. Local Playwright (CLI on a machine with Chromium) — dynamic import so
- *    OpenNext never statically pulls playwright into the Worker graph.
+ * 2. REST Browser Rendering when account + token are set and Playwright is not preferred
+ * 3. Local Playwright (CLI on a residential machine with Chromium) — dynamic
+ *    import so OpenNext never statically pulls playwright into the Worker graph.
  */
 export async function createRenderedHtmlFetcher(
   options: CreateRenderedHtmlFetcherOptions = {},
@@ -39,5 +45,5 @@ export async function createRenderedHtmlFetcher(
   }
 
   const { PlaywrightHtmlFetcher } = await import('./playwrightRenderedHtml.js');
-  return new PlaywrightHtmlFetcher();
+  return new PlaywrightHtmlFetcher(options.browserManager);
 }

@@ -92,13 +92,36 @@ and re-checked inside every admin server action. The split `auth.config.ts` (edg
 ## Running the CLI
 
 ```bash
-npm run scan       # run one scan now, notify about good deals, exit
+npm run scan       # run one scan now (incremental), notify about good deals, exit
 npm run report     # re-send today's good-deal digest from storage, without scanning
 npm run schedule   # start the built-in cron scheduler and keep running (8:00 AM Africa/Casablanca)
 ```
 
-`schedule` is the always-on mode for a VPS / systemd / pm2 / container: it keeps the
-process alive and runs a scan every day at the configured time, independent of Vercel.
+Scans are **incremental** by default: Avito stops at listings older than the last
+scrape watermark; Biker stops when a whole page was already in the crawl ledger.
+Use `npm run discover -- --full` for a full re-crawl.
+
+### Residential Avito (laptop / Raspberry Pi)
+
+Avito’s Cloudflare challenge blocks datacenter IPs (GitHub Actions and Browser
+Rendering). Scrape Avito from a residential connection with Playwright:
+
+```bash
+# In .env (Playwright is already the default; CF BR creds are ignored for crawl)
+# Optional: Turso URL/token so results land in the same DB as production
+
+npm run playwright:install
+npm run scan                          # Avito + Biker, since last scrape
+npm run scan -- --source avito        # Avito only
+npm run schedule                      # daily always-on (Pi / VPS / systemd / pm2)
+```
+
+A future Raspberry Pi uses the same path: 64-bit OS, Node 22, Playwright
+Chromium, ≥2–4 GB RAM, headless. GitHub Actions still runs **Biker only**
+(`SCRAPE_SOURCES=biker`); admin “Scan now” triggers that workflow.
+
+`schedule` is the always-on mode for a VPS / systemd / pm2 / container / Pi: it
+keeps the process alive and runs a scan every day at the configured time.
 Build the CLI to plain JS with `npm run build:cli` (outputs to `dist/`).
 
 ## Deploying to Vercel
@@ -166,6 +189,8 @@ needs to change.
 | `SCAN_CRON_EXPRESSION`  | `0 8 * * *`                     | CLI `schedule` only (not Vercel).                                             |
 | `SCAN_TIMEZONE`         | `Africa/Casablanca`             | CLI `schedule` only (not Vercel).                                             |
 | `SCRAPE_THROTTLE_MS`    | `2000`                          | Delay between page loads on the same marketplace.                             |
+| `SCRAPE_USE_PLAYWRIGHT` | `true`                          | Prefer Playwright for Avito (residential). Set `false` to force BR REST.      |
+| `SCRAPE_SOURCES`        | _(all)_                         | Comma list, e.g. `avito,biker`. GHA uses `biker` only.                        |
 | `PLAYWRIGHT_HEADLESS`   | `true`                          | Local only; set `false` to watch the browser while debugging a scraper.       |
 | `DISCORD_WEBHOOK_URL`   | _(unset)_                       | Activates the Discord notifier.                                               |
 | `AUTH_SECRET`           | _(unset)_                       | Auth.js session secret. Required in production (`openssl rand -base64 32`).   |

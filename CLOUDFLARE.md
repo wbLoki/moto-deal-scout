@@ -1,8 +1,11 @@
 # Hosting on Cloudflare (Workers, via OpenNext)
 
 The web app runs on **Cloudflare Workers** using the [`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare)
-adapter. Avito HTML is fetched with **Cloudflare Browser Rendering** (Workers Free).
-Biker search still uses Playwright on GitHub Actions.
+adapter. Compare for Avito listing links uses **Cloudflare Browser Rendering**
+(Workers Free). Daily **Avito crawls cannot use Browser Rendering**: Avito’s
+Cloudflare challenge blocks datacenter IPs. Avito runs on a **residential**
+Playwright box (laptop or Raspberry Pi). Biker runs on GitHub Actions (and on
+the same residential box when you scrape both locally).
 
 ## Architecture
 
@@ -11,17 +14,14 @@ Biker search still uses Playwright on GitHub Actions.
 | Next.js app (UI, server actions, auth, AI features) | Cloudflare Workers |
 | Database | Turso — `@libsql/client/web` on Workers |
 | Compare Avito listing links | Worker `BROWSER` binding → Quick Action `/content` |
-| Daily scan (watched models) | GitHub Actions — Avito via Browser Rendering REST; Biker via Playwright |
-| Weekly discovery | GitHub Actions — **Biker only** on Free (too many pages for BR budget) |
-| Admin **“Scan now”** | Triggers `scan.yml` via the GitHub API |
+| Daily Biker scan | GitHub Actions — Playwright (`SCRAPE_SOURCES=biker`) |
+| Daily Avito scan | Residential CLI — Playwright (`SCRAPE_USE_PLAYWRIGHT=true`) |
+| Admin **“Scan now”** | Triggers `scan.yml` (Biker only) via the GitHub API |
 
 ### Workers Free Browser Rendering budget
 
-Shared across compare + daily Avito (~**10 browser-minutes/day**, REST **1 req / 10s**):
-
-- Daily Avito: `AVITO_MAX_PAGES=1`, `SCRAPE_THROTTLE_MS=10000`, watched models only.
-- On HTTP 429 / time-limit, Avito stops early; Biker still runs.
-- Upgrade to Workers Paid for deeper Avito crawls / discovery.
+Used for **compare** only (~**10 browser-minutes/day**, REST **1 req / 10s**).
+Daily Avito no longer consumes this quota.
 
 ## One-time setup
 
@@ -40,10 +40,10 @@ Shared across compare + daily Avito (~**10 browser-minutes/day**, REST **1 req /
    Non-secret values can go in `wrangler.jsonc` under `"vars"` instead:
    `AI_PROVIDER`, `GEMINI_MODEL`, `APP_BASE_URL`, `GITHUB_REPO`, `ALERT_FROM_EMAIL`.
    The `browser.binding` (`BROWSER`) is declared in `wrangler.jsonc` — no secret for the binding itself.
-3. **GitHub Actions secrets** for the scrapers: `DATABASE_URL`,
+3. **GitHub Actions secrets** for the Biker scanner: `DATABASE_URL`,
    `DATABASE_AUTH_TOKEN`, `DISCORD_WEBHOOK_URL`, `RESEND_API_KEY`,
-   `ALERT_FROM_EMAIL`, `APP_BASE_URL`, plus `CLOUDFLARE_ACCOUNT_ID` and a
-   Browser Rendering token (`BROWSER_RENDERING_API_TOKEN` or `CLOUDFLARE_API_TOKEN`).
+   `ALERT_FROM_EMAIL`, `APP_BASE_URL`. Browser Rendering secrets are only
+   needed for Worker **compare**, not for the daily scan.
 
 ## Deploying
 
@@ -117,8 +117,25 @@ fails on unresolved `chromium-bidi` paths inside playwright-core.
 Unchanged: `npm run dev` (Turso via `DATABASE_URL` in `.env`). To preview the
 actual Worker build locally, use WSL: `npm run cf:preview`.
 
-Local Avito CLI scans use Playwright when `CLOUDFLARE_ACCOUNT_ID` /
-`CLOUDFLARE_API_TOKEN` are unset; with those set they use Browser Rendering REST.
+### Residential scrape (laptop / Raspberry Pi)
+
+Avito must run from a residential IP. Use the CLI with Playwright forced on:
+
+```bash
+# .env — point at Turso if you want prod data. Playwright is the default for
+# Avito crawls (SCRAPE_USE_PLAYWRIGHT=true); set false only to force BR REST.
+# DATABASE_URL=...
+# DATABASE_AUTH_TOKEN=...
+
+npm run playwright:install
+npm run scan                 # both sources, incremental (since last scrape)
+npm run scan -- --source avito
+npm run discover -- --full   # ignore watermark / crawl ledger
+npm run schedule             # always-on daily cron (same path a Pi will use)
+```
+
+Pi notes: 64-bit OS, Node 22, `npm run playwright:install`, ≥2–4 GB RAM,
+headless default. Same env and commands as the laptop — no Worker BR binding.
 
 ## Verified vs. needs a real deploy
 
@@ -126,7 +143,7 @@ Local Avito CLI scans use Playwright when `CLOUDFLARE_ACCOUNT_ID` /
 must not pull Playwright into the Worker graph.
 
 **Not yet verified (needs a Linux deploy):** Worker `BROWSER` binding on
-`/compare` Avito links; GHA daily Avito via REST under Free quota.
+`/compare` Avito links.
 
 ## Later: durable cache
 
