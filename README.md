@@ -118,7 +118,7 @@ npm run schedule                      # daily always-on (Pi / VPS / systemd / pm
 
 A future Raspberry Pi uses the same path: 64-bit OS, Node 22, Playwright
 Chromium, ≥2–4 GB RAM, headless. GitHub Actions still runs **Biker only**
-(`SCRAPE_SOURCES=biker`); admin “Scan now” triggers that workflow.
+(JSON API, `SCRAPE_SOURCES=biker`); admin “Scan now” triggers that workflow.
 
 `schedule` is the always-on mode for a VPS / systemd / pm2 / container / Pi: it
 keeps the process alive and runs a scan every day at the configured time.

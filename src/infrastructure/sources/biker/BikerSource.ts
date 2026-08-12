@@ -1,97 +1,102 @@
 import type { Logger } from 'pino';
-import type { Page } from 'playwright-core';
 import type { Listing } from '../../../domain/entities/Listing.js';
 import type {
   MarketplaceSource,
   SourceQuery,
 } from '../../../domain/interfaces/MarketplaceSource.js';
-import type { BrowserManager } from '../shared/BrowserManager.js';
 import { crawlPages } from '../shared/crawl.js';
 import { delay } from '../shared/throttle.js';
-import { parseNumber, parseYear, slugifyWithHyphens } from '../shared/textParsing.js';
+import { parseNumber, slugifyWithHyphens } from '../shared/textParsing.js';
 
 const BASE_URL = 'https://www.biker.ma';
+const LIST_PATH = '/api/v1/moto/annonce';
+const PHOTO_BASE = `${BASE_URL}/uploads/`;
+/** Page size matching Biker's public list endpoint default. */
+export const BIKER_PAGE_LIMIT = 45;
 const DEFAULT_MAX_PAGES = 3;
-const CARD_SELECTOR = '[data-id]';
 
-interface RawCard {
-  dataId: string;
-  title: string;
-  price: string;
-  city: string;
-  mileage: string;
-  year: string;
-  image: string;
+/** One row from `/api/v1/moto/annonce`. */
+interface BikerAnnonce {
+  readonly idannonce_moto?: number;
+  readonly marque?: string | null;
+  readonly model?: string | null;
+  readonly titre?: string | null;
+  readonly description?: string | null;
+  readonly prix?: number | string | null;
+  readonly anneemodele?: number | string | null;
+  readonly kilometrage?: number | string | null;
+  readonly cylindre?: number | string | null;
+  readonly ville?: string | null;
+  readonly dateajout?: string | null;
+  readonly photo1?: string | null;
+  readonly etatannonce?: string | null;
+  readonly vendu?: number | null;
+}
+
+interface BikerAnnoncePage {
+  readonly annonces?: readonly BikerAnnonce[];
+  readonly page?: number;
+  readonly totalPages?: number;
+  readonly total?: number;
 }
 
 export interface BikerSourceOptions {
   readonly throttleMs: number;
   readonly maxPages?: number;
+  /** Items per API page (default {@link BIKER_PAGE_LIMIT}). */
+  readonly pageLimit?: number;
 }
 
 /**
- * Builds a Biker.ma search URL. Every filter except `modele` is already sent
- * empty by design, so an empty `modele` too is simply an unfiltered browse of
- * the whole used-motorcycle category — that's the discovery crawl.
+ * Builds the Biker list API URL. Empty `modele` browses the whole catalogue
+ * (discovery); a non-empty value filters like the old HTML search.
  */
-export function buildBikerUrl(model: string, page: number): string {
+export function buildBikerUrl(model: string, page: number, limit = BIKER_PAGE_LIMIT): string {
   const params = new URLSearchParams({
-    marque: '',
-    modele: model,
-    prixmin: '',
-    prixmax: '',
-    ville: '',
     page: String(page),
-    cylindreeMin: '',
-    cylindreeMax: '',
+    limit: String(limit),
   });
-  return `${BASE_URL}/annonce/moto?${params.toString()}`;
+  if (model) params.set('modele', model);
+  return `${BASE_URL}${LIST_PATH}?${params.toString()}`;
 }
 
 /**
- * Scrapes Biker.ma's used-motorcycle search (`/annonce/moto`), which
- * supports a `modele` query param that does real substring/full-text
- * matching against listing titles.
+ * Fetches Biker.ma used-motorcycle listings via their public JSON API
+ * (`/api/v1/moto/annonce`) — no browser required. Detail enrich still hits
+ * `/api/v1/moto/detail/{id}` when a list row is missing date/cc (rare).
  */
 export class BikerSource implements MarketplaceSource {
   readonly id = 'biker' as const;
   readonly name = 'Biker.ma';
 
+  private readonly pageLimit: number;
+
   constructor(
-    private readonly browserManager: BrowserManager,
     private readonly options: BikerSourceOptions,
     private readonly logger: Logger,
-  ) {}
+  ) {
+    this.pageLimit = options.pageLimit ?? BIKER_PAGE_LIMIT;
+  }
 
   async fetchListings(query: SourceQuery): Promise<Listing[]> {
-    // No model means browse the entire category (discovery crawl).
     const model = query.criteria?.model ?? '';
     const maxPages = query.maxPages ?? this.options.maxPages ?? DEFAULT_MAX_PAGES;
 
-    const page = await this.browserManager.newPage();
-    try {
-      return await crawlPages({
-        maxPages,
-        throttleMs: this.options.throttleMs,
-        ...(query.postedAfter ? { postedAfter: query.postedAfter } : {}),
-        ...(query.seenBefore ? { seenBefore: query.seenBefore } : {}),
-        fetchPage: (pageNumber) => this.scrapePage(page, buildBikerUrl(model, pageNumber)),
-        onError: (err, pageNumber) =>
-          this.logger.error({ err, model, pageNumber }, 'Biker.ma scrape failed'),
-      });
-    } finally {
-      await page.close();
-    }
+    return crawlPages({
+      maxPages,
+      throttleMs: this.options.throttleMs,
+      ...(query.postedAfter ? { postedAfter: query.postedAfter } : {}),
+      ...(query.seenBefore ? { seenBefore: query.seenBefore } : {}),
+      fetchPage: (pageNumber) => this.fetchPage(buildBikerUrl(model, pageNumber, this.pageLimit)),
+      onError: (err, pageNumber) =>
+        this.logger.error({ err, model, pageNumber }, 'Biker.ma list API failed'),
+    });
   }
 
   /**
-   * Fills in `postedAt` and `displacementCc`, which the search cards omit — only
-   * the detail record carries the publish date and engine size. Biker.ma's own
-   * detail view is an Angular page that fetches `/api/v1/moto/detail/{id}`, so we
-   * hit that JSON endpoint directly (its `dateajout` is a clean ISO timestamp,
-   * `cylindre` the displacement in cc) rather than rendering a browser page. The
-   * scanner calls this only for listings it hasn't stored yet. Any failure
-   * returns the listing untouched: a missing field must never drop it.
+   * Fills in `postedAt` / `displacementCc` when the list row omitted them.
+   * The list API usually already provides both, so this is a no-op for most
+   * crawls. Failures leave the listing untouched.
    */
   async enrich(listing: Listing): Promise<Listing> {
     if (listing.postedAt && listing.displacementCc !== undefined) return listing;
@@ -105,8 +110,6 @@ export class BikerSource implements MarketplaceSource {
       const data = await res.json<{ dateajout?: string; cylindre?: string | number }>();
       const posted = data.dateajout ? new Date(data.dateajout) : undefined;
       const postedAt = posted && !Number.isNaN(posted.getTime()) ? posted : listing.postedAt;
-      // Sellers occasionally enter nonsense ("2", "99999") — keep only plausible
-      // displacements, else leave it unknown so it can't skew the cc filter.
       const cc = parseNumber(String(data.cylindre ?? ''));
       const displacementCc = cc && cc >= 25 && cc <= 3500 ? cc : listing.displacementCc;
       return { ...listing, postedAt, displacementCc };
@@ -117,60 +120,72 @@ export class BikerSource implements MarketplaceSource {
   }
 
   dispose(): Promise<void> {
-    // Browser lifecycle is owned by the shared PlaywrightBrowserManager.
     return Promise.resolve();
   }
 
-  private async scrapePage(page: Page, url: string): Promise<Listing[]> {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-    await page.waitForSelector(CARD_SELECTOR, { timeout: 10_000 }).catch(() => undefined);
-
-    const raw = await page.$$eval(CARD_SELECTOR, (cards): RawCard[] =>
-      cards
-        .filter((card) => card.querySelector('.custom-heading'))
-        .map((card) => {
-          const dataId = card.getAttribute('data-id') ?? '';
-          const title = card.querySelector('.custom-heading')?.textContent?.trim() ?? '';
-          const price = card.querySelector('.price-large-red')?.textContent?.trim() ?? '';
-          const image = card.querySelector('.custom-card-img__img')?.getAttribute('src') ?? '';
-
-          let city = '';
-          let mileage = '';
-          let year = '';
-          card.querySelectorAll('.icon-text-block').forEach((block) => {
-            const text = block.textContent?.trim() ?? '';
-            if (block.querySelector('.bi-geo-alt')) city = text;
-            else if (block.querySelector('.bi-speedometer2')) mileage = text;
-            else if (block.querySelector('.bi-calendar')) year = text;
-          });
-
-          return { dataId, title, price, city, mileage, year, image };
-        }),
-    );
-
-    return raw
-      .filter((r) => r.dataId && r.title && parseNumber(r.price) !== undefined)
-      .map((r) => this.toListing(r));
+  private async fetchPage(url: string): Promise<Listing[]> {
+    const res = await fetch(url, { headers: { accept: 'application/json' } });
+    if (!res.ok) {
+      throw new Error(`Biker.ma list API HTTP ${res.status} for ${url}`);
+    }
+    const data = await res.json<BikerAnnoncePage>();
+    const rows = data.annonces ?? [];
+    const scrapedAt = new Date();
+    return rows
+      .map((row) => this.toListing(row, scrapedAt))
+      .filter((l): l is Listing => l !== undefined);
   }
 
-  private toListing(raw: RawCard): Listing {
-    const slug = slugifyWithHyphens(raw.title) || 'moto';
+  private toListing(row: BikerAnnonce, scrapedAt: Date): Listing | undefined {
+    if (row.vendu === 1 || (row.etatannonce && row.etatannonce !== 'active')) {
+      return undefined;
+    }
+
+    const externalId = String(row.idannonce_moto ?? '');
+    if (!externalId) return undefined;
+
+    const priceMAD =
+      typeof row.prix === 'number' ? row.prix : parseNumber(String(row.prix ?? ''));
+    if (priceMAD == null || !(priceMAD > 0)) return undefined;
+
+    const brand = (row.marque ?? '').trim();
+    const model = (row.model ?? '').trim();
+    // Prefer marque+model for catalog matching — titres are often city names
+    // or vague slogans ("larache", "a vendre").
+    const title =
+      [brand, model].filter(Boolean).join(' ') ||
+      (row.titre ?? '').trim() ||
+      `Biker #${externalId}`;
+
+    const year =
+      typeof row.anneemodele === 'number'
+        ? row.anneemodele
+        : parseNumber(String(row.anneemodele ?? ''));
+    const mileageKm =
+      typeof row.kilometrage === 'number'
+        ? row.kilometrage
+        : parseNumber(String(row.kilometrage ?? ''));
+    const cc = parseNumber(String(row.cylindre ?? ''));
+    const displacementCc = cc && cc >= 25 && cc <= 3500 ? cc : undefined;
+
+    const posted = row.dateajout ? new Date(row.dateajout) : undefined;
+    const photo = (row.photo1 ?? '').trim();
+    const slug = slugifyWithHyphens(title) || 'moto';
+
     return {
       sourceId: this.id,
-      externalId: raw.dataId,
-      url: `${BASE_URL}/annonce/detail-moto/${slug}/${raw.dataId}`,
-      title: raw.title,
-      description: undefined,
-      // Presence of a parseable price was already checked by the filter above.
-      priceMAD: parseNumber(raw.price)!,
-      year: parseYear(raw.year),
-      mileageKm: parseNumber(raw.mileage),
-      // Displacement (and the post date) live only on the detail record — see enrich().
-      displacementCc: undefined,
-      city: raw.city || 'Maroc',
-      imageUrl: raw.image || undefined,
-      postedAt: undefined,
-      scrapedAt: new Date(),
+      externalId,
+      url: `${BASE_URL}/annonce/detail-moto/${slug}/${externalId}`,
+      title,
+      description: row.description?.trim() || undefined,
+      priceMAD,
+      year: year != null && year >= 1950 ? year : undefined,
+      mileageKm,
+      displacementCc,
+      city: (row.ville ?? '').trim() || 'Maroc',
+      imageUrl: photo ? `${PHOTO_BASE}${photo}` : undefined,
+      postedAt: posted && !Number.isNaN(posted.getTime()) ? posted : undefined,
+      scrapedAt,
     };
   }
 }

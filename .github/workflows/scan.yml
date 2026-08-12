@@ -1,9 +1,9 @@
 name: Daily scan
 
-# Biker-only crawl on GitHub Actions (Playwright). Avito sits behind Cloudflare,
-# which serves a challenge to datacenter IPs — Browser Rendering cannot clear it.
-# Avito runs on a residential runner instead (local laptop or Pi via
-# `npm run scan` / `schedule` with SCRAPE_USE_PLAYWRIGHT=true).
+# Biker-only crawl on GitHub Actions via their public JSON list API (no browser).
+# Avito sits behind Cloudflare, which serves a challenge to datacenter IPs —
+# Browser Rendering cannot clear it. Avito runs on a residential runner instead
+# (local laptop or Pi via `npm run scan` / `schedule` with Playwright).
 # Incremental: only listings newer than the last scrape watermark / crawl ledger.
 on:
   schedule:
@@ -27,8 +27,6 @@ jobs:
           cache: npm
 
       - run: npm ci
-
-      - run: npx playwright install --with-deps chromium
 
       - name: Scan Biker (incremental)
         run: npm run scan

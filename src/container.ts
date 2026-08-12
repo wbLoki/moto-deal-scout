@@ -122,7 +122,7 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
   };
   const allSources: MarketplaceSource[] = [
     new AvitoSource(htmlFetcher, avitoOptions, logger.child({ source: 'avito' })),
-    new BikerSource(browserManager, sourceOptions, logger.child({ source: 'biker' })),
+    new BikerSource(sourceOptions, logger.child({ source: 'biker' })),
   ];
   const selection = options.sources ?? parseSourceList(env.SCRAPE_SOURCES);
   const sources = selection ? selectSources(allSources, selection) : allSources;

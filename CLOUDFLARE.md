@@ -14,7 +14,7 @@ the same residential box when you scrape both locally).
 | Next.js app (UI, server actions, auth, AI features) | Cloudflare Workers |
 | Database | Turso — `@libsql/client/web` on Workers |
 | Compare Avito listing links | Worker `BROWSER` binding → Quick Action `/content` |
-| Daily Biker scan | GitHub Actions — Playwright (`SCRAPE_SOURCES=biker`) |
+| Daily Biker scan | GitHub Actions — JSON list API (`SCRAPE_SOURCES=biker`) |
 | Daily Avito scan | Residential CLI — Playwright (`SCRAPE_USE_PLAYWRIGHT=true`) |
 | Admin **“Scan now”** | Triggers `scan.yml` (Biker only) via the GitHub API |
 

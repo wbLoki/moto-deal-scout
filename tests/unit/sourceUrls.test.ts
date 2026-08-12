@@ -18,21 +18,18 @@ describe('buildAvitoUrl', () => {
 });
 
 describe('buildBikerUrl', () => {
-  it('sends the model as the only non-empty filter', () => {
+  it('hits the list API with page + limit', () => {
     const url = new URL(buildBikerUrl('MT-07', 1));
-    expect(url.pathname).toBe('/annonce/moto');
+    expect(url.pathname).toBe('/api/v1/moto/annonce');
     expect(url.searchParams.get('modele')).toBe('MT-07');
     expect(url.searchParams.get('page')).toBe('1');
-    for (const key of ['marque', 'prixmin', 'prixmax', 'ville']) {
-      expect(url.searchParams.get(key)).toBe('');
-    }
+    expect(url.searchParams.get('limit')).toBe('45');
   });
 
   it('browses the whole category when the model is empty', () => {
-    // This is what makes discovery possible on Biker: every filter empty is a
-    // valid unfiltered search rather than an error.
     const url = new URL(buildBikerUrl('', 4));
-    expect(url.searchParams.get('modele')).toBe('');
+    expect(url.searchParams.get('modele')).toBeNull();
     expect(url.searchParams.get('page')).toBe('4');
+    expect(url.searchParams.get('limit')).toBe('45');
   });
 });
