@@ -20,6 +20,7 @@ import { LibsqlListingRepository } from './infrastructure/persistence/libsql/Lib
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
 import { LibsqlUserProfileRepository } from './infrastructure/persistence/libsql/LibsqlUserProfileRepository.js';
 import { CatalogModelResolver } from './application/services/CatalogModelResolver.js';
+import { saveForReview } from './reviewQueue.js';
 import { createRenderedHtmlFetcher } from './infrastructure/browser/createRenderedHtmlFetcher.js';
 import type { BrowserManager } from './infrastructure/sources/shared/BrowserManager.js';
 import { PlaywrightBrowserManager } from './infrastructure/sources/shared/PlaywrightBrowserManager.js';
@@ -76,7 +77,12 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
   // scan iterates the enabled models and stores every match; budget/year
   // filtering is per-user and applied on the dashboard, not here.
   const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
-  const db = await openDatabase(resolveDatabaseConfig(env));
+  const dbConfig = resolveDatabaseConfig(env);
+  // Surface which database this run writes to. A local `file:` target in a
+  // scheduled/CI run means results won't persist — the #1 cause of "the report
+  // says N new but the site shows nothing".
+  logger.info({ database: describeDbTarget(dbConfig.url) }, 'database target');
+  const db = await openDatabase(dbConfig);
   const modelRepo = new LibsqlModelRepository(db);
   await modelRepo.seedIfEmpty(config.models);
   const enabledModels = await modelRepo.listEnabledCriteria();
@@ -136,6 +142,9 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
           // insertIfAbsent, never upsert: re-discovering an already-calibrated
           // model must not reset its price range back to the provisional one.
           modelSink: (model) => modelRepo.insertIfAbsent(model),
+          // Known-brand listings with no catalog model go to the admin review
+          // queue instead of being dropped.
+          reviewSink: (listing, brand) => saveForReview(db, listing, brand),
           ...(options.discovery.maxPages === undefined
             ? {}
             : { discoveryMaxPages: options.discovery.maxPages }),
@@ -166,6 +175,22 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
 // of truth now lives in the Database module so the web/auth layer can open a
 // client without importing this Playwright-heavy composition root.
 export { resolveDatabaseConfig };
+
+/**
+ * A log-safe description of the database target: the host for a remote Turso
+ * URL, or a "local file — not persisted in CI" note for a `file:`/memory URL.
+ * Never includes the auth token (it lives in a separate config field, not the URL).
+ */
+function describeDbTarget(url: string): string {
+  if (url.startsWith('file:') || url === ':memory:') {
+    return `LOCAL FILE (${url}) — not persisted in CI`;
+  }
+  try {
+    return new URL(url).host;
+  } catch {
+    return 'remote';
+  }
+}
 
 /** Splits a `SCRAPE_SOURCES`-style csv into normalized ids, or undefined if empty. */
 function parseSourceList(csv: string | undefined): string[] | undefined {

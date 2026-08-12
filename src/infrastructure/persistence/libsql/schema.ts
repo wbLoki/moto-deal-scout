@@ -48,6 +48,29 @@ export const MIGRATIONS: readonly string[] = [
     crawled_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     PRIMARY KEY (source_id, external_id)
   )`,
+  // Admin review queue: listings that name a brand we know but no model we have,
+  // so they're dropped by discovery instead of shown to users. An admin adds the
+  // model to the catalog (or picks an existing one) and promotes the row into
+  // `listings`. `status`: 'pending' | 'dismissed' (promoted rows are deleted).
+  `CREATE TABLE IF NOT EXISTS review_listings (
+    source_id       TEXT    NOT NULL,
+    external_id     TEXT    NOT NULL,
+    url             TEXT    NOT NULL,
+    title           TEXT    NOT NULL,
+    price_mad       REAL    NOT NULL,
+    year            INTEGER,
+    mileage_km      INTEGER,
+    displacement_cc INTEGER,
+    city            TEXT    NOT NULL,
+    image_url       TEXT,
+    posted_at       TEXT,
+    detected_brand  TEXT,
+    status          TEXT    NOT NULL DEFAULT 'pending',
+    created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at      TEXT,
+    PRIMARY KEY (source_id, external_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_review_listings_status ON review_listings (status, created_at)`,
   // Deprecated: the pre-multi-user global range. Kept so existing databases
   // migrate cleanly; per-user ranges now live in user_search_ranges.
   `CREATE TABLE IF NOT EXISTS search_settings (

@@ -23,6 +23,11 @@ export interface RunOptions {
 }
 
 export async function runScan(options: RunOptions = {}): Promise<DailyReport> {
+  // The daily scan now persists a full catalog crawl, so protect it the same way
+  // discovery is: without DATABASE_URL in CI it would write to a throwaway local
+  // SQLite that's discarded when the job ends — the run "succeeds" and even sends
+  // its Discord report, but nothing reaches the real database. Fail loudly.
+  assertRemoteDatabaseInCi();
   await calibrateModels();
   const report = await scanAndNotify(options);
   await runUserAlerts(report);

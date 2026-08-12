@@ -40,6 +40,12 @@ export interface DealScannerDeps {
    * Returns true when the model was newly created.
    */
   readonly modelSink?: (model: StoredModel) => Promise<boolean>;
+  /**
+   * Sends a dropped listing to the admin review queue. Called during discovery
+   * for a listing that names a known brand but resolves to no catalog model —
+   * likely a real bike whose model we're missing. Absent = don't queue.
+   */
+  readonly reviewSink?: (listing: Listing, brand: string) => Promise<void>;
   /** How deep the discovery crawl paginates. Ignored by {@link DealScanner.scan}. */
   readonly discoveryMaxPages?: number;
   /**
@@ -65,6 +71,9 @@ export class DealScanner {
   private readonly scorer: ListingScorer;
   private readonly resolver: CatalogModelResolver | undefined;
   private readonly modelSink: ((model: StoredModel) => Promise<boolean>) | undefined;
+  private readonly reviewSink:
+    | ((listing: Listing, brand: string) => Promise<void>)
+    | undefined;
   private readonly discoveryMaxPages: number | undefined;
   private readonly incremental: boolean;
 
@@ -77,6 +86,7 @@ export class DealScanner {
     this.scorer = deps.scorer ?? new ListingScorer();
     this.resolver = deps.resolver;
     this.modelSink = deps.modelSink;
+    this.reviewSink = deps.reviewSink;
     this.discoveryMaxPages = deps.discoveryMaxPages;
     this.incremental = deps.incremental ?? true;
   }
@@ -194,6 +204,13 @@ export class DealScanner {
           const match = resolver.resolve(listing.title);
           if (!match || match.confidence < MIN_DISCOVERY_CONFIDENCE) {
             unmatched += 1;
+            // A dropped listing that still names a maker we know is probably a
+            // real bike whose model is missing from the catalog — queue it for
+            // an admin to add the model and promote, rather than losing it.
+            if (this.reviewSink) {
+              const brand = resolver.knownBrandIn(listing.title);
+              if (brand) await this.reviewSink(listing, brand);
+            }
             continue;
           }
 

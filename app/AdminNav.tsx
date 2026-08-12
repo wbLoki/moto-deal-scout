@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 const TABS = [
   { id: 'models', label: 'Models', href: '/admin' },
+  { id: 'review', label: 'Review', href: '/admin/review' },
   { id: 'listings', label: 'Scan log', href: '/admin/listings' },
   { id: 'users', label: 'Users', href: '/admin/users' },
   { id: 'analytics', label: 'Analytics', href: '/admin/analytics' },
@@ -12,7 +13,7 @@ const TABS = [
 export function AdminNav({
   active,
 }: {
-  active: 'models' | 'listings' | 'users' | 'analytics' | 'price-review';
+  active: 'models' | 'review' | 'listings' | 'users' | 'analytics' | 'price-review';
 }) {
   return (
     <nav className="admin-nav">
