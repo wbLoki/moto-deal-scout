@@ -23,13 +23,15 @@ function contentPayload(url: string, options: RenderHtmlOptions = {}): Record<st
   const payload: Record<string, unknown> = {
     url,
     gotoOptions: {
-      waitUntil: 'domcontentloaded',
+      waitUntil: options.waitUntil ?? 'domcontentloaded',
       timeout,
     },
   };
   if (options.waitForSelector) {
     payload['waitForSelector'] = { selector: options.waitForSelector, timeout };
   }
+  if (options.userAgent) payload['userAgent'] = options.userAgent;
+  if (options.extraHeaders) payload['setExtraHTTPHeaders'] = options.extraHeaders;
   return payload;
 }
 

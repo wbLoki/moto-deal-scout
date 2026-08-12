@@ -4,6 +4,17 @@ export interface RenderHtmlOptions {
   readonly waitForSelector?: string;
   /** Navigation / wait timeout in ms (default 30_000). */
   readonly timeoutMs?: number;
+  /**
+   * Navigation completion signal. `domcontentloaded` is fastest but may miss
+   * client-rendered content; `networkidle2` waits for the page's JS/XHRs to
+   * settle, which also gives a JS bot-check (Datadome) time to run. Default
+   * `domcontentloaded`.
+   */
+  readonly waitUntil?: 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2';
+  /** Override the browser User-Agent — a real Chrome UA is less bot-flagged. */
+  readonly userAgent?: string;
+  /** Extra request headers (e.g. `Accept-Language`) sent with every request. */
+  readonly extraHeaders?: Record<string, string>;
 }
 
 /**
