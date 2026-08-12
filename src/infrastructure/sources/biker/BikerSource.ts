@@ -74,6 +74,7 @@ export class BikerSource implements MarketplaceSource {
         maxPages,
         throttleMs: this.options.throttleMs,
         ...(query.postedAfter ? { postedAfter: query.postedAfter } : {}),
+        ...(query.seenBefore ? { seenBefore: query.seenBefore } : {}),
         fetchPage: (pageNumber) => this.scrapePage(page, buildBikerUrl(model, pageNumber)),
         onError: (err, pageNumber) =>
           this.logger.error({ err, model, pageNumber }, 'Biker.ma scrape failed'),
@@ -101,7 +102,7 @@ export class BikerSource implements MarketplaceSource {
         headers: { accept: 'application/json' },
       });
       if (!res.ok) return listing;
-      const data = (await res.json()) as { dateajout?: string; cylindre?: string | number };
+      const data = await res.json<{ dateajout?: string; cylindre?: string | number }>();
       const posted = data.dateajout ? new Date(data.dateajout) : undefined;
       const postedAt = posted && !Number.isNaN(posted.getTime()) ? posted : listing.postedAt;
       // Sellers occasionally enter nonsense ("2", "99999") — keep only plausible

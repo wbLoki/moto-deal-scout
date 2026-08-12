@@ -31,6 +31,17 @@ export interface CrawlOptions {
    * a full crawl (first run, or a forced re-crawl).
    */
   readonly postedAfter?: Date;
+  /**
+   * "Do we already have this listing?" check. Lets a source whose cards carry
+   * no post date — Biker — stop paginating once it reaches a page that is
+   * *entirely* already stored: the marketplace is newest-first, so everything
+   * below a fully-seen page is older and already ours. This is the date-less
+   * counterpart to {@link postedAfter}. It only decides *when to stop*, not
+   * which listings come back — already-seen listings on a fetched page are
+   * still returned, so price-drop detection keeps working. Undefined disables
+   * the check (first run, or a source that relies on postedAfter).
+   */
+  readonly seenBefore?: (listing: Listing) => Promise<boolean>;
 }
 
 /**
@@ -59,6 +70,13 @@ async function fetchWithRetries(
       return await opts.fetchPage(pageNumber);
     } catch (err) {
       opts.onError?.(err, pageNumber);
+      // Browser Rendering Free quota — do not burn retries; abort the crawl.
+      if (
+        err instanceof Error &&
+        (err.name === 'BrowserRenderingQuotaError' || /quota exceeded|time limit/i.test(err.message))
+      ) {
+        throw err;
+      }
       // Back off before retrying; a stalled page is often busy, not broken.
       if (attempt < attempts) await delay(opts.throttleMs);
     }
@@ -95,6 +113,15 @@ export async function crawlPages(opts: CrawlOptions): Promise<Listing[]> {
       : fresh;
     collected.push(...recent);
     if (opts.postedAfter && recent.length === 0) break;
+
+    // Date-less sources (Biker): stop once a whole page is already stored —
+    // newest-first means nothing new remains below it. Checked on `fresh` (the
+    // deduped page), and only after `recent` is collected, so already-seen
+    // listings are still returned for price-drop detection.
+    if (opts.seenBefore) {
+      const alreadyStored = await Promise.all(fresh.map((l) => opts.seenBefore!(l)));
+      if (alreadyStored.every(Boolean)) break;
+    }
 
     if (pageNumber < opts.maxPages) await delay(opts.throttleMs);
   }

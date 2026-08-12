@@ -1,44 +1,40 @@
 import type { Logger } from 'pino';
-import type { Page } from 'playwright-core';
 import type { Listing } from '../../../domain/entities/Listing.js';
 import type {
   MarketplaceSource,
   SourceQuery,
 } from '../../../domain/interfaces/MarketplaceSource.js';
-import type { BrowserManager } from '../shared/BrowserManager.js';
-import { crawlPages } from '../shared/crawl.js';
 import {
-  parseNumber,
-  parseRelativeFrenchDate,
-  parseYear,
-  slugifyForAvito,
-} from '../shared/textParsing.js';
+  isBrowserRenderingQuotaError,
+  type RenderedHtmlFetcher,
+} from '../../browser/RenderedHtmlFetcher.js';
+import { crawlPages } from '../shared/crawl.js';
+import { slugifyForAvito } from '../shared/textParsing.js';
+import { parseAvitoSearchCards } from './parseAvitoSearchCards.js';
 
 const BASE_URL = 'https://www.avito.ma';
 const DEFAULT_MAX_PAGES = 3;
+
+/** A current desktop Chrome UA — the default headless UA is an easy bot tell. */
+const AVITO_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
+/** Headers a real fr-MA browser sends; helps a bot-check treat us as human. */
+const AVITO_HEADERS: Record<string, string> = {
+  'Accept-Language': 'fr-FR,fr;q=0.9,ar;q=0.8,en;q=0.7',
+  Accept:
+    'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+};
+
+/** Markers that identify Datadome's bot-wall / CAPTCHA challenge in the HTML. */
+const DATADOME_MARKERS =
+  /datadome|captcha-delivery|geo\.captcha-delivery|interstitial|dd_cookie|verify you are (a )?human|access denied/i;
 /**
  * Avito's motorcycle category. It occupies the same path slot as a search
  * slug, so browsing the whole category and searching for one model differ
  * only in what goes here. Verified live: ~1400 listings, 38 cards per page.
  */
 const CATEGORY_SLUG = 'motos_et_scooters';
-/**
- * Avito's listing cards are styled-components with hashed class names that
- * churn across deploys, so this is the one selector we depend on: it's a
- * `data-testid` prefix, which is far more stable than `.sc-xxxx-y`.
- */
-const CARD_SELECTOR = 'a[data-testid^="ad-card-v2-"]';
-
-interface RawCard {
-  href: string;
-  title: string;
-  year: string;
-  mileage: string;
-  image: string;
-  price: string;
-  city: string;
-  relativeDate: string;
-}
 
 export interface AvitoSourceOptions {
   readonly throttleMs: number;
@@ -51,19 +47,16 @@ export function buildAvitoUrl(slug: string, page: number): string {
 }
 
 /**
- * Scrapes Avito.ma's "Motos & scooters" section. With a model it uses
- * Avito's own search box (`/fr/maroc/{slug}`), which does real full-text
- * matching, so we let it do the heavy lifting and treat the
- * {@link FuzzyModelMatcher} downstream as a confirmation pass rather than
- * the primary filter. Without a model it browses the whole category instead
- * — that's the discovery crawl.
+ * Scrapes Avito.ma's "Motos & scooters" section via rendered HTML (Cloudflare
+ * Browser Rendering on GHA/Workers, or Playwright locally). With a model it
+ * uses Avito's search slug; without a model it browses the whole category.
  */
 export class AvitoSource implements MarketplaceSource {
   readonly id = 'avito' as const;
   readonly name = 'Avito.ma';
 
   constructor(
-    private readonly browserManager: BrowserManager,
+    private readonly htmlFetcher: RenderedHtmlFetcher,
     private readonly options: AvitoSourceOptions,
     private readonly logger: Logger,
   ) {}
@@ -72,90 +65,68 @@ export class AvitoSource implements MarketplaceSource {
     const slug = query.criteria
       ? slugifyForAvito(`${query.criteria.brand} ${query.criteria.model}`)
       : CATEGORY_SLUG;
-    const maxPages = query.maxPages ?? this.options.maxPages ?? DEFAULT_MAX_PAGES;
+    // `options.maxPages` (AVITO_MAX_PAGES) is a hard ceiling, not just a default:
+    // Avito goes through rate-limited Cloudflare Browser Rendering (Free plan),
+    // so a deep discovery crawl (query.maxPages of 20-40) must not run 40 browser
+    // requests here. When the cap is unset (local Playwright), the request wins.
+    const requested = query.maxPages ?? this.options.maxPages ?? DEFAULT_MAX_PAGES;
+    const maxPages =
+      this.options.maxPages !== undefined
+        ? Math.min(requested, this.options.maxPages)
+        : requested;
 
-    const page = await this.browserManager.newPage();
-    try {
-      return await crawlPages({
-        maxPages,
-        throttleMs: this.options.throttleMs,
-        ...(query.postedAfter ? { postedAfter: query.postedAfter } : {}),
-        fetchPage: (pageNumber) => this.scrapePage(page, buildAvitoUrl(slug, pageNumber)),
-        onError: (err, pageNumber) =>
-          this.logger.error({ err, slug, pageNumber }, 'Avito scrape failed'),
-      });
-    } finally {
-      await page.close();
-    }
+    return crawlPages({
+      maxPages,
+      throttleMs: this.options.throttleMs,
+      ...(query.postedAfter ? { postedAfter: query.postedAfter } : {}),
+      ...(query.seenBefore ? { seenBefore: query.seenBefore } : {}),
+      fetchPage: (pageNumber) => this.scrapePage(buildAvitoUrl(slug, pageNumber)),
+      onError: (err, pageNumber) =>
+        this.logger.error({ err, slug, pageNumber }, 'Avito scrape failed'),
+    });
   }
 
   dispose(): Promise<void> {
-    // Browser lifecycle is owned by the shared PlaywrightBrowserManager.
     return Promise.resolve();
   }
 
-  private async scrapePage(page: Page, url: string): Promise<Listing[]> {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-    await page.waitForSelector(CARD_SELECTOR, { timeout: 10_000 }).catch(() => undefined);
-
-    // Note: this callback is serialized and run inside the page, so it must
-    // not reference any outer closures or named helper functions — under
-    // tsx/esbuild's dev transform those get rewritten with a `__name(...)`
-    // wrapper call that doesn't exist in the page's isolated JS context.
-    const raw = await page.$$eval(CARD_SELECTOR, (cards): RawCard[] =>
-      cards.map((card) => {
-        const href = card.getAttribute('href') ?? '';
-        const title = card.querySelector('h3')?.textContent?.trim() ?? '';
-        const year = card.querySelector('span[title="Année-Modèle"]')?.textContent?.trim() ?? '';
-        const mileage = card.querySelector('span[title="Kilométrage"]')?.textContent?.trim() ?? '';
-        const image = card.querySelector('img')?.getAttribute('src') ?? '';
-
-        // Price is two adjacent spans: an amount, then a literal "DH" unit.
-        // The first such pair is the sale price; a second pair further down
-        // ("518" + "DH/mois") is a financing estimate we don't want.
-        const spans = Array.from(card.querySelectorAll('span'));
-        let price = '';
-        for (let i = 0; i < spans.length; i++) {
-          const t = spans[i]?.textContent?.trim() ?? '';
-          if (/^[\d][\d\s.,]*$/.test(t) && spans[i + 1]?.textContent?.trim() === 'DH') {
-            price = t;
-            break;
-          }
-        }
-
-        // City has no stable attribute, but it's always the text immediately
-        // before the "il y a ..." relative-date span, so anchor on that instead.
-        const spanTexts = spans.map((s) => s.textContent?.trim() ?? '').filter(Boolean);
-        const dateIndex = spanTexts.findIndex((t) => /^(il y a|aujourd'hui|hier)/i.test(t));
-        const city = dateIndex > 0 ? (spanTexts[dateIndex - 1] ?? '') : '';
-        const relativeDate = dateIndex >= 0 ? (spanTexts[dateIndex] ?? '') : '';
-
-        return { href, title, year, mileage, image, price, city, relativeDate };
-      }),
-    );
-
-    return raw
-      .filter((r) => r.href && r.title && parseNumber(r.price) !== undefined)
-      .map((r) => this.toListing(r));
+  private async scrapePage(url: string): Promise<Listing[]> {
+    const html = await this.fetchAvitoHtml(url);
+    const cards = parseAvitoSearchCards(html);
+    if (cards.length === 0) {
+      // Zero cards on a 200 means either an empty page past the last one, or —
+      // the reason to log — Avito's Datadome bot-wall served a challenge instead
+      // of listings. The snippet makes that unambiguous in the run logs.
+      const likelyBlocked = DATADOME_MARKERS.test(html);
+      this.logger.warn(
+        { url, htmlLength: html.length, likelyBlocked, snippet: html.slice(0, 400) },
+        likelyBlocked ? 'Avito appears bot-blocked (Datadome challenge)' : 'Avito returned no cards',
+      );
+    }
+    return cards;
   }
 
-  private toListing(raw: RawCard): Listing {
-    const externalId = /_(\d+)\.htm$/.exec(raw.href)?.[1] ?? raw.href;
-    return {
-      sourceId: this.id,
-      externalId,
-      url: raw.href,
-      title: raw.title,
-      description: undefined,
-      // Presence of a parseable price was already checked by the filter above.
-      priceMAD: parseNumber(raw.price)!,
-      year: parseYear(raw.year),
-      mileageKm: parseNumber(raw.mileage),
-      displacementCc: undefined,
-      city: raw.city || 'Maroc',
-      imageUrl: raw.image || undefined,
-      postedAt: parseRelativeFrenchDate(raw.relativeDate),
-      scrapedAt: new Date(),
-    };
+  /**
+   * Fetches Avito's rendered HTML, mirroring the local Playwright behaviour that
+   * already works: no *fatal* selector wait (the Browser Rendering REST API 422s
+   * when a `waitForSelector` times out, unlike Playwright's soft wait). Instead
+   * we wait for the network to settle so the client-rendered cards — and any
+   * Datadome JS check — have time to run, sending a real Chrome UA + French
+   * headers to look less like a bot. If that hangs on a challenge page (never
+   * idle), we fall back to the initial HTML so we still parse and can diagnose.
+   */
+  private async fetchAvitoHtml(url: string): Promise<string> {
+    const common = {
+      timeoutMs: 30_000,
+      userAgent: AVITO_USER_AGENT,
+      extraHeaders: AVITO_HEADERS,
+    } as const;
+    try {
+      return await this.htmlFetcher.fetchRenderedHtml(url, { ...common, waitUntil: 'networkidle2' });
+    } catch (err) {
+      if (isBrowserRenderingQuotaError(err)) throw err;
+      this.logger.warn({ err, url }, 'Avito networkidle fetch failed; retrying for raw HTML');
+      return this.htmlFetcher.fetchRenderedHtml(url, { ...common, waitUntil: 'domcontentloaded' });
+    }
   }
 }

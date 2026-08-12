@@ -117,6 +117,6 @@ export async function fetchBikerListing(url: string): Promise<BikerListingResult
     throw new BikerListingFetchError(`Biker.ma returned HTTP ${res.status}.`);
   }
 
-  const data = (await res.json()) as BikerDetail;
+  const data = await res.json<BikerDetail>();
   return listingFromBikerDetail(data, parsed.url);
 }

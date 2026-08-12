@@ -11,6 +11,10 @@ import { evaluateBike, type BikeEvaluation, type BikeInput } from './application
 import type { Listing } from './domain/entities/Listing.js';
 import { createAiExtractor } from './infrastructure/ai/aiExtractor.js';
 import {
+  AvitoListingFetchError,
+  fetchAvitoListing,
+} from './infrastructure/sources/avito/fetchAvitoListing.js';
+import {
   BikerListingFetchError,
   fetchBikerListing,
 } from './infrastructure/sources/biker/fetchBikerListing.js';
@@ -20,7 +24,7 @@ import { LibsqlModelRepository } from './infrastructure/persistence/libsql/Libsq
 
 export type { BikeEvaluation, BikeInput } from './application/services/evaluateBike.js';
 
-/** Marketplace URL could not be resolved (unknown host, missing scrape, API fail, …). */
+/** Marketplace URL could not be resolved (unknown host, scrape fail, …). */
 export class ListingUrlScanError extends Error {
   override readonly name = 'ListingUrlScanError';
   constructor(message: string) {
@@ -91,11 +95,7 @@ function bikeInputFromListing(
   };
 }
 
-/**
- * Avito (and any already-scraped) links resolve from our DB — Playwright cannot
- * run on Cloudflare Workers, and importing it breaks the OpenNext esbuild step
- * (`chromium-bidi` unresolved). Biker still uses their JSON API (no browser).
- */
+/** Already-scraped Avito/Biker rows in Turso (fallback when live fetch fails). */
 async function bikeInputFromStoredUrl(ref: ParsedListingUrl): Promise<BikeInput | undefined> {
   const env = loadEnv();
   const db = await openDatabase(resolveDatabaseConfig(env));
@@ -115,7 +115,11 @@ async function bikeInputFromStoredUrl(ref: ParsedListingUrl): Promise<BikeInput 
   }
 }
 
-/** Opens the marketplace page / API (or our DB) and builds a {@link BikeInput} with price. */
+/**
+ * Opens the marketplace page / API (or our DB) and builds a {@link BikeInput}.
+ * Avito: Cloudflare Browser Rendering first, then DB fallback.
+ * Biker: public JSON API.
+ */
 async function scanListingUrl(url: string): Promise<BikeInput> {
   const ref = extractListingUrl(url);
   if (!ref) {
@@ -128,14 +132,20 @@ async function scanListingUrl(url: string): Promise<BikeInput> {
       return bikeInputFromListing(listing, { brand, model });
     }
 
-    const fromDb = await bikeInputFromStoredUrl(ref);
-    if (fromDb) return fromDb;
-    throw new ListingUrlScanError(
-      'We haven’t scraped that Avito listing yet. Paste the ad text instead, or try again after the daily scan.',
-    );
+    try {
+      const listing = await fetchAvitoListing(ref.url);
+      return bikeInputFromListing(listing);
+    } catch (liveErr) {
+      const fromDb = await bikeInputFromStoredUrl(ref);
+      if (fromDb) return fromDb;
+      if (liveErr instanceof AvitoListingFetchError) {
+        throw new ListingUrlScanError(liveErr.message);
+      }
+      throw liveErr;
+    }
   } catch (err) {
     if (err instanceof ListingUrlScanError) throw err;
-    if (err instanceof BikerListingFetchError) {
+    if (err instanceof BikerListingFetchError || err instanceof AvitoListingFetchError) {
       throw new ListingUrlScanError(err.message);
     }
     throw new ListingUrlScanError(
@@ -148,7 +158,7 @@ async function scanListingUrl(url: string): Promise<BikeInput> {
  * Parses a pasted ad or marketplace URL into structured fields, then rates it.
  *
  * - Biker URL → live JSON API scan, then evaluate.
- * - Avito URL → lookup in our scraped listings DB (no Playwright on Workers), then evaluate.
+ * - Avito URL → Browser Rendering (Workers binding), DB fallback, then evaluate.
  * - Free-text ad → AI extraction, then evaluate.
  */
 export async function getPastedListingEvaluation(text: string): Promise<PastedListingResult> {

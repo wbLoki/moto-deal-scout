@@ -118,4 +118,70 @@ describe('crawlPages', () => {
       expect(out.map((l) => l.externalId)).toEqual(['a', 'b', 'c']);
     });
   });
+
+  describe('seenBefore stop (date-less sources, e.g. Biker)', () => {
+    /** Marks the given external ids as already stored. */
+    const seenSet = (...ids: string[]) => {
+      const stored = new Set(ids);
+      return (l: ReturnType<typeof makeListing>) => Promise.resolve(stored.has(l.externalId));
+    };
+
+    it('stops once a whole page is already stored', async () => {
+      // Biker cards carry no date, so postedAfter can't trim them; the page
+      // being entirely already-seen is the "nothing new below" signal.
+      const fetchPage = vi
+        .fn<(n: number) => Promise<ReturnType<typeof page>>>()
+        .mockResolvedValueOnce(page('new1', 'seen1'))
+        .mockResolvedValueOnce(page('seen2', 'seen3'))
+        .mockResolvedValue(page('seen4'));
+
+      const out = await crawlPages({
+        maxPages: 10,
+        throttleMs: 0,
+        fetchPage,
+        seenBefore: seenSet('seen1', 'seen2', 'seen3', 'seen4'),
+      });
+
+      // Page 1 has a fresh id so the crawl continues; page 2 is all-seen and stops it.
+      expect(out.map((l) => l.externalId)).toEqual(['new1', 'seen1', 'seen2', 'seen3']);
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps paginating while a page still has an unseen listing', async () => {
+      const fetchPage = vi
+        .fn<(n: number) => Promise<ReturnType<typeof page>>>()
+        .mockResolvedValueOnce(page('a'))
+        .mockResolvedValueOnce(page('b'))
+        .mockResolvedValueOnce(page('seen'))
+        .mockResolvedValue([]);
+
+      const out = await crawlPages({
+        maxPages: 10,
+        throttleMs: 0,
+        fetchPage,
+        seenBefore: seenSet('seen'),
+      });
+
+      // 'a' and 'b' are new; page 3 is all-seen → stop.
+      expect(out.map((l) => l.externalId)).toEqual(['a', 'b', 'seen']);
+      expect(fetchPage).toHaveBeenCalledTimes(3);
+    });
+
+    it('still returns already-seen listings (so price-drop detection sees them)', async () => {
+      const fetchPage = vi
+        .fn<(n: number) => Promise<ReturnType<typeof page>>>()
+        .mockResolvedValueOnce(page('seen1', 'new1'))
+        .mockResolvedValue(page('seen1', 'new1'));
+
+      const out = await crawlPages({
+        maxPages: 3,
+        throttleMs: 0,
+        fetchPage,
+        seenBefore: seenSet('seen1'),
+      });
+
+      // The already-seen 'seen1' is returned, not filtered out.
+      expect(out.map((l) => l.externalId)).toContain('seen1');
+    });
+  });
 });

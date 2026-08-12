@@ -167,6 +167,31 @@ export class LibsqlListingRepository implements ListingRepository {
     return result.rows.length > 0;
   }
 
+  async crawledExternalIds(sourceId: MarketplaceId): Promise<Set<string>> {
+    const result = await this.client.execute({
+      sql: 'SELECT external_id FROM crawled_listings WHERE source_id = ?',
+      args: [sourceId],
+    });
+    return new Set(
+      (result.rows as unknown as { external_id: string }[]).map((r) => r.external_id),
+    );
+  }
+
+  async recordCrawled(sourceId: MarketplaceId, externalIds: readonly string[]): Promise<void> {
+    if (externalIds.length === 0) return;
+    // De-dupe first so one batch can't insert the same PK twice.
+    const unique = [...new Set(externalIds)];
+    await this.client.batch(
+      unique.map((externalId) => ({
+        sql: `INSERT INTO crawled_listings (source_id, external_id) VALUES (?, ?)
+              ON CONFLICT (source_id, external_id)
+              DO UPDATE SET crawled_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+        args: [sourceId, externalId],
+      })),
+      'write',
+    );
+  }
+
   async lastScrapedAt(sourceId: MarketplaceId): Promise<Date | undefined> {
     const result = await this.client.execute({
       sql: 'SELECT MAX(scraped_at) AS last FROM listings WHERE source_id = ?',

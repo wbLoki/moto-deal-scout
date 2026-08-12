@@ -40,6 +40,12 @@ export interface DealScannerDeps {
    * Returns true when the model was newly created.
    */
   readonly modelSink?: (model: StoredModel) => Promise<boolean>;
+  /**
+   * Sends a dropped listing to the admin review queue. Called during discovery
+   * for a listing that names a known brand but resolves to no catalog model —
+   * likely a real bike whose model we're missing. Absent = don't queue.
+   */
+  readonly reviewSink?: (listing: Listing, brand: string) => Promise<void>;
   /** How deep the discovery crawl paginates. Ignored by {@link DealScanner.scan}. */
   readonly discoveryMaxPages?: number;
   /**
@@ -65,6 +71,9 @@ export class DealScanner {
   private readonly scorer: ListingScorer;
   private readonly resolver: CatalogModelResolver | undefined;
   private readonly modelSink: ((model: StoredModel) => Promise<boolean>) | undefined;
+  private readonly reviewSink:
+    | ((listing: Listing, brand: string) => Promise<void>)
+    | undefined;
   private readonly discoveryMaxPages: number | undefined;
   private readonly incremental: boolean;
 
@@ -77,6 +86,7 @@ export class DealScanner {
     this.scorer = deps.scorer ?? new ListingScorer();
     this.resolver = deps.resolver;
     this.modelSink = deps.modelSink;
+    this.reviewSink = deps.reviewSink;
     this.discoveryMaxPages = deps.discoveryMaxPages;
     this.incremental = deps.incremental ?? true;
   }
@@ -84,6 +94,30 @@ export class DealScanner {
   /** The incremental watermark for a source, or undefined for a full crawl. */
   private async watermarkFor(source: MarketplaceSource): Promise<Date | undefined> {
     return this.incremental ? this.repository.lastScrapedAt(source.id) : undefined;
+  }
+
+  /**
+   * The crawl ledger for a source: a `seenBefore` predicate that stops a
+   * date-less crawl (Biker) once it reaches an already-crawled page, plus a
+   * `record` to persist this run's crawled ids afterward. The predicate is
+   * backed by every id crawled in *previous* runs (loaded once), so a fresh
+   * database never trips it and a re-crawl stops as soon as a whole page is old.
+   * A forced full crawl (`discover --full`, `incremental` off) disables both.
+   */
+  private async crawlLedgerFor(source: MarketplaceSource): Promise<{
+    seenBefore?: (listing: Listing) => Promise<boolean>;
+    record: (listings: readonly Listing[]) => Promise<void>;
+  }> {
+    if (!this.incremental) return { record: () => Promise.resolve() };
+    const crawled = await this.repository.crawledExternalIds(source.id);
+    return {
+      seenBefore: (listing) => Promise.resolve(crawled.has(listing.externalId)),
+      record: (listings) =>
+        this.repository.recordCrawled(
+          source.id,
+          listings.map((l) => l.externalId),
+        ),
+    };
   }
 
   /** Price drops found on already-seen listings during the current scan. */
@@ -156,17 +190,27 @@ export class DealScanner {
 
       try {
         const postedAfter = await this.watermarkFor(source);
+        const ledger = await this.crawlLedgerFor(source);
         const query: SourceQuery = {
           ...(this.discoveryMaxPages === undefined ? {} : { maxPages: this.discoveryMaxPages }),
           ...(postedAfter ? { postedAfter } : {}),
+          ...(ledger.seenBefore ? { seenBefore: ledger.seenBefore } : {}),
         };
         const listings = await source.fetchListings(query);
+        await ledger.record(listings);
         listingsFound = listings.length;
 
         for (const listing of listings) {
           const match = resolver.resolve(listing.title);
           if (!match || match.confidence < MIN_DISCOVERY_CONFIDENCE) {
             unmatched += 1;
+            // A dropped listing that still names a maker we know is probably a
+            // real bike whose model is missing from the catalog — queue it for
+            // an admin to add the model and promote, rather than losing it.
+            if (this.reviewSink) {
+              const brand = resolver.knownBrandIn(listing.title);
+              if (brand) await this.reviewSink(listing, brand);
+            }
             continue;
           }
 
@@ -233,11 +277,14 @@ export class DealScanner {
 
     try {
       const postedAfter = await this.watermarkFor(source);
+      const ledger = await this.crawlLedgerFor(source);
       for (const model of this.criteria.models) {
         const listings = await source.fetchListings({
           criteria: model,
           ...(postedAfter ? { postedAfter } : {}),
+          ...(ledger.seenBefore ? { seenBefore: ledger.seenBefore } : {}),
         });
+        await ledger.record(listings);
         listingsFound += listings.length;
 
         for (const listing of listings) {

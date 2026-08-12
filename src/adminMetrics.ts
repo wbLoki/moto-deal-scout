@@ -147,6 +147,160 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
   }
 }
 
+export interface ScannedListing {
+  readonly sourceId: string;
+  readonly externalId: string;
+  readonly url: string;
+  readonly title: string;
+  readonly priceMAD: number;
+  readonly year: number | null;
+  readonly mileageKm: number | null;
+  readonly city: string;
+  readonly modelId: string;
+  readonly scoreTotal: number;
+  readonly isGoodDeal: boolean;
+  /** Marketplace publish date (seller's ad date). Often years old on Biker. */
+  readonly postedAt: string | null;
+  /** When our crawler last saw it. */
+  readonly scrapedAt: string;
+  /** When we first stored it (drives the "new" count). */
+  readonly firstSeenAt: string;
+}
+
+export interface ScannedListingsPage {
+  readonly rows: readonly ScannedListing[];
+  /** Total rows matching the filter (across all pages). */
+  readonly total: number;
+  readonly sources: readonly string[];
+  /** 1-based page number returned. */
+  readonly page: number;
+  readonly pageSize: number;
+  /** Total pages for the current filter (at least 1). */
+  readonly totalPages: number;
+}
+
+/** Which timestamp the date filter applies to. */
+export type ScannedDateField = 'scraped_at' | 'posted_at' | 'created_at';
+
+const DATE_FIELDS: readonly ScannedDateField[] = ['scraped_at', 'posted_at', 'created_at'];
+
+/** Coerces arbitrary input to a whitelisted column (guards the un-parameterizable field name). */
+export function toScannedDateField(value: string | undefined): ScannedDateField {
+  return DATE_FIELDS.includes(value as ScannedDateField)
+    ? (value as ScannedDateField)
+    : 'scraped_at';
+}
+
+export interface ScannedListingsQuery {
+  /** Restrict to one source id ('avito' | 'biker'); undefined = all. */
+  readonly source?: string;
+  /** Case-insensitive substring match on the title; undefined = no filter. */
+  readonly search?: string;
+  /** Which date column the from/to bounds apply to. Defaults to scraped_at. */
+  readonly dateField?: ScannedDateField;
+  /** Inclusive lower bound as a YYYY-MM-DD day; undefined = no lower bound. */
+  readonly from?: string;
+  /** Inclusive upper bound as a YYYY-MM-DD day; undefined = no upper bound. */
+  readonly to?: string;
+  /** 1-based page number. Defaults to 1. */
+  readonly page?: number;
+  /** Rows per page. Defaults to 50, capped at 200. */
+  readonly pageSize?: number;
+}
+
+interface ScannedRow {
+  source_id: string;
+  external_id: string;
+  url: string;
+  title: string;
+  price_mad: number;
+  year: number | null;
+  mileage_km: number | null;
+  city: string;
+  matched_model_id: string;
+  score_total: number;
+  is_good_deal: number;
+  posted_at: string | null;
+  scraped_at: string;
+  created_at: string;
+}
+
+/**
+ * The admin "scan log": every stored listing, newest-scraped first, with the
+ * three timestamps side by side (posted / scraped / first-seen) so it's obvious
+ * why an old-dated ad (e.g. a Biker bike posted in 2022 but still live) shows up.
+ */
+export async function listScannedListings(
+  query: ScannedListingsQuery = {},
+): Promise<ScannedListingsPage> {
+  const pageSize = Math.min(Math.max(query.pageSize ?? 50, 1), 200);
+  const where: string[] = [];
+  const args: unknown[] = [];
+  if (query.source) {
+    where.push('source_id = ?');
+    args.push(query.source);
+  }
+  if (query.search && query.search.trim()) {
+    where.push('LOWER(title) LIKE ?');
+    args.push(`%${query.search.trim().toLowerCase()}%`);
+  }
+  // Compare on the day portion so a YYYY-MM-DD bound is inclusive at both ends.
+  // The field is whitelisted (toScannedDateField), never user text, so it's safe
+  // to interpolate — bind values can't be used for a column name.
+  const dateField = toScannedDateField(query.dateField);
+  if (query.from) {
+    where.push(`substr(${dateField}, 1, 10) >= ?`);
+    args.push(query.from);
+  }
+  if (query.to) {
+    where.push(`substr(${dateField}, 1, 10) <= ?`);
+    args.push(query.to);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const db = await openDatabaseFromEnv();
+  try {
+    const total = await scalar(db, `SELECT COUNT(*) AS n FROM listings ${whereSql}`, args);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(Math.max(query.page ?? 1, 1), totalPages);
+    const offset = (page - 1) * pageSize;
+
+    const sourcesRes = await db.execute(
+      'SELECT DISTINCT source_id AS s FROM listings ORDER BY s',
+    );
+    const sources = (sourcesRes.rows as unknown as { s: string }[]).map((r) => r.s);
+
+    const result = await db.execute({
+      sql: `SELECT source_id, external_id, url, title, price_mad, year, mileage_km, city,
+                   matched_model_id, score_total, is_good_deal, posted_at, scraped_at, created_at
+              FROM listings ${whereSql}
+             ORDER BY scraped_at DESC, created_at DESC
+             LIMIT ? OFFSET ?`,
+      args: [...args, pageSize, offset] as never,
+    });
+    const rows = (result.rows as unknown as ScannedRow[]).map((r) => ({
+      sourceId: r.source_id,
+      externalId: r.external_id,
+      url: r.url,
+      title: r.title,
+      priceMAD: r.price_mad,
+      year: r.year,
+      mileageKm: r.mileage_km,
+      city: r.city,
+      modelId: r.matched_model_id,
+      scoreTotal: r.score_total,
+      isGoodDeal: r.is_good_deal === 1,
+      postedAt: r.posted_at,
+      scrapedAt: r.scraped_at,
+      firstSeenAt: r.created_at,
+    }));
+
+    return { rows, total, sources, page, pageSize, totalPages };
+  } finally {
+    db.close();
+  }
+}
+
 interface UserRow {
   id: string;
   email: string;

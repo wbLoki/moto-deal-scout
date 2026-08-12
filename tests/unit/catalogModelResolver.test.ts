@@ -105,4 +105,17 @@ describe('CatalogModelResolver', () => {
     const title = 'Yamaha MT-09 SP 2022';
     expect(resolver.resolve(title)?.id).toBe(resolver.resolve(title)?.id);
   });
+
+  describe('knownBrandIn', () => {
+    it('returns the catalog brand a title names, even with no matching model', () => {
+      // A real bike whose exact model isn't in the catalog — the review-queue case.
+      expect(resolver.knownBrandIn('YAMAHA Tracer 9 GT 2023')).toBe('Yamaha');
+      expect(resolver.knownBrandIn('Honda Hornet')).toBe('Honda');
+    });
+
+    it('returns undefined when no known maker is named (scooter/rental/junk)', () => {
+      expect(resolver.knownBrandIn('Vélo électrique pliable neuf')).toBeUndefined();
+      expect(resolver.knownBrandIn('Location scooter Tanger prix bas')).toBeUndefined();
+    });
+  });
 });

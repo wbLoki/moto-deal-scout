@@ -182,6 +182,22 @@ function namesAnotherMaker(tokens: readonly string[], needle: readonly string[])
  * the long tail never auto-creates messy near-duplicate models.
  */
 export class CatalogModelResolver {
+  /**
+   * The catalog brand named in a title, or undefined if none is. Used to sort
+   * dropped listings into the admin review queue: a title that names a maker we
+   * know (Yamaha, Honda, KTM…) but resolves to no model is very likely a real
+   * bike whose model is simply missing from the catalog — worth a human look —
+   * whereas one naming no known brand is almost always a scooter/rental/part.
+   */
+  knownBrandIn(title: string): string | undefined {
+    const tokens = tokenize(title);
+    for (const [, candidates] of BY_BRAND) {
+      const brandTokens = candidates[0]?.brandTokens;
+      if (brandTokens && containsRun(tokens, brandTokens)) return candidates[0]?.brand;
+    }
+    return undefined;
+  }
+
   resolve(title: string): CatalogMatch | undefined {
     const tokens = tokenize(title);
 

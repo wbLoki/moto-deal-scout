@@ -1,6 +1,7 @@
 import pino from 'pino';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DealScanner } from '../../src/application/services/DealScanner.js';
+import { CatalogModelResolver } from '../../src/application/services/CatalogModelResolver.js';
 import type { Listing, MarketplaceId } from '../../src/domain/entities/Listing.js';
 import type { ScoredListing } from '../../src/domain/entities/ScoredListing.js';
 import type { SearchCriteria } from '../../src/domain/entities/SearchCriteria.js';
@@ -49,8 +50,22 @@ class InMemoryRepository implements ListingRepository {
   private readonly seen = new Set<string>();
   private readonly prices = new Map<string, number>();
 
+  readonly crawled = new Set<string>();
+
   hasSeen(sourceId: MarketplaceId, externalId: string): Promise<boolean> {
     return Promise.resolve(this.seen.has(`${sourceId}:${externalId}`));
+  }
+
+  crawledExternalIds(sourceId: MarketplaceId): Promise<Set<string>> {
+    const ids = [...this.crawled]
+      .filter((k) => k.startsWith(`${sourceId}:`))
+      .map((k) => k.slice(sourceId.length + 1));
+    return Promise.resolve(new Set(ids));
+  }
+
+  recordCrawled(sourceId: MarketplaceId, externalIds: readonly string[]): Promise<void> {
+    for (const id of externalIds) this.crawled.add(`${sourceId}:${id}`);
+    return Promise.resolve();
   }
 
   lastScrapedAt(sourceId: MarketplaceId): Promise<Date | undefined> {
@@ -444,6 +459,34 @@ describe('DealScanner', () => {
     const bikerSummary = report.sources.find((s) => s.sourceId === 'biker');
     expect(bikerSummary?.error).toContain('boom');
     expect(report.newListingsSeen).toBe(1);
+  });
+
+  it('sends a known-brand, unknown-model listing to the review queue during discovery', async () => {
+    const criteria = buildCriteria();
+    // Names a maker we know (Yamaha) but a model that isn't in the catalog.
+    const unknownModel = makeListing({ externalId: 'r1', title: 'Yamaha Zwergpiraten 9000 2021' });
+    // A pure scooter/rental with no known brand must NOT be queued.
+    const junk = makeListing({ externalId: 'r2', title: 'Location scooter Tanger prix bas' });
+    const source = new FakeSource('biker', 'Biker.ma', [[unknownModel, junk]]);
+    const reviewSink = vi.fn<(listing: Listing, brand: string) => Promise<void>>().mockResolvedValue();
+
+    const scanner = new DealScanner({
+      sources: [source],
+      repository,
+      criteria,
+      logger: silentLogger,
+      resolver: new CatalogModelResolver(),
+      modelSink: () => Promise.resolve(true),
+      reviewSink,
+    });
+
+    await scanner.discover();
+
+    expect(reviewSink).toHaveBeenCalledTimes(1);
+    expect(reviewSink).toHaveBeenCalledWith(
+      expect.objectContaining({ externalId: 'r1' }),
+      'Yamaha',
+    );
   });
 
   it('disposeSources disposes every source', async () => {

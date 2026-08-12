@@ -5,6 +5,11 @@
   "compatibility_date": "2024-12-30",
   // Required by OpenNext so Node built-ins (buffer, crypto, etc.) work on Workers.
   "compatibility_flags": ["nodejs_compat"],
+  // Cloudflare Browser Rendering — compare Avito links (Quick Action /content).
+  // Free plan: ~10 browser-minutes/day shared with the GHA REST crawl.
+  "browser": {
+    "binding": "BROWSER"
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -35,6 +40,9 @@
   "env": {
     "preview": {
       "name": "motosnipe-preview",
+      "browser": {
+        "binding": "BROWSER"
+      },
       "routes": [
         { "pattern": "preview.motosnipe.com", "custom_domain": true }
       ],
