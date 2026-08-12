@@ -275,7 +275,7 @@ textarea:focus-visible,
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
   font-weight: 800;
   font-size: 1.1rem;
   letter-spacing: -0.02em;
@@ -283,8 +283,70 @@ textarea:focus-visible,
   text-decoration: none;
 }
 
-.brand svg {
-  color: var(--accent);
+.brand-name {
+  white-space: nowrap;
+}
+
+/* Stack light/dark PNGs in one cell; CSS picks the visible one (no JS). */
+.brand-logo {
+  display: inline-grid;
+  flex-shrink: 0;
+}
+
+.brand-logo img {
+  grid-area: 1 / 1;
+  display: block;
+  width: auto;
+  max-width: 100%;
+}
+
+.brand-logo-mark img {
+  height: 2rem;
+}
+
+.brand-logo-wordmark img {
+  height: 2.25rem;
+}
+
+/* Default theme is dark — white mark. Light only when forced or OS-light. */
+.brand-logo-on-light {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.brand-logo-on-dark {
+  opacity: 1;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .brand-logo-on-light {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  :root:not([data-theme]) .brand-logo-on-dark {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+:root[data-theme='light'] .brand-logo-on-light {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+:root[data-theme='light'] .brand-logo-on-dark {
+  opacity: 0;
+  pointer-events: none;
+}
+
+:root[data-theme='dark'] .brand-logo-on-light {
+  opacity: 0;
+  pointer-events: none;
+}
+
+:root[data-theme='dark'] .brand-logo-on-dark {
+  opacity: 1;
 }
 
 .site-nav {
@@ -1257,17 +1319,14 @@ textarea:focus-visible,
 }
 
 .auth-title {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 1.5rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  margin: 0 0 0.35rem;
+  justify-content: center;
+  margin: 0 0 0.5rem;
 }
 
-.auth-title svg {
-  color: var(--accent);
+.auth-title .brand-logo-wordmark img {
+  height: 2.5rem;
 }
 
 .auth-subtitle {

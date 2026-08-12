@@ -3,7 +3,8 @@ import { auth } from '../auth.js';
 import { countUnreadNotifications } from '../src/notificationsModel.js';
 import { signOutAction } from './auth-actions.js';
 import { ThemeToggle } from './ThemeToggle.js';
-import { BellIcon, MotoIcon } from './icons.js';
+import { BrandLogo } from './BrandLogo.js';
+import { BellIcon } from './icons.js';
 
 /** Top bar: brand, nav (Admin link for admins), the signed-in email, and logout. */
 export async function SiteHeader() {
@@ -14,8 +15,8 @@ export async function SiteHeader() {
   return (
     <header className="site-header">
       <Link href="/" className="brand">
-        <MotoIcon size={22} />
-        Moto Deal Scout
+        <BrandLogo variant="mark" />
+        <span className="brand-name">Moto Deal Scout</span>
       </Link>
       <nav className="site-nav">
         <ThemeToggle />

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { LoginForm } from './LoginForm.js';
 import { OAuthButtons } from '../OAuthButtons.js';
-import { MotoIcon } from '../icons.js';
+import { BrandLogo } from '../BrandLogo.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,8 +11,7 @@ export default function LoginPage() {
     <main className="auth-container">
       <div className="auth-card">
         <h1 className="auth-title">
-          <MotoIcon size={24} />
-          Moto Deal Scout
+          <BrandLogo variant="wordmark" />
         </h1>
         <p className="auth-subtitle">Sign in to see deals matched to your budget.</p>
         <LoginForm />
