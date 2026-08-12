@@ -102,7 +102,7 @@ export class BikerSource implements MarketplaceSource {
         headers: { accept: 'application/json' },
       });
       if (!res.ok) return listing;
-      const data = (await res.json()) as { dateajout?: string; cylindre?: string | number };
+      const data = await res.json<{ dateajout?: string; cylindre?: string | number }>();
       const posted = data.dateajout ? new Date(data.dateajout) : undefined;
       const postedAt = posted && !Number.isNaN(posted.getTime()) ? posted : listing.postedAt;
       // Sellers occasionally enter nonsense ("2", "99999") — keep only plausible
