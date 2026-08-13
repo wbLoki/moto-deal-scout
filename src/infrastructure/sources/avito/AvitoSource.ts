@@ -7,7 +7,8 @@ import type {
 import type { RenderedHtmlFetcher } from '../../browser/RenderedHtmlFetcher.js';
 import { crawlPages } from '../shared/crawl.js';
 import { slugifyForAvito } from '../shared/textParsing.js';
-import { parseAvitoSearchCards } from './parseAvitoSearchCards.js';
+import { listingImageFromHtml, parseAvitoSearchCards } from './parseAvitoSearchCards.js';
+import { listingFromAvitoHtml } from './fetchAvitoListing.js';
 
 const BASE_URL = 'https://www.avito.ma';
 const DEFAULT_MAX_PAGES = 3;
@@ -115,5 +116,27 @@ export class AvitoSource implements MarketplaceSource {
       );
     }
     return cards;
+  }
+
+  async fetchListingImage(url: string): Promise<string | undefined> {
+    try {
+      const html = await this.htmlFetcher.fetchRenderedHtml(url, {
+        waitUntil: 'domcontentloaded',
+        timeoutMs: 20_000,
+        userAgent: AVITO_USER_AGENT,
+        extraHeaders: AVITO_HEADERS,
+      });
+      let imageUrl: string | undefined;
+      try {
+        imageUrl = listingFromAvitoHtml(html, url).imageUrl;
+      } catch {
+        imageUrl = undefined;
+      }
+      imageUrl ??= listingImageFromHtml(html);
+      return imageUrl;
+    } catch (err) {
+      this.logger.warn({ err, url }, 'Avito listing image fetch failed');
+      return undefined;
+    }
   }
 }

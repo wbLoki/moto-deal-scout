@@ -60,6 +60,13 @@ export interface MarketplaceSource {
    */
   enrich?(listing: Listing): Promise<Listing>;
 
+  /**
+   * Load a single listing URL and return a photo URL when the source can
+   * extract one. Used to backfill stored rows that missed the category crawl.
+   * Omit when the source has no detail-page image.
+   */
+  fetchListingImage?(url: string): Promise<string | undefined>;
+
   /** Release any held resources (browser/context). Safe to call multiple times. */
   dispose(): Promise<void>;
 }

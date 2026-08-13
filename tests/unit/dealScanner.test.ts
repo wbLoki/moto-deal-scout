@@ -103,6 +103,39 @@ class InMemoryRepository implements ListingRepository {
     return Promise.resolve();
   }
 
+  refreshMissingImage(
+    sourceId: MarketplaceId,
+    externalId: string,
+    imageUrl: string,
+  ): Promise<void> {
+    const idx = this.saved.findIndex(
+      (s) => s.listing.sourceId === sourceId && s.listing.externalId === externalId,
+    );
+    if (idx < 0) return Promise.resolve();
+    const current = this.saved[idx]!;
+    const existing = current.listing.imageUrl;
+    if (existing && !/phoenix-assets|avatar\.svg/i.test(existing)) return Promise.resolve();
+    this.saved[idx] = {
+      ...current,
+      listing: { ...current.listing, imageUrl },
+    };
+    return Promise.resolve();
+  }
+
+  listImageGaps(
+    sourceId: MarketplaceId,
+  ): Promise<readonly { readonly externalId: string; readonly url: string }[]> {
+    return Promise.resolve(
+      this.saved
+        .filter(
+          (s) =>
+            s.listing.sourceId === sourceId &&
+            (!s.listing.imageUrl || /phoenix-assets|avatar\.svg/i.test(s.listing.imageUrl)),
+        )
+        .map((s) => ({ externalId: s.listing.externalId, url: s.listing.url })),
+    );
+  }
+
   getGoodDealsSince(): Promise<ScoredListing[]> {
     return Promise.resolve(this.saved.filter((s) => s.isGoodDeal));
   }
@@ -270,6 +303,63 @@ describe('DealScanner', () => {
     expect(second.priceDrops).toHaveLength(1);
     expect(second.priceDrops[0]).toMatchObject({ oldPriceMAD: 70000, newPriceMAD: 62000 });
     expect(await repository.getStoredPrice('avito', '1')).toBe(62000);
+  });
+
+  it('backfills a missing image on an already-seen listing', async () => {
+    const criteria = buildCriteria();
+    const source = new FakeSource('avito', 'Avito.ma', [
+      [makeListing({ externalId: '1', imageUrl: undefined })],
+      [
+        makeListing({
+          externalId: '1',
+          imageUrl: 'https://content.avito.ma/classifieds/images/99?t=images',
+        }),
+      ],
+    ]);
+    const scanner = new DealScanner({
+      sources: [source],
+      repository,
+      criteria,
+      logger: silentLogger,
+    });
+
+    await scanner.scan();
+    expect(repository.saved[0]?.listing.imageUrl).toBeUndefined();
+
+    await scanner.scan();
+    expect(repository.saved[0]?.listing.imageUrl).toBe(
+      'https://content.avito.ma/classifieds/images/99?t=images',
+    );
+  });
+
+  it('backfills images even when the re-crawled card would be filtered', async () => {
+    const criteria = buildCriteria();
+    await repository.save({
+      listing: makeListing({ externalId: '1', imageUrl: undefined }),
+      match: { criteria: criteria.models[0]!, confidence: 1 },
+      score: { price: 0, mileage: 0, year: 0, city: 0, total: 0, reasons: [] },
+      isGoodDeal: false,
+    });
+    const source = new FakeSource('avito', 'Avito.ma', [
+      [
+        makeListing({
+          externalId: '1',
+          title: 'Scooter chinois 50cc pas cher',
+          imageUrl: 'https://content.avito.ma/classifieds/images/99?t=images',
+        }),
+      ],
+    ]);
+    const scanner = new DealScanner({
+      sources: [source],
+      repository,
+      criteria,
+      logger: silentLogger,
+    });
+
+    await scanner.scan();
+    expect(repository.saved[0]?.listing.imageUrl).toBe(
+      'https://content.avito.ma/classifieds/images/99?t=images',
+    );
   });
 
   it('does not record a price drop when the price is unchanged or higher', async () => {

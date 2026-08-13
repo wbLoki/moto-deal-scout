@@ -89,8 +89,8 @@ describe('crawlPages', () => {
         .mockResolvedValue([dated('old3', OLD)]);
 
       const out = await crawlPages({ maxPages: 10, throttleMs: 0, fetchPage, postedAfter: WATERMARK });
-      expect(out.map((l) => l.externalId)).toEqual(['new1', 'new2']);
-      // Page 2 is fetched to discover it's all old, then the crawl stops.
+      expect(out.map((l) => l.externalId)).toEqual(['new1', 'new2', 'old1', 'old2']);
+      // Page 2 is fetched to discover it's all old (and still returned for refresh), then stop.
       expect(fetchPage).toHaveBeenCalledTimes(2);
     });
 
@@ -104,7 +104,18 @@ describe('crawlPages', () => {
         .mockResolvedValue([dated('pin', OLD), dated('tail', OLD)]);
 
       const out = await crawlPages({ maxPages: 10, throttleMs: 0, fetchPage, postedAfter: WATERMARK });
-      expect(out.map((l) => l.externalId)).toEqual(['new1', 'new2', 'new3']);
+      expect(out.map((l) => l.externalId)).toEqual(['pin', 'new1', 'new2', 'new3', 'tail']);
+    });
+
+    it('still returns listings from the all-old stop page so stored rows can refresh', async () => {
+      const fetchPage = vi
+        .fn<(n: number) => Promise<ReturnType<typeof page>>>()
+        .mockResolvedValueOnce([dated('old1', OLD), dated('old2', OLD)])
+        .mockResolvedValue([dated('old3', OLD)]);
+
+      const out = await crawlPages({ maxPages: 10, throttleMs: 0, fetchPage, postedAfter: WATERMARK });
+      expect(out.map((l) => l.externalId)).toEqual(['old1', 'old2']);
+      expect(fetchPage).toHaveBeenCalledTimes(1);
     });
 
     it('never trims listings that carry no post date (e.g. Biker cards)', async () => {

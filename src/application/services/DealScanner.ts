@@ -21,6 +21,7 @@ import { priceIsPlausible } from '../../domain/services/priceFilter.js';
 import { isCalibrated } from '../../domain/services/calibrationState.js';
 import { FuzzyModelMatcher } from './FuzzyModelMatcher.js';
 import { ListingScorer } from './ListingScorer.js';
+import { delay } from '../../infrastructure/sources/shared/throttle.js';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -201,6 +202,7 @@ export class DealScanner {
         listingsFound = listings.length;
 
         for (const listing of listings) {
+          await this.maybeRefreshImage(listing);
           const match = resolver.resolve(listing.title);
           if (!match || match.confidence < MIN_DISCOVERY_CONFIDENCE) {
             unmatched += 1;
@@ -225,6 +227,8 @@ export class DealScanner {
           const result = await this.processListing(listing, criteria, source, match.confidence);
           if (result) scored.push(result);
         }
+
+        await this.backfillMissingImages(source, listings);
       } catch (err) {
         error = err instanceof Error ? err.message : String(err);
         this.logger.error({ err, source: source.id }, 'discovery crawl failed');
@@ -288,6 +292,7 @@ export class DealScanner {
         listingsFound += listings.length;
 
         for (const listing of listings) {
+          await this.maybeRefreshImage(listing);
           const result = await this.processListing(listing, model, source);
           if (result) scored.push(result);
         }
@@ -302,6 +307,39 @@ export class DealScanner {
       scored,
       scanned: listingsFound,
     };
+  }
+
+  /**
+   * Backfill a listing photo on an already-stored row. Called for every crawled
+   * card (including unmatched / filtered titles) because `UPDATE` is a no-op
+   * when the id is not in `listings`.
+   */
+  private async maybeRefreshImage(listing: Listing): Promise<void> {
+    if (!listing.imageUrl) return;
+    await this.repository.refreshMissingImage(
+      listing.sourceId,
+      listing.externalId,
+      listing.imageUrl,
+    );
+  }
+
+  private async backfillMissingImages(
+    source: MarketplaceSource,
+    crawled: readonly Listing[],
+  ): Promise<void> {
+    const crawledIds = new Set(crawled.map((l) => l.externalId));
+    const gaps = (await this.repository.listImageGaps(source.id)).filter(
+      (g) => !crawledIds.has(g.externalId),
+    );
+    if (!source.fetchListingImage || gaps.length === 0) return;
+
+    for (const gap of gaps) {
+      const imageUrl = await source.fetchListingImage(gap.url);
+      if (imageUrl) {
+        await this.repository.refreshMissingImage(source.id, gap.externalId, imageUrl);
+      }
+      await delay(500);
+    }
   }
 
   private async processListing(

@@ -159,6 +159,21 @@ export interface ListingRepository {
     oldPriceMAD: number,
   ): Promise<void>;
 
+  /**
+   * Fills `image_url` on an already-stored row when it is missing or is an
+   * Avito seller-avatar stub, without touching price or scores.
+   */
+  refreshMissingImage(
+    sourceId: MarketplaceId,
+    externalId: string,
+    imageUrl: string,
+  ): Promise<void>;
+
+  /** Stored rows for a source whose listing photo is missing or an avatar stub. */
+  listImageGaps(
+    sourceId: MarketplaceId,
+  ): Promise<readonly { readonly externalId: string; readonly url: string }[]>;
+
   /** Release the underlying connection. Safe to call multiple times. */
   close(): Promise<void>;
 }

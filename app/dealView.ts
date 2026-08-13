@@ -16,6 +16,14 @@ function toIso(value: Date | string | undefined | null): string | null {
   return value.toISOString();
 }
 
+/** Avito sometimes stored seller avatars (`/phoenix-assets/...`) as listing thumbs. */
+function displayableListingImage(url: string | undefined): string | null {
+  if (!url) return null;
+  if (/phoenix-assets|avatar\.svg|^data:/i.test(url)) return null;
+  if (url.startsWith('/') && !url.startsWith('//')) return null;
+  return url;
+}
+
 /**
  * Maps a domain {@link ScoredListing} to the flat card view the client renders.
  * Shared by the server component's first paint and the paging server action so
@@ -35,7 +43,7 @@ export function toDealView(scored: ScoredListing): DealView {
     city: listing.city,
     sourceId: listing.sourceId,
     url: listing.url,
-    imageUrl: listing.imageUrl ?? null,
+    imageUrl: displayableListingImage(listing.imageUrl),
     matchConfidence: match.confidence,
     score: score.total,
     createdAt: listing.firstSeenAt ?? toIso(listing.scrapedAt) ?? '',

@@ -22,13 +22,10 @@ export interface CrawlOptions {
    */
   readonly retries?: number;
   /**
-   * Incremental watermark: skip listings posted on or before this date, and
-   * stop once a whole page falls below it. Because the marketplace lists
-   * newest-first, everything past that point is older than our last scrape, so
-   * re-crawling it is wasted work. Listings with no post date are treated as
-   * recent (never trimmed), so a source whose cards omit the date — Biker,
-   * where the date arrives later via enrich() — is unaffected. Undefined runs
-   * a full crawl (first run, or a forced re-crawl).
+   * Incremental watermark: stop paginating once a whole page is older than this
+   * date. Listings on pages we already fetched are still returned so already-stored
+   * rows can refresh (images, prices). Listings with no post date are treated as
+   * recent (never trigger a stop). Undefined runs a full crawl.
    */
   readonly postedAfter?: Date;
   /**
@@ -103,15 +100,15 @@ export async function crawlPages(opts: CrawlOptions): Promise<Listing[]> {
     }
     if (fresh.length === 0) break;
 
-    // Incremental crawl: keep only listings newer than the watermark, and stop
-    // once a whole page is older — everything after it is older still. We check
-    // "the whole page is old", not "the first old card", because marketplaces
-    // pin old sponsored ads to the top; one such card must not truncate a crawl
-    // that still has fresh listings below it.
+    // Incremental crawl: stop once a whole page is older than the watermark —
+    // everything after it is older still. Keep every listing on pages we did
+    // fetch (including already-stored ones) so images/prices can refresh.
+    // Check "the whole page is old", not "the first old card", because
+    // marketplaces pin old sponsored ads to the top.
     const recent = opts.postedAfter
       ? fresh.filter((l) => l.postedAt === undefined || l.postedAt > opts.postedAfter!)
       : fresh;
-    collected.push(...recent);
+    collected.push(...fresh);
     if (opts.postedAfter && recent.length === 0) break;
 
     // Date-less sources (Biker): stop once a whole page is already stored —

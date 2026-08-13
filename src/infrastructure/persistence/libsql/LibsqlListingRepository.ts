@@ -397,6 +397,46 @@ export class LibsqlListingRepository implements ListingRepository {
     });
   }
 
+  async refreshMissingImage(
+    sourceId: MarketplaceId,
+    externalId: string,
+    imageUrl: string,
+  ): Promise<void> {
+    await this.client.execute({
+      sql: `UPDATE listings
+            SET image_url = ?
+            WHERE source_id = ? AND external_id = ?
+              AND (
+                image_url IS NULL
+                OR image_url = ''
+                OR image_url LIKE '%phoenix-assets%'
+                OR image_url LIKE '%avatar.svg%'
+              )`,
+      args: [imageUrl, sourceId, externalId],
+    });
+  }
+
+  async listImageGaps(
+    sourceId: MarketplaceId,
+  ): Promise<readonly { readonly externalId: string; readonly url: string }[]> {
+    const result = await this.client.execute({
+      sql: `SELECT external_id, url FROM listings
+            WHERE source_id = ?
+              AND (
+                image_url IS NULL
+                OR image_url = ''
+                OR image_url LIKE '%phoenix-assets%'
+                OR image_url LIKE '%avatar.svg%'
+              )
+            ORDER BY created_at DESC`,
+      args: [sourceId],
+    });
+    return result.rows.map((row) => ({
+      externalId: String(row.external_id),
+      url: String(row.url),
+    }));
+  }
+
   close(): Promise<void> {
     this.client.close();
     return Promise.resolve();

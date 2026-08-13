@@ -1,6 +1,7 @@
 import type { Listing } from '../../../domain/entities/Listing.js';
 import { parseNumber, parseYear } from '../shared/textParsing.js';
 import { parseListingUrl } from '../../../application/services/parseListingUrl.js';
+import { normalizeListingImageUrl } from './parseAvitoSearchCards.js';
 import {
   RestBrowserHtmlFetcher,
   tryGetWorkersBrowserBinding,
@@ -22,6 +23,10 @@ interface AvitoAd {
   readonly description?: string;
   readonly price?: { readonly value?: number } | number | null;
   readonly location?: { readonly city?: { readonly name?: string } };
+  readonly defaultImage?: string;
+  readonly imageUrl?: string;
+  readonly images?: readonly unknown[];
+  readonly photos?: readonly unknown[];
   readonly params?: {
     readonly primary?: readonly AvitoParam[];
     readonly secondary?: readonly AvitoParam[];
@@ -94,7 +99,7 @@ export function listingFromAvitoAd(
     typeof ccRaw === 'number' ? ccRaw : parseNumber(paramText(ccRaw));
 
   return {
-    sourceId: 'avito',
+    sourceId: 'avito' as const,
     externalId,
     url: pageUrl,
     title: (ad.subject ?? '').trim() || `Avito #${externalId}`,
@@ -107,10 +112,58 @@ export function listingFromAvitoAd(
         ? displacementCc
         : undefined,
     city: ad.location?.city?.name?.trim() || 'Maroc',
-    imageUrl: undefined,
+    imageUrl: extractAdImage(ad),
     postedAt: undefined,
     scrapedAt,
   };
+}
+
+function imageCandidateUrl(value: unknown): string | undefined {
+  if (typeof value === 'string') return normalizeListingImageUrl(value);
+  if (value && typeof value === 'object' && 'url' in value) {
+    const url = (value as { url?: unknown }).url;
+    if (typeof url === 'string') return normalizeListingImageUrl(url);
+  }
+  return undefined;
+}
+
+function extractAdImage(ad: AvitoAd): string | undefined {
+  const classifieds: string[] = [];
+  const other: string[] = [];
+  const push = (url: string | undefined): void => {
+    if (!url) return;
+    if (/classifieds\/images/i.test(url)) classifieds.push(url);
+    else other.push(url);
+  };
+  push(imageCandidateUrl(ad.defaultImage));
+  push(imageCandidateUrl(ad.imageUrl));
+  for (const collection of [ad.images, ad.photos]) {
+    for (const item of collection ?? []) push(imageCandidateUrl(item));
+  }
+  push(findAvitoCdnUrl(ad));
+  return classifieds[0] ?? other[0];
+}
+
+function findAvitoCdnUrl(node: unknown, depth = 0): string | undefined {
+  if (depth > 6 || node == null) return undefined;
+  if (typeof node === 'string') {
+    const url = normalizeListingImageUrl(node);
+    return url && /content\.avito\.ma/i.test(url) ? url : undefined;
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const url = findAvitoCdnUrl(item, depth + 1);
+      if (url) return url;
+    }
+    return undefined;
+  }
+  if (typeof node === 'object') {
+    for (const value of Object.values(node as Record<string, unknown>)) {
+      const url = findAvitoCdnUrl(value, depth + 1);
+      if (url) return url;
+    }
+  }
+  return undefined;
 }
 
 /** Pulls the ad object from Avito's Next.js page props. */

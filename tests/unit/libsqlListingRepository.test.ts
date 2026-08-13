@@ -58,6 +58,21 @@ describe('LibsqlListingRepository', () => {
     expect(goodDeals[0]?.listing.externalId).toBe('a');
   });
 
+  it('refreshMissingImage fills a null image_url and ignores a real one', async () => {
+    await repo.save(buildScored({ listing: makeListing({ externalId: 'img-a', imageUrl: undefined }) }));
+    await repo.refreshMissingImage(
+      'avito',
+      'img-a',
+      'https://content.avito.ma/classifieds/images/1?t=images',
+    );
+    const filled = await repo.findBySourceExternalId('avito', 'img-a');
+    expect(filled?.listing.imageUrl).toBe('https://content.avito.ma/classifieds/images/1?t=images');
+
+    await repo.refreshMissingImage('avito', 'img-a', 'https://example.com/other.jpg');
+    const kept = await repo.findBySourceExternalId('avito', 'img-a');
+    expect(kept?.listing.imageUrl).toBe('https://content.avito.ma/classifieds/images/1?t=images');
+  });
+
   it('excludes good deals from before the given date', async () => {
     await repo.save(buildScored({ listing: makeListing({ externalId: 'c' }), isGoodDeal: true }));
 
