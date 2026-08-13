@@ -43,22 +43,24 @@ export function PriceReview() {
 
       {page && (
         <>
-          <table className="review-table">
-            <thead>
-              <tr>
-                <th>Model</th>
-                <th>Our range (MAD)</th>
-                <th>Verdict</th>
-                <th>AI suggestion</th>
-                <th>Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {page.rows.map((row) => (
-                <ReviewRow key={row.id} row={row} />
-              ))}
-            </tbody>
-          </table>
+          <div className="table-wrap">
+            <table className="review-table">
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>Our range (MAD)</th>
+                  <th>Verdict</th>
+                  <th>AI suggestion</th>
+                  <th>Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {page.rows.map((row) => (
+                  <ReviewRow key={row.id} row={row} />
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {page.nextOffset !== null && (
             <button

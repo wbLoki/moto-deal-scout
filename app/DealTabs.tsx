@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { setWatchedModelAction } from './watchlist-actions.js';
 import { setSavedListingAction } from './saved-actions.js';
 import { fetchDealsPageAction } from './deal-actions.js';
+import { BrowseSidebar } from './BrowseSidebar.js';
 import { DealCardShell } from './DealCardShell.js';
 import { DealSearchBar } from './DealSearchBar.js';
 import { SortSelect } from './SortSelect.js';
@@ -112,7 +113,11 @@ function DealCard({
       matchPct={Math.round(deal.matchConfidence * 100)}
       topRight={
         <div className="card-actions">
-          <WatchEye watching={watching} label={label} onToggle={() => onToggleWatch(deal.modelId)} />
+          <WatchEye
+            watching={watching}
+            label={label}
+            onToggle={() => onToggleWatch(deal.modelId)}
+          />
           <SaveButton saved={saved} label={label} onToggle={() => onToggleSave(deal.key)} />
         </div>
       }
@@ -120,11 +125,11 @@ function DealCard({
   );
 }
 
-const TABS: { id: DealTab; label: string }[] = [
-  { id: 'daily', label: 'Daily deals' },
-  { id: 'watched', label: 'Your watched models' },
-  { id: 'saved', label: 'Saved' },
-  { id: 'all', label: 'All deals' },
+const TABS: { id: DealTab; label: string; shortLabel: string }[] = [
+  { id: 'daily', label: 'Daily deals', shortLabel: 'Daily' },
+  { id: 'watched', label: 'Your watched models', shortLabel: 'Watched' },
+  { id: 'saved', label: 'Saved', shortLabel: 'Saved' },
+  { id: 'all', label: 'All deals', shortLabel: 'All' },
 ];
 
 export function DealTabs({
@@ -146,7 +151,7 @@ export function DealTabs({
   facets: DealFacets;
   watchedModelIds: readonly string[];
   savedKeys: readonly string[];
-  /** Injected sidebar content (saved range + scan control) shown above search/sort. */
+  /** Injected sidebar content (saved range + scan control) shown with the filters. */
   sidebar?: ReactNode;
 }) {
   // Server-provided page + counts; refreshed on every filter/sort/page change.
@@ -263,7 +268,23 @@ export function DealTabs({
       }
     });
     // prettier-ignore
-  }, [active, debouncedQuery, sort, page, debouncedKmMin, debouncedKmMax, debouncedCcMin, debouncedCcMax, ratings, cities, brandsSel, refreshKey, kmCap, ccCap, rangeInvalid]);
+  }, [
+    active,
+    debouncedQuery,
+    sort,
+    page,
+    debouncedKmMin,
+    debouncedKmMax,
+    debouncedCcMin,
+    debouncedCcMax,
+    ratings,
+    cities,
+    brandsSel,
+    refreshKey,
+    kmCap,
+    ccCap,
+    rangeInvalid,
+  ]);
 
   const toggleWatch = (modelId: string) => {
     const willWatch = !watched.has(modelId);
@@ -311,18 +332,24 @@ export function DealTabs({
     return 'No listings in your range yet. Widen your budget/year, or wait for the next daily scan.';
   };
 
+  const filterCount = ratings.length + brandsSel.length + cities.length;
+
   return (
     <div className="browse">
-      <aside className="browse-sidebar">
+      <BrowseSidebar
+        filterCount={filterCount}
+        search={<DealSearchBar value={query} onChange={setQuery} />}
+        sort={
+          <SortSelect
+            value={sort}
+            onChange={(v) => {
+              setSort(v);
+              resetPage();
+            }}
+          />
+        }
+      >
         {sidebar}
-        <DealSearchBar value={query} onChange={setQuery} />
-        <SortSelect
-          value={sort}
-          onChange={(v) => {
-            setSort(v);
-            resetPage();
-          }}
-        />
 
         <div className="filters-head">
           <h3 className="filters-title">Filters</h3>
@@ -419,7 +446,7 @@ export function DealTabs({
         {rangeInvalid && (
           <p className="settings-error">Max must be greater than or equal to min.</p>
         )}
-      </aside>
+      </BrowseSidebar>
 
       <div className="browse-main">
         <div className="tabs" role="tablist">
@@ -432,7 +459,9 @@ export function DealTabs({
               onClick={() => selectTab(t.id)}
               type="button"
             >
-              {t.label} <span className="tab-count">{counts[t.id]}</span>
+              <span className="tab-label-full">{t.label}</span>
+              <span className="tab-label-short">{t.shortLabel}</span>
+              <span className="tab-count">{counts[t.id]}</span>
             </button>
           ))}
         </div>
@@ -456,7 +485,9 @@ export function DealTabs({
 
         {deals.length === 0 && (
           <div className="empty">
-            {debouncedQuery.trim() ? `No deals match “${debouncedQuery.trim()}”.` : emptyNote(active)}
+            {debouncedQuery.trim()
+              ? `No deals match “${debouncedQuery.trim()}”.`
+              : emptyNote(active)}
           </div>
         )}
 

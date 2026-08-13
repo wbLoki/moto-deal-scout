@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
@@ -14,6 +14,12 @@ const sans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: 'Moto Deal Scout',
   description: 'Good motorcycle deals from Moroccan marketplaces, scored and filtered.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 // Runs before first paint: applies a saved light/dark choice so there's no

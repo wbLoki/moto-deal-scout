@@ -14,14 +14,6 @@ export const dynamic = 'force-dynamic';
 
 const madFmt = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
 
-const inputStyle = {
-  padding: '0.4rem 0.6rem',
-  border: '1px solid var(--border)',
-  borderRadius: '6px',
-  background: 'var(--bg)',
-  color: 'inherit',
-} as const;
-
 const DATE_FIELD_LABELS: Record<ScannedDateField, string> = {
   scraped_at: 'Scraped',
   posted_at: 'Posted',
@@ -130,11 +122,7 @@ async function AdminListingsBody({ searchParams }: { searchParams: Promise<Searc
           ))}
         </nav>
 
-        <form
-          method="get"
-          className="inline-form"
-          style={{ margin: '0.75rem 0', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}
-        >
+        <form method="get" className="inline-form listings-filters">
           {source ? <input type="hidden" name="source" value={source} /> : null}
           <input
             type="search"
@@ -142,11 +130,10 @@ async function AdminListingsBody({ searchParams }: { searchParams: Promise<Searc
             defaultValue={search ?? ''}
             placeholder="Search title…"
             aria-label="Search listing titles"
-            style={inputStyle}
           />
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+          <label>
             <span className="settings-hint">Date:</span>
-            <select name="field" defaultValue={field} aria-label="Date field to filter" style={inputStyle}>
+            <select name="field" defaultValue={field} aria-label="Date field to filter">
               {(Object.keys(DATE_FIELD_LABELS) as ScannedDateField[]).map((f) => (
                 <option key={f} value={f}>
                   {DATE_FIELD_LABELS[f]}
@@ -154,21 +141,9 @@ async function AdminListingsBody({ searchParams }: { searchParams: Promise<Searc
               ))}
             </select>
           </label>
-          <input
-            type="date"
-            name="from"
-            defaultValue={from ?? ''}
-            aria-label="From date"
-            style={inputStyle}
-          />
+          <input type="date" name="from" defaultValue={from ?? ''} aria-label="From date" />
           <span className="settings-hint">to</span>
-          <input
-            type="date"
-            name="to"
-            defaultValue={to ?? ''}
-            aria-label="To date"
-            style={inputStyle}
-          />
+          <input type="date" name="to" defaultValue={to ?? ''} aria-label="To date" />
           <button className="btn btn-small" type="submit">
             Apply
           </button>
