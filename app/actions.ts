@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { auth } from '../auth.js';
 import type { SearchRange } from '../src/domain/entities/SearchCriteria.js';
+import type { VehicleType } from '../src/domain/entities/VehicleType.js';
 import { saveUserSearchRange } from '../src/userSettings.js';
 import { dispatchScanWorkflow } from '../src/infrastructure/github/dispatchScanWorkflow.js';
 import type { ErrorKey } from './i18n/en.js';
@@ -19,12 +20,15 @@ export interface ActionResult {
  * Persists the signed-in user's personal budget/year range. It's a view
  * filter, so it takes effect on their dashboard immediately (no scan needed).
  */
-export async function saveSearchRangeAction(range: SearchRange): Promise<ActionResult> {
+export async function saveSearchRangeAction(
+  range: SearchRange,
+  vehicleType: VehicleType = 'motorcycle',
+): Promise<ActionResult> {
   const session = await auth();
   if (!session?.user?.id) return { ok: false, code: 'not_signed_in' };
   try {
-    await saveUserSearchRange(session.user.id, range);
-    revalidatePath('/');
+    await saveUserSearchRange(session.user.id, range, vehicleType);
+    revalidatePath(vehicleType === 'car' ? '/cars' : '/');
     return { ok: true };
   } catch {
     return { ok: false, code: 'save_failed' };

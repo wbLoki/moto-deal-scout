@@ -25,6 +25,7 @@ function storedModel(over: Partial<StoredModel> & Pick<StoredModel, 'id' | 'bran
     minYear: 2010,
     enabled: true,
     autoCalibrate: true,
+    vehicleType: 'motorcycle',
     ...over,
   };
 }
@@ -72,6 +73,7 @@ function query(over: Partial<DealQuery> = {}): DealQuery {
   return {
     userId: 'u1',
     tab: 'all',
+    vehicleType: 'motorcycle',
     range: WIDE_RANGE,
     minPriceFactor: 0.5,
     watchedModelIds: [],
@@ -80,6 +82,8 @@ function query(over: Partial<DealQuery> = {}): DealQuery {
     mileageMax: 0,
     ccMin: 0,
     ccMax: 0,
+    fuelTypes: [],
+    gearboxes: [],
     ratings: [],
     cities: [],
     brands: [],
@@ -260,5 +264,56 @@ describe('LibsqlListingRepository.countDealsByTab & getDealFacets', () => {
     expect(facets.maxMileage).toBe(55000);
     expect(facets.maxCc).toBe(500);
     expect(facets.maxPrice).toBe(70000);
+    expect(facets.fuels).toEqual([]);
+    expect(facets.gearboxes).toEqual([]);
+  });
+});
+
+describe('vehicle type isolation', () => {
+  it('does not mix car listings into the motorcycle feed', async () => {
+    const db = await openDatabase({ url: ':memory:' });
+    try {
+      const models = new LibsqlModelRepository(db);
+      await models.upsert(storedModel({ id: 'yamaha-mt07', brand: 'Yamaha', model: 'MT-07' }));
+      await models.upsert(
+        storedModel({
+          id: 'dacia-duster',
+          brand: 'Dacia',
+          model: 'Duster',
+          vehicleType: 'car',
+          maxMileageKm: 150000,
+        }),
+      );
+      const repo = new LibsqlListingRepository(db, await models.listAll());
+      await repo.save(scored({ externalId: 'bike-1' }));
+      await repo.save({
+        listing: makeListing({
+          externalId: 'car-1',
+          sourceId: 'avito-cars',
+          vehicleType: 'car',
+          title: 'Dacia Duster 2019',
+          priceMAD: 150000,
+        }),
+        match: {
+          criteria: makeModelCriteria({
+            id: 'dacia-duster',
+            brand: 'Dacia',
+            model: 'Duster',
+            vehicleType: 'car',
+          }),
+          confidence: 0.9,
+        },
+        score: { price: 0, mileage: 0, year: 0, city: 0, total: 75, reasons: [] },
+        isGoodDeal: true,
+      });
+
+      const moto = await repo.queryDeals(query({ vehicleType: 'motorcycle' }));
+      expect(moto.deals.map((d) => d.listing.externalId)).toEqual(['bike-1']);
+
+      const cars = await repo.queryDeals(query({ vehicleType: 'car' }));
+      expect(cars.deals.map((d) => d.listing.externalId)).toEqual(['car-1']);
+    } finally {
+      db.close();
+    }
   });
 });

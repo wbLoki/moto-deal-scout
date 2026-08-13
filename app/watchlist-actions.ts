@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { auth } from '../auth.js';
 import { completeOnboarding, saveWatchedModels, setWatchedModel } from '../src/watchlist.js';
+import { parseVehicleType } from '../src/domain/entities/VehicleType.js';
 import type { ErrorKey } from './i18n/en.js';
 import { errorKeyFromCaught } from './i18n/errorKey.js';
 
@@ -20,9 +21,11 @@ export async function saveWatchedModelsAction(
   const session = await auth();
   if (!session?.user?.id) return { error: 'not_signed_in' };
   const modelIds = formData.getAll('models').filter((v): v is string => typeof v === 'string');
+  const vehicleType = parseVehicleType(String(formData.get('vehicleType') ?? 'motorcycle'));
   try {
-    await saveWatchedModels(session.user.id, modelIds);
+    await saveWatchedModels(session.user.id, modelIds, vehicleType);
     revalidatePath('/');
+    revalidatePath('/cars');
     revalidatePath('/profile');
     return { ok: true };
   } catch (err) {
@@ -49,6 +52,7 @@ export async function setWatchedModelAction(
   try {
     await setWatchedModel(session.user.id, modelId, watch);
     revalidatePath('/');
+    revalidatePath('/cars');
     return { ok: true };
   } catch {
     return { ok: false };

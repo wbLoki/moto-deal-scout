@@ -12,7 +12,7 @@ const fmt = (n: number): string => mad.format(n);
  * one bounded batch at a time (to fit the serverless timeout and cap cost).
  * Flags anything not "plausible".
  */
-export function PriceReview() {
+export function PriceReview({ vehicleType = 'motorcycle' }: { vehicleType?: 'motorcycle' | 'car' }) {
   const [page, setPage] = useState<RangeReviewPage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -20,7 +20,7 @@ export function PriceReview() {
   const run = (offset: number): void => {
     setError(null);
     start(async () => {
-      const res = await reviewPricesAction(offset);
+      const res = await reviewPricesAction(offset, vehicleType);
       if (res.ok && res.page) setPage(res.page);
       else setError(res.error ?? 'Review failed.');
     });

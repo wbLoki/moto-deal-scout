@@ -26,10 +26,15 @@ export default async function OnboardingPage() {
         </h1>
         <p className="auth-subtitle">{t.auth.onboardingSubtitle}</p>
         <WatchedModelsForm
-          models={models.map((m) => ({ id: m.id, brand: m.brand, model: m.model }))}
-          watchedIds={profile.watchedModelIds}
+          models={models
+            .filter((m) => m.vehicleType === 'motorcycle')
+            .map((m) => ({ id: m.id, brand: m.brand, model: m.model }))}
+          watchedIds={profile.watchedModelIds.filter((id) =>
+            models.some((m) => m.id === id && m.vehicleType === 'motorcycle'),
+          )}
           mode="onboarding"
           locale={locale}
+          vehicleType="motorcycle"
         />
       </div>
     </AuthShell>

@@ -2,6 +2,8 @@ import type { Logger } from 'pino';
 import type { Listing, MarketplaceId } from '../../../domain/entities/Listing.js';
 import type { ScoredListing } from '../../../domain/entities/ScoredListing.js';
 import type { ModelCriteria } from '../../../domain/entities/SearchCriteria.js';
+import type { FuelType, GearboxType } from '../../../domain/entities/VehicleType.js';
+import { parseVehicleType } from '../../../domain/entities/VehicleType.js';
 
 /**
  * Idempotent DDL (CREATE ... IF NOT EXISTS), which is all a single-table
@@ -134,6 +136,19 @@ export const MIGRATIONS: readonly string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_model_requests_status ON model_requests (status, created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_listings_model_scraped ON listings (matched_model_id, scraped_at)`,
+  // Per-user budget/year window, keyed by vehicle type so moto and car
+  // budgets stay independent. Existing `user_search_ranges` rows are copied
+  // into this table as motorcycle on migrate (see Database.applyMigrations).
+  `CREATE TABLE IF NOT EXISTS user_vehicle_search_ranges (
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    vehicle_type TEXT NOT NULL DEFAULT 'motorcycle',
+    budget_min   INTEGER NOT NULL,
+    budget_max   INTEGER NOT NULL,
+    year_min     INTEGER NOT NULL,
+    year_max     INTEGER NOT NULL,
+    updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (user_id, vehicle_type)
+  )`,
   // Models a user has chosen to follow (picked at onboarding, edited on profile).
   `CREATE TABLE IF NOT EXISTS user_watched_models (
     user_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -197,6 +212,23 @@ export const ADDITIVE_COLUMNS: ReadonlyArray<{
   { table: 'models', column: 'discovered_at', definition: 'TEXT' },
   { table: 'listings', column: 'previous_price_mad', definition: 'REAL' },
   { table: 'listings', column: 'displacement_cc', definition: 'INTEGER' },
+  { table: 'listings', column: 'vehicle_type', definition: "TEXT NOT NULL DEFAULT 'motorcycle'" },
+  { table: 'listings', column: 'fuel_type', definition: 'TEXT' },
+  { table: 'listings', column: 'gearbox', definition: 'TEXT' },
+  { table: 'models', column: 'vehicle_type', definition: "TEXT NOT NULL DEFAULT 'motorcycle'" },
+  { table: 'model_requests', column: 'vehicle_type', definition: "TEXT NOT NULL DEFAULT 'motorcycle'" },
+  { table: 'review_listings', column: 'vehicle_type', definition: "TEXT NOT NULL DEFAULT 'motorcycle'" },
+  { table: 'review_listings', column: 'fuel_type', definition: 'TEXT' },
+  { table: 'review_listings', column: 'gearbox', definition: 'TEXT' },
+];
+
+/**
+ * Indexes that depend on additive columns. Must run after {@link ensureColumns}
+ * so a fresh database (CREATE TABLE without those columns) doesn't fail.
+ */
+export const POST_COLUMN_INDEXES: readonly string[] = [
+  `CREATE INDEX IF NOT EXISTS idx_listings_vehicle_type_scraped ON listings (vehicle_type, scraped_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_models_vehicle_type ON models (vehicle_type)`,
 ];
 
 /**
@@ -227,6 +259,9 @@ const INSERT_COLUMNS = [
   'score_total',
   'score_reasons',
   'is_good_deal',
+  'vehicle_type',
+  'fuel_type',
+  'gearbox',
 ] as const;
 
 const UPDATE_ON_CONFLICT = INSERT_COLUMNS.filter((c) => c !== 'source_id' && c !== 'external_id')
@@ -269,6 +304,9 @@ export function toInsertArgs(scored: ScoredListing): SqlValue[] {
     score.total,
     JSON.stringify(score.reasons),
     scored.isGoodDeal ? 1 : 0,
+    listing.vehicleType,
+    listing.fuelType ?? null,
+    listing.gearbox ?? null,
   ];
 }
 
@@ -297,6 +335,9 @@ export interface ListingRow {
   score_reasons: string;
   is_good_deal: number;
   created_at: string;
+  vehicle_type: string | null;
+  fuel_type: string | null;
+  gearbox: string | null;
 }
 
 /**
@@ -329,6 +370,9 @@ export function mapRowToScoredListing(
     year: row.year ?? undefined,
     mileageKm: row.mileage_km ?? undefined,
     displacementCc: row.displacement_cc ?? undefined,
+    vehicleType: parseVehicleType(row.vehicle_type),
+    fuelType: (row.fuel_type as FuelType | null) ?? undefined,
+    gearbox: (row.gearbox as GearboxType | null) ?? undefined,
     city: row.city,
     imageUrl: row.image_url ?? undefined,
     postedAt: row.posted_at ? new Date(row.posted_at) : undefined,

@@ -3,9 +3,13 @@ import {
   CatalogModelResolver,
   MIN_DISCOVERY_CONFIDENCE,
 } from './application/services/CatalogModelResolver.js';
+import { CAR_CATALOG } from './catalog/carCatalog.js';
+import { MOTORCYCLE_CATALOG } from './catalog/motorcycleCatalog.js';
 import { calibrateModels } from './calibration.js';
 import { buildContainer } from './container.js';
 import type { DailyReport } from './domain/entities/DailyReport.js';
+import { isCarMarketplace } from './domain/entities/Listing.js';
+import type { VehicleType } from './domain/entities/VehicleType.js';
 
 /**
  * Runs one full scan and dispatches notifications, then tears everything
@@ -41,23 +45,65 @@ export async function runScan(options: RunOptions = {}): Promise<DailyReport> {
  */
 const DAILY_MAX_PAGES = 20;
 
+function vehicleTypesToRun(sourceIds: readonly string[] | undefined): VehicleType[] {
+  if (!sourceIds?.length) return ['motorcycle', 'car'];
+  const types: VehicleType[] = [];
+  if (sourceIds.some((id) => !isCarMarketplace(id))) types.push('motorcycle');
+  if (sourceIds.some((id) => isCarMarketplace(id))) types.push('car');
+  return types;
+}
+
+function sourcesForType(
+  sourceIds: readonly string[] | undefined,
+  vehicleType: VehicleType,
+): readonly string[] | undefined {
+  if (!sourceIds?.length) return undefined;
+  return sourceIds.filter((id) => (isCarMarketplace(id) ? 'car' : 'motorcycle') === vehicleType);
+}
+
+function mergeReports(reports: readonly DailyReport[]): DailyReport {
+  const first = reports[0];
+  return {
+    runAt: first?.runAt ?? new Date(),
+    sources: reports.flatMap((r) => r.sources),
+    totalListingsScanned: reports.reduce((n, r) => n + r.totalListingsScanned, 0),
+    newListingsSeen: reports.reduce((n, r) => n + r.newListingsSeen, 0),
+    goodDeals: reports.flatMap((r) => r.goodDeals),
+    priceDrops: reports.flatMap((r) => r.priceDrops),
+  };
+}
+
+async function discoverAllTypes(
+  discovery: { maxPages?: number; full?: boolean },
+  options: RunOptions,
+): Promise<DailyReport> {
+  const reports: DailyReport[] = [];
+  for (const vehicleType of vehicleTypesToRun(options.sources)) {
+    const typeSources = sourcesForType(options.sources, vehicleType);
+    if (typeSources && typeSources.length === 0) continue;
+    const container = await buildContainer({
+      vehicleType,
+      discovery,
+      ...(typeSources ? { sources: typeSources } : {}),
+    });
+    try {
+      reports.push(await container.scanner.discover());
+    } finally {
+      await container.shutdown();
+    }
+  }
+  return mergeReports(reports);
+}
+
 async function scanAndNotify(options: RunOptions): Promise<DailyReport> {
-  // Fetch every catalog-matching listing from both marketplaces' whole
-  // category — not just watched models — so the market log stays complete. This
-  // is the discovery pipeline (browse category, resolve titles against the
-  // reference catalog, auto-create models, store all matches), run incrementally
-  // so a re-run only picks up listings posted since the last scrape.
-  const container = await buildContainer({
-    discovery: { maxPages: DAILY_MAX_PAGES },
-    ...(options.sources ? { sources: options.sources } : {}),
-  });
+  const report = await discoverAllTypes({ maxPages: DAILY_MAX_PAGES }, options);
+  const container = await buildContainer();
   try {
-    const report = await container.scanner.discover();
     await container.dispatcher.dispatch(report);
-    return report;
   } finally {
     await container.shutdown();
   }
+  return report;
 }
 
 /**
@@ -84,16 +130,15 @@ export async function runDiscovery(
   assertRemoteDatabaseInCi();
   await calibrateModels();
 
-  const container = await buildContainer({
-    discovery: {
+  const report = await discoverAllTypes(
+    {
       ...(maxPages === undefined ? {} : { maxPages }),
       ...(options.full ? { full: true } : {}),
     },
-    ...(options.sources ? { sources: options.sources } : {}),
-  });
-  let report: DailyReport;
+    options,
+  );
+  const container = await buildContainer();
   try {
-    report = await container.scanner.discover();
     await container.dispatcher.dispatch(report);
   } finally {
     await container.shutdown();
@@ -138,35 +183,43 @@ export async function runDiscoveryDryRun(
   maxPages?: number,
   options: RunOptions = {},
 ): Promise<DryRunResult> {
-  const resolver = new CatalogModelResolver();
-  const container = await buildContainer(options.sources ? { sources: options.sources } : {});
-  const existing = new Set(container.criteria.models.map((m) => m.id));
+  const motoResolver = new CatalogModelResolver(MOTORCYCLE_CATALOG);
+  const carResolver = new CatalogModelResolver(CAR_CATALOG);
   const wouldCreate = new Map<string, string[]>();
   let scanned = 0;
   let resolved = 0;
+  const existing = new Set<string>();
 
-  try {
-    for (const source of container.sources) {
-      const listings = await source.fetchListings(
-        maxPages === undefined ? {} : { maxPages },
-      );
-      scanned += listings.length;
+  for (const vehicleType of vehicleTypesToRun(options.sources)) {
+    const typeSources = sourcesForType(options.sources, vehicleType);
+    if (typeSources && typeSources.length === 0) continue;
+    const container = await buildContainer({
+      vehicleType,
+      ...(typeSources ? { sources: typeSources } : {}),
+    });
+    for (const m of container.criteria.models) existing.add(m.id);
+    const resolver = vehicleType === 'car' ? carResolver : motoResolver;
+    try {
+      for (const source of container.sources) {
+        const listings = await source.fetchListings(maxPages === undefined ? {} : { maxPages });
+        scanned += listings.length;
 
-      for (const listing of listings) {
-        const match = resolver.resolve(listing.title);
-        if (!match || match.confidence < MIN_DISCOVERY_CONFIDENCE) {
-          console.log(`  ${listing.title}`);
-          continue;
-        }
-        resolved += 1;
-        console.log(`✓ ${listing.title}\n    -> ${match.id} (confidence ${match.confidence})`);
-        if (!existing.has(match.id)) {
-          wouldCreate.set(match.id, [...(wouldCreate.get(match.id) ?? []), listing.title]);
+        for (const listing of listings) {
+          const match = resolver.resolve(listing.title);
+          if (!match || match.confidence < MIN_DISCOVERY_CONFIDENCE) {
+            console.log(`  ${listing.title}`);
+            continue;
+          }
+          resolved += 1;
+          console.log(`✓ ${listing.title}\n    -> ${match.id} (confidence ${match.confidence})`);
+          if (!existing.has(match.id)) {
+            wouldCreate.set(match.id, [...(wouldCreate.get(match.id) ?? []), listing.title]);
+          }
         }
       }
+    } finally {
+      await container.shutdown();
     }
-  } finally {
-    await container.shutdown();
   }
 
   console.log(

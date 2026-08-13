@@ -40,6 +40,16 @@ describe('newDealNotifications', () => {
     const deal = scored({}, { id: 'honda-cb500f' });
     expect(newDealNotifications([deal], new Map(), () => wide)).toHaveLength(0);
   });
+
+  it('applies the search range for the deal’s vehicle type', () => {
+    const deal = scored({ priceMAD: 250000, vehicleType: 'car' }, { id: 'dacia-duster', vehicleType: 'car' });
+    const watchers = new Map([['dacia-duster', ['u1']]]);
+    const motoTight: SearchRange = { budgetMin: 0, budgetMax: 80000, yearMin: 2000, yearMax: 2100 };
+    const carWide: SearchRange = { budgetMin: 0, budgetMax: 600000, yearMin: 2000, yearMax: 2100 };
+    const rangeFor = (_userId: string, vehicleType: 'motorcycle' | 'car') =>
+      vehicleType === 'car' ? carWide : motoTight;
+    expect(newDealNotifications([deal], watchers, rangeFor)).toHaveLength(1);
+  });
 });
 
 function drop(

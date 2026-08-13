@@ -28,6 +28,42 @@ describe('parseListingUrl', () => {
     });
   });
 
+  it('parses a Wandaloo listing URL as a car source', () => {
+    expect(
+      parseListingUrl(
+        'https://www.wandaloo.com/occasion/hyundai-tucson-diesel-occasion-marrakech-maroc/44771.html',
+      ),
+    ).toEqual({
+      sourceId: 'wandaloo',
+      externalId: '44771',
+      url: 'https://www.wandaloo.com/occasion/hyundai-tucson-diesel-occasion-marrakech-maroc/44771.html',
+    });
+  });
+
+  it('parses an Avito car listing URL as avito-cars', () => {
+    expect(
+      parseListingUrl(
+        'https://www.avito.ma/fr/casablanca/voitures/dacia_duster_2020_555.htm',
+      ),
+    ).toEqual({
+      sourceId: 'avito-cars',
+      externalId: '555',
+      url: 'https://www.avito.ma/fr/casablanca/voitures/dacia_duster_2020_555.htm',
+    });
+  });
+
+  it('parses a Moteur.ma car listing URL', () => {
+    expect(
+      parseListingUrl(
+        'https://moteur.ma/fr/voiture/achat-voiture-occasion/detail-annonce/633645/renault-clio.html',
+      ),
+    ).toEqual({
+      sourceId: 'moteur',
+      externalId: '633645',
+      url: 'https://moteur.ma/fr/voiture/achat-voiture-occasion/detail-annonce/633645/renault-clio.html',
+    });
+  });
+
   it('rejects unrelated hosts', () => {
     expect(parseListingUrl('https://example.com/moto_123.htm')).toBeUndefined();
   });

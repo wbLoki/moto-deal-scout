@@ -11,6 +11,7 @@ import {
 import { CloseIcon } from './icons.js';
 import { useT } from './i18n/I18nProvider.js';
 import type { Locale } from './i18n/locales.js';
+import type { VehicleType } from '../src/domain/entities/VehicleType.js';
 
 export interface PickableModel {
   id: string;
@@ -31,11 +32,13 @@ export function WatchedModelsForm({
   watchedIds,
   mode,
   locale,
+  vehicleType = 'motorcycle',
 }: {
   models: readonly PickableModel[];
   watchedIds: readonly string[];
   mode: 'onboarding' | 'profile';
   locale: Locale;
+  vehicleType?: VehicleType;
 }) {
   const t = useT(locale);
   const [state, action, pending] = useActionState(saveWatchedModelsAction, initial);
@@ -66,6 +69,7 @@ export function WatchedModelsForm({
 
   return (
     <form action={action} className="auth-form">
+      <input type="hidden" name="vehicleType" value={vehicleType} />
       {selected.map((id) => (
         <input key={id} type="hidden" name="models" value={id} />
       ))}

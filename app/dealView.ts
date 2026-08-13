@@ -16,10 +16,16 @@ function toIso(value: Date | string | undefined | null): string | null {
   return value.toISOString();
 }
 
-/** Avito sometimes stored seller avatars (`/phoenix-assets/...`) as listing thumbs. */
+/** Drop seller portraits and Avito avatar stubs so cards show the vehicle. */
 function displayableListingImage(url: string | undefined): string | null {
   if (!url) return null;
-  if (/phoenix-assets|avatar\.svg|^data:/i.test(url)) return null;
+  if (
+    /phoenix-assets|\/profile\/|avatar\.svg|\/avatars\/|\/users\/|\/user\/|^data:|no-photo|no_photo/i.test(
+      url,
+    )
+  ) {
+    return null;
+  }
   if (url.startsWith('/') && !url.startsWith('//')) return null;
   return url;
 }

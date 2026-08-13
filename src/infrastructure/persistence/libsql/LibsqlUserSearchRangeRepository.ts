@@ -1,5 +1,6 @@
 import type { Client } from '@libsql/client';
 import type { SearchRange } from '../../../domain/entities/SearchCriteria.js';
+import type { VehicleType } from '../../../domain/entities/VehicleType.js';
 import type { UserSearchRangeRepository } from '../../../domain/interfaces/UserSearchRangeRepository.js';
 
 interface RangeRow {
@@ -10,9 +11,10 @@ interface RangeRow {
 }
 
 const UPSERT_SQL = `
-  INSERT INTO user_search_ranges (user_id, budget_min, budget_max, year_min, year_max, updated_at)
-  VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  ON CONFLICT (user_id) DO UPDATE SET
+  INSERT INTO user_vehicle_search_ranges
+    (user_id, vehicle_type, budget_min, budget_max, year_min, year_max, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  ON CONFLICT (user_id, vehicle_type) DO UPDATE SET
     budget_min = excluded.budget_min,
     budget_max = excluded.budget_max,
     year_min = excluded.year_min,
@@ -23,10 +25,12 @@ const UPSERT_SQL = `
 export class LibsqlUserSearchRangeRepository implements UserSearchRangeRepository {
   constructor(private readonly client: Client) {}
 
-  async get(userId: string): Promise<SearchRange | null> {
+  async get(userId: string, vehicleType: VehicleType = 'motorcycle'): Promise<SearchRange | null> {
     const result = await this.client.execute({
-      sql: 'SELECT budget_min, budget_max, year_min, year_max FROM user_search_ranges WHERE user_id = ?',
-      args: [userId],
+      sql: `SELECT budget_min, budget_max, year_min, year_max
+              FROM user_vehicle_search_ranges
+             WHERE user_id = ? AND vehicle_type = ?`,
+      args: [userId, vehicleType],
     });
     const row = result.rows[0] as unknown as RangeRow | undefined;
     if (!row) return null;
@@ -38,10 +42,14 @@ export class LibsqlUserSearchRangeRepository implements UserSearchRangeRepositor
     };
   }
 
-  async save(userId: string, range: SearchRange): Promise<void> {
+  async save(
+    userId: string,
+    range: SearchRange,
+    vehicleType: VehicleType = 'motorcycle',
+  ): Promise<void> {
     await this.client.execute({
       sql: UPSERT_SQL,
-      args: [userId, range.budgetMin, range.budgetMax, range.yearMin, range.yearMax],
+      args: [userId, vehicleType, range.budgetMin, range.budgetMax, range.yearMin, range.yearMax],
     });
   }
 }

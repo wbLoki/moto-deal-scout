@@ -2,11 +2,14 @@ import type { Listing } from '../../domain/entities/Listing.js';
 import type { GlobalCriteria, ModelCriteria } from '../../domain/entities/SearchCriteria.js';
 import { isCalibrated } from '../../domain/services/calibrationState.js';
 import { dealTierFor } from '../../domain/services/dealTier.js';
+import { CAR_CATALOG } from '../../catalog/carCatalog.js';
+import { MOTORCYCLE_CATALOG } from '../../catalog/motorcycleCatalog.js';
 import { CatalogModelResolver } from './CatalogModelResolver.js';
 import { FACTOR_WEIGHTS, ListingScorer } from './ListingScorer.js';
 import { suggestPrice, type PriceSuggestion } from './priceAdvisor.js';
+import type { VehicleType } from '../../domain/entities/VehicleType.js';
 
-/** A bike to evaluate, as entered on the compare page. Only brand/model are required. */
+/** A vehicle to evaluate, as entered on the compare page. Only brand/model are required. */
 export interface BikeInput {
   readonly brand: string;
   readonly model: string;
@@ -17,6 +20,7 @@ export interface BikeInput {
   /** Asking price. When omitted we still suggest a fair price but skip the rating verdict. */
   readonly priceMAD?: number | undefined;
   readonly city?: string | undefined;
+  readonly vehicleType?: VehicleType;
 }
 
 /** One row of the score breakdown, e.g. Price 32/40. */
@@ -61,7 +65,7 @@ function pricePosition(price: number, model: ModelCriteria): 'below' | 'within' 
 /** Builds the minimal Listing the scorer reads (price, mileage, year, city). */
 function toListing(input: BikeInput, priceMAD: number): Listing {
   return {
-    sourceId: 'avito',
+    sourceId: input.vehicleType === 'car' ? 'avito-cars' : 'avito',
     externalId: 'compare',
     url: '',
     title: `${input.brand} ${input.model}`.trim(),
@@ -70,6 +74,9 @@ function toListing(input: BikeInput, priceMAD: number): Listing {
     year: input.year,
     mileageKm: input.mileageKm,
     displacementCc: input.displacementCc,
+    vehicleType: input.vehicleType ?? 'motorcycle',
+    fuelType: undefined,
+    gearbox: undefined,
     city: input.city ?? '',
     imageUrl: undefined,
     postedAt: undefined,
@@ -133,7 +140,8 @@ export function evaluateBike(
   // gives us a definite brand, so "Honda CBR500R" must never fall through to a
   // similarly-named model from another maker (e.g. a Voge 500R). Then look the
   // resolved model up among the tracked models to get its fair range.
-  const match = new CatalogModelResolver().resolve(`${input.brand} ${input.model}`.trim());
+  const catalog = input.vehicleType === 'car' ? CAR_CATALOG : MOTORCYCLE_CATALOG;
+  const match = new CatalogModelResolver(catalog).resolve(`${input.brand} ${input.model}`.trim());
   const model = match ? ctx.models.find((m) => m.id === match.id) : undefined;
   if (!match || !model) {
     return { status: 'not-found' };

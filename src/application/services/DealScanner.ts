@@ -159,7 +159,7 @@ export class DealScanner {
   }
 
   /**
-   * One discovery crawl: browse each marketplace's whole motorcycle category
+   * One discovery crawl: browse each marketplace's whole category
    * (no per-model search), resolve every title against the reference catalog,
    * create any model we haven't seen before, then run the listing through the
    * exact same pipeline `scan()` uses — age/city filters, already-seen
@@ -218,7 +218,7 @@ export class DealScanner {
 
           let criteria = known.get(match.id);
           if (!criteria) {
-            const model = provisionalModel(match);
+            const model = provisionalModel({ ...match, vehicleType: listing.vehicleType });
             if (await modelSink(model)) discovered.add(match.id);
             criteria = model;
             known.set(match.id, criteria);

@@ -68,6 +68,7 @@ describe('aiListingParser', () => {
       displacementCc: 689,
       priceMAD: 60000,
       city: 'Casablanca',
+      vehicleType: 'motorcycle',
     });
   });
 
@@ -84,7 +85,7 @@ describe('aiListingParser', () => {
       }),
       'CB500F à vendre',
     );
-    expect(input).toEqual({ brand: 'Honda', model: 'CB500F' });
+    expect(input).toEqual({ brand: 'Honda', model: 'CB500F', vehicleType: 'motorcycle' });
     expect('priceMAD' in input).toBe(false);
   });
 });

@@ -4,6 +4,7 @@ import type { SortKey } from '../../../domain/entities/DealSort.js';
 import type { MarketplaceId } from '../../../domain/entities/Listing.js';
 import type { ScoredListing } from '../../../domain/entities/ScoredListing.js';
 import type { ModelCriteria } from '../../../domain/entities/SearchCriteria.js';
+import type { FuelType, GearboxType } from '../../../domain/entities/VehicleType.js';
 import type {
   DealFacets,
   DealQuery,
@@ -13,6 +14,7 @@ import type {
 } from '../../../domain/interfaces/ListingRepository.js';
 import { tierScoreBand } from '../../../domain/services/dealTier.js';
 import { mapRowToScoredListing, toInsertArgs, UPSERT_SQL, type ListingRow } from './schema.js';
+import { isSellerOrPlaceholderImage } from '../../sources/avito/parseAvitoSearchCards.js';
 
 /**
  * SQL ORDER BY fragment per sort key. A stable id tiebreaker is appended by
@@ -28,6 +30,16 @@ const ORDER_BY: Record<SortKey, string> = {
   'price-desc': 'l.price_mad DESC',
   score: 'l.score_total DESC',
 };
+
+const IMAGE_GAP_SQL = `(
+                image_url IS NULL
+                OR image_url = ''
+                OR image_url LIKE '%phoenix-assets%'
+                OR image_url LIKE '%avatar.svg%'
+                OR image_url LIKE '%/avatars/%'
+                OR image_url LIKE '%/users/%'
+                OR image_url LIKE '%/profile/%'
+              )`;
 
 const placeholders = (n: number): string => Array(n).fill('?').join(', ');
 
@@ -71,6 +83,9 @@ function buildParts(
   conds.push('l.price_mad >= m.price_min * ?');
   whereArgs.push(q.minPriceFactor);
 
+  conds.push("COALESCE(l.vehicle_type, m.vehicle_type, 'motorcycle') = ?");
+  whereArgs.push(q.vehicleType);
+
   if (opts.applyRange) {
     conds.push('l.price_mad BETWEEN ? AND ?');
     whereArgs.push(q.range.budgetMin, q.range.budgetMax);
@@ -104,6 +119,16 @@ function buildParts(
       const max = q.ccMax > 0 ? q.ccMax : Number.MAX_SAFE_INTEGER;
       conds.push('(l.displacement_cc IS NULL OR l.displacement_cc BETWEEN ? AND ?)');
       whereArgs.push(q.ccMin, max);
+    }
+
+    if (q.fuelTypes.length > 0) {
+      conds.push(`l.fuel_type IN (${placeholders(q.fuelTypes.length)})`);
+      whereArgs.push(...q.fuelTypes);
+    }
+
+    if (q.gearboxes.length > 0) {
+      conds.push(`l.gearbox IN (${placeholders(q.gearboxes.length)})`);
+      whereArgs.push(...q.gearboxes);
     }
 
     if (q.cities.length > 0) {
@@ -297,7 +322,7 @@ export class LibsqlListingRepository implements ListingRepository {
     const withPred = (extra: string): string =>
       parts.where ? `WHERE ${parts.where} AND ${extra}` : `WHERE ${extra}`;
 
-    const [brandsRes, citiesRes, maxRes] = await Promise.all([
+    const [brandsRes, citiesRes, maxRes, fuelRes, gearRes] = await Promise.all([
       this.client.execute({
         sql: `SELECT DISTINCT TRIM(m.brand) AS brand ${from}
               ${withPred(`TRIM(m.brand) != ''`)}
@@ -315,6 +340,18 @@ export class LibsqlListingRepository implements ListingRepository {
                      MAX(l.displacement_cc) AS maxCc,
                      MAX(l.price_mad) AS maxPrice
               ${from}${parts.where ? ` WHERE ${parts.where}` : ''}`,
+        args,
+      }),
+      this.client.execute({
+        sql: `SELECT DISTINCT l.fuel_type AS fuel ${from}
+              ${withPred(`l.fuel_type IS NOT NULL AND TRIM(l.fuel_type) != ''`)}
+              ORDER BY fuel`,
+        args,
+      }),
+      this.client.execute({
+        sql: `SELECT DISTINCT l.gearbox AS gearbox ${from}
+              ${withPred(`l.gearbox IS NOT NULL AND TRIM(l.gearbox) != ''`)}
+              ORDER BY gearbox`,
         args,
       }),
     ]);
@@ -342,6 +379,12 @@ export class LibsqlListingRepository implements ListingRepository {
       maxMileage: Number(maxRow?.maxMileage ?? 0),
       maxCc: Number(maxRow?.maxCc ?? 0),
       maxPrice: Number(maxRow?.maxPrice ?? 0),
+      fuels: (fuelRes.rows as unknown as { fuel: string }[])
+        .map((r) => r.fuel)
+        .filter((f): f is FuelType => f === 'essence' || f === 'diesel' || f === 'hybrid' || f === 'electric' || f === 'lpg'),
+      gearboxes: (gearRes.rows as unknown as { gearbox: string }[])
+        .map((r) => r.gearbox)
+        .filter((g): g is GearboxType => g === 'manual' || g === 'automatic'),
     };
   }
 
@@ -402,16 +445,12 @@ export class LibsqlListingRepository implements ListingRepository {
     externalId: string,
     imageUrl: string,
   ): Promise<void> {
+    if (isSellerOrPlaceholderImage(imageUrl)) return;
     await this.client.execute({
       sql: `UPDATE listings
             SET image_url = ?
             WHERE source_id = ? AND external_id = ?
-              AND (
-                image_url IS NULL
-                OR image_url = ''
-                OR image_url LIKE '%phoenix-assets%'
-                OR image_url LIKE '%avatar.svg%'
-              )`,
+              AND ${IMAGE_GAP_SQL}`,
       args: [imageUrl, sourceId, externalId],
     });
   }
@@ -422,18 +461,13 @@ export class LibsqlListingRepository implements ListingRepository {
     const result = await this.client.execute({
       sql: `SELECT external_id, url FROM listings
             WHERE source_id = ?
-              AND (
-                image_url IS NULL
-                OR image_url = ''
-                OR image_url LIKE '%phoenix-assets%'
-                OR image_url LIKE '%avatar.svg%'
-              )
+              AND ${IMAGE_GAP_SQL}
             ORDER BY created_at DESC`,
       args: [sourceId],
     });
     return result.rows.map((row) => ({
-      externalId: String(row.external_id),
-      url: String(row.url),
+      externalId: String(row['external_id']),
+      url: String(row['url']),
     }));
   }
 

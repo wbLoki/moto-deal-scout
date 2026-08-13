@@ -22,6 +22,7 @@ const PROTECTED_PREFIXES = [
   '/onboarding',
   '/profile',
   '/requests',
+  '/cars/requests',
   '/notifications',
   '/saved',
   '/admin',

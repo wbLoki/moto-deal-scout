@@ -1,3 +1,5 @@
+import type { VehicleType } from '../entities/VehicleType.js';
+
 /**
  * Per-user profile state that isn't authentication: which models they
  * follow, and whether they've been through onboarding.
@@ -7,6 +9,15 @@ export interface UserProfileRepository {
   getWatchedModelIds(userId: string): Promise<string[]>;
   /** Replaces the user's followed models with exactly this set. */
   setWatchedModelIds(userId: string, modelIds: readonly string[]): Promise<void>;
+  /**
+   * Replaces followed models of one vehicle type only, leaving the other
+   * type's watches untouched.
+   */
+  setWatchedModelIdsForType(
+    userId: string,
+    vehicleType: VehicleType,
+    modelIds: readonly string[],
+  ): Promise<void>;
   /** Follows a single model (no-op if already followed). */
   addWatchedModel(userId: string, modelId: string): Promise<void>;
   /** Unfollows a single model (no-op if not followed). */

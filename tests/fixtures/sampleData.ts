@@ -10,6 +10,7 @@ export function makeModelCriteria(overrides: Partial<ModelCriteria> = {}): Model
     priceRangeMAD: { min: 65000, max: 95000 },
     maxMileageKm: 30000,
     minYear: 2017,
+    vehicleType: 'motorcycle',
     ...overrides,
   };
 }
@@ -37,6 +38,9 @@ export function makeListing(overrides: Partial<Listing> = {}): Listing {
     year: 2019,
     mileageKm: 15000,
     displacementCc: 689,
+    vehicleType: 'motorcycle',
+    fuelType: undefined,
+    gearbox: undefined,
     city: 'Casablanca',
     imageUrl: undefined,
     postedAt: new Date(),

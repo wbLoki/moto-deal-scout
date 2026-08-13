@@ -55,6 +55,45 @@ export function parseRelativeFrenchDate(
   return undefined;
 }
 
+const FRENCH_MONTHS: Readonly<Record<string, number>> = {
+  janvier: 0,
+  fevrier: 1,
+  février: 1,
+  mars: 2,
+  avril: 3,
+  mai: 4,
+  juin: 5,
+  juillet: 6,
+  aout: 7,
+  août: 7,
+  septembre: 8,
+  octobre: 9,
+  novembre: 10,
+  decembre: 11,
+  décembre: 11,
+};
+
+/**
+ * Parses an absolute French date like "13 août 2026".
+ * Accents are stripped so mojibake / unaccented months still match.
+ */
+export function parseFrenchAbsoluteDate(text: string | null | undefined): Date | undefined {
+  if (!text) return undefined;
+  const normalized = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+  const match = /(\d{1,2})\s+([a-z]+)\s+(\d{4})/.exec(normalized);
+  if (!match) return undefined;
+  const day = Number.parseInt(match[1]!, 10);
+  const month = FRENCH_MONTHS[match[2]!];
+  const year = Number.parseInt(match[3]!, 10);
+  if (month === undefined || day < 1 || day > 31) return undefined;
+  const date = new Date(Date.UTC(year, month, day));
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
 /** "MT-07" -> "mt_07", used to build Avito's slug-based search URLs. */
 export function slugifyForAvito(text: string): string {
   return text

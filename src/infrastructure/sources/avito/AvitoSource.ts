@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
-import type { Listing } from '../../../domain/entities/Listing.js';
+import type { Listing, MarketplaceId } from '../../../domain/entities/Listing.js';
+import { vehicleTypeForMarketplace } from '../../../domain/entities/Listing.js';
 import type {
   MarketplaceSource,
   SourceQuery,
@@ -37,11 +38,15 @@ const BOT_CHALLENGE_MARKERS =
  * differ only in what goes here. Prefer this over `motos_et_scooters` — that
  * older browse path misses ads that only appear under motos-à_vendre.
  */
-const CATEGORY_SLUG = 'motos-à_vendre';
+const MOTO_CATEGORY_SLUG = 'motos-à_vendre';
+const CAR_CATEGORY_SLUG = 'voitures-à_vendre';
 
 export interface AvitoSourceOptions {
   readonly throttleMs: number;
   readonly maxPages?: number;
+  /** Defaults to `avito` (motorcycles). Use `avito-cars` for the car category. */
+  readonly sourceId?: MarketplaceId;
+  readonly categorySlug?: string;
 }
 
 /** Page 1 has no cursor; later pages carry `?o=N`. */
@@ -50,24 +55,31 @@ export function buildAvitoUrl(slug: string, page: number): string {
 }
 
 /**
- * Scrapes Avito.ma's "Motos & scooters" section via rendered HTML (Cloudflare
- * Browser Rendering on GHA/Workers, or Playwright locally). With a model it
- * uses Avito's search slug; without a model it browses the whole category.
+ * Scrapes Avito.ma via rendered HTML (Cloudflare Browser Rendering on
+ * GHA/Workers, or Playwright locally). With a model it uses Avito's search
+ * slug; without a model it browses the whole category (`motos-à_vendre` or
+ * `voitures-à_vendre`).
  */
 export class AvitoSource implements MarketplaceSource {
-  readonly id = 'avito' as const;
+  readonly id: MarketplaceId;
   readonly name = 'Avito.ma';
+  private readonly categorySlug: string;
 
   constructor(
     private readonly htmlFetcher: RenderedHtmlFetcher,
     private readonly options: AvitoSourceOptions,
     private readonly logger: Logger,
-  ) {}
+  ) {
+    this.id = options.sourceId ?? 'avito';
+    this.categorySlug =
+      options.categorySlug ??
+      (this.id === 'avito-cars' ? CAR_CATEGORY_SLUG : MOTO_CATEGORY_SLUG);
+  }
 
   async fetchListings(query: SourceQuery): Promise<Listing[]> {
     const slug = query.criteria
       ? slugifyForAvito(`${query.criteria.brand} ${query.criteria.model}`)
-      : CATEGORY_SLUG;
+      : this.categorySlug;
     // `options.maxPages` (AVITO_MAX_PAGES) is a hard ceiling, not just a default:
     // Avito goes through rate-limited Cloudflare Browser Rendering (Free plan),
     // so a deep discovery crawl (query.maxPages of 20-40) must not run 40 browser
@@ -105,7 +117,10 @@ export class AvitoSource implements MarketplaceSource {
       userAgent: AVITO_USER_AGENT,
       extraHeaders: AVITO_HEADERS,
     });
-    const cards = parseAvitoSearchCards(html);
+    const cards = parseAvitoSearchCards(html, new Date(), {
+      sourceId: this.id,
+      vehicleType: vehicleTypeForMarketplace(this.id),
+    });
     if (cards.length === 0) {
       const blocked = BOT_CHALLENGE_MARKERS.test(html);
       this.logger.warn(

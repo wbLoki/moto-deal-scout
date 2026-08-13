@@ -26,21 +26,21 @@ describe('LibsqlModelRequestRepository', () => {
   });
 
   it('creates a pending request and lists it for the user', async () => {
-    await repo.create({ userId, brand: 'Honda', model: 'CB500X', note: 'nice' });
+    await repo.create({ userId, brand: 'Honda', model: 'CB500X', note: 'nice', vehicleType: 'motorcycle' });
     const mine = await repo.listByUser(userId);
     expect(mine).toHaveLength(1);
     expect(mine[0]).toMatchObject({ brand: 'Honda', model: 'CB500X', status: 'pending' });
   });
 
   it('lists pending requests with the requester email', async () => {
-    await repo.create({ userId, brand: 'Yamaha', model: 'Tenere', note: undefined });
+    await repo.create({ userId, brand: 'Yamaha', model: 'Tenere', note: undefined, vehicleType: 'motorcycle' });
     const pending = await repo.listPending();
     expect(pending).toHaveLength(1);
     expect(pending[0]?.requesterEmail).toBe('u@x.com');
   });
 
   it('setStatus records the decision and removes it from pending', async () => {
-    const req = await repo.create({ userId, brand: 'KTM', model: '390', note: undefined });
+    const req = await repo.create({ userId, brand: 'KTM', model: '390', note: undefined, vehicleType: 'motorcycle' });
     await repo.setStatus(req.id, 'approved', adminId);
     expect(await repo.listPending()).toHaveLength(0);
     const updated = await repo.findById(req.id);

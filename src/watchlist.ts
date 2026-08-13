@@ -84,16 +84,18 @@ export async function getProfilePageData(userId: string): Promise<ProfilePageDat
 export async function saveWatchedModels(
   userId: string,
   modelIds: readonly string[],
+  vehicleType: import('./domain/entities/VehicleType.js').VehicleType = 'motorcycle',
 ): Promise<void> {
   const db = await openDatabaseFromEnv();
   try {
     const models = new LibsqlModelRepository(db);
-    const valid = new Set((await models.listAll()).map((m) => m.id));
+    const ofType = (await models.listAll()).filter((m) => m.vehicleType === vehicleType);
+    const valid = new Set(ofType.map((m) => m.id));
     const filtered = modelIds.filter((id) => valid.has(id));
 
     const profile = new LibsqlUserProfileRepository(db);
-    await profile.setWatchedModelIds(userId, filtered);
-    await profile.markOnboarded(userId);
+    await profile.setWatchedModelIdsForType(userId, vehicleType, filtered);
+    if (vehicleType === 'motorcycle') await profile.markOnboarded(userId);
   } finally {
     db.close();
   }

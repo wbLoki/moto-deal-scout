@@ -64,7 +64,7 @@ async function HomeBody() {
         locale={locale}
         sidebar={
           <>
-            <SearchSettings locale={locale} current={searchRange} />
+            <SearchSettings locale={locale} current={searchRange} vehicleType="motorcycle" />
             {isAdmin ? (
               <ScanNowButton />
             ) : (

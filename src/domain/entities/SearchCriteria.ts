@@ -1,3 +1,5 @@
+import type { VehicleType } from './VehicleType.js';
+
 /** A price range considered fair market value for a given model. */
 export interface PriceRangeMAD {
   readonly min: number;
@@ -22,6 +24,8 @@ export interface ModelCriteria {
   readonly maxMileageKm: number;
   /** Listings older (model year) than this score poorly. */
   readonly minYear: number;
+  /** Motorcycle vs car — matching and feeds never mix the two. */
+  readonly vehicleType: VehicleType;
 }
 
 /**

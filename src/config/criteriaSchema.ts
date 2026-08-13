@@ -15,6 +15,7 @@ const modelCriteriaSchema = z.object({
   priceRangeMAD: priceRangeSchema,
   maxMileageKm: z.number().positive(),
   minYear: z.number().int().gte(1980).lte(2100),
+  vehicleType: z.enum(['motorcycle', 'car']).default('motorcycle'),
 });
 
 /** Shared by the criteria config and the runtime settings form. */

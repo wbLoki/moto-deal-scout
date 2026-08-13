@@ -2,6 +2,7 @@ import type { SortKey } from '../entities/DealSort.js';
 import type { MarketplaceId } from '../entities/Listing.js';
 import type { ScoredListing } from '../entities/ScoredListing.js';
 import type { SearchRange } from '../entities/SearchCriteria.js';
+import type { FuelType, GearboxType, VehicleType } from '../entities/VehicleType.js';
 
 /** The four dashboard feeds. `saved` deliberately ignores the budget/year range. */
 export type DealTab = 'all' | 'daily' | 'watched' | 'saved';
@@ -14,6 +15,8 @@ export type DealTab = 'all' | 'daily' | 'watched' | 'saved';
 export interface DealQuery {
   readonly userId: string;
   readonly tab: DealTab;
+  /** Motorcycle vs car feed — never mix the two. */
+  readonly vehicleType: VehicleType;
   /** Budget/year window. Ignored when `tab === 'saved'`. */
   readonly range: SearchRange;
   /** Multiplier for the implausible-price floor (`price >= fairMin * factor`). */
@@ -28,6 +31,10 @@ export interface DealQuery {
   readonly ccMin: number;
   /** Upper displacement (cc) bound; `0` means "no upper bound". */
   readonly ccMax: number;
+  /** Fuel types to include (cars). Empty = all. */
+  readonly fuelTypes: readonly FuelType[];
+  /** Gearboxes to include (cars). Empty = all. */
+  readonly gearboxes: readonly GearboxType[];
   /** Deal-tier levels to include (e.g. `['hot','great']`). Empty = all. */
   readonly ratings: readonly string[];
   /** Lowercased city keys. Empty = all. */
@@ -62,6 +69,10 @@ export interface DealFacets {
   readonly maxCc: number;
   /** Highest price seen, for the public budget slider's upper bound. */
   readonly maxPrice: number;
+  /** Distinct fuels present in the in-range set (cars). */
+  readonly fuels: readonly FuelType[];
+  /** Distinct gearboxes present in the in-range set (cars). */
+  readonly gearboxes: readonly GearboxType[];
 }
 
 /**

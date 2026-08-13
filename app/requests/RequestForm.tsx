@@ -4,10 +4,17 @@ import { useActionState } from 'react';
 import { submitRequestAction, type RequestFormState } from '../request-actions.js';
 import { useT } from '../i18n/I18nProvider.js';
 import type { Locale } from '../i18n/locales.js';
+import type { VehicleType } from '../../src/domain/entities/VehicleType.js';
 
 const initial: RequestFormState = {};
 
-export function RequestForm({ locale }: { locale: Locale }) {
+export function RequestForm({
+  locale,
+  vehicleType = 'motorcycle',
+}: {
+  locale: Locale;
+  vehicleType?: VehicleType;
+}) {
   const t = useT(locale);
   const [state, action, pending] = useActionState(submitRequestAction, initial);
   const duplicateNote =
@@ -18,6 +25,7 @@ export function RequestForm({ locale }: { locale: Locale }) {
         : null;
   return (
     <form action={action} className="auth-form">
+      <input type="hidden" name="vehicleType" value={vehicleType} />
       <div className="model-grid">
         <label>
           <span>{t.requests.brand}</span>

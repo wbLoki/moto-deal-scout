@@ -17,9 +17,11 @@ import { BookmarkIcon } from './icons.js';
 import type { DealView } from './dealView.js';
 import type { DealsPageInput } from '../src/readModel.js';
 import type { DealFacets, DealTab, TabCounts } from '../src/domain/interfaces/ListingRepository.js';
+import type { DealTierLevel } from '../src/domain/services/dealTier.js';
 import { useT } from './i18n/I18nProvider.js';
 import type { Locale } from './i18n/locales.js';
-import type { DealTierLevel } from '../src/domain/services/dealTier.js';
+import type { FuelType, GearboxType, VehicleType } from '../src/domain/entities/VehicleType.js';
+import { FUEL_TYPES, GEARBOX_TYPES } from '../src/domain/entities/VehicleType.js';
 
 /** Debounce for the search box, so we don't hit the server on every keystroke. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -157,6 +159,7 @@ export function DealTabs({
   savedKeys,
   locale,
   sidebar,
+  vehicleType = 'motorcycle',
 }: {
   initialDeals: readonly DealView[];
   initialTotal: number;
@@ -169,6 +172,7 @@ export function DealTabs({
   locale: Locale;
   /** Injected sidebar content (saved range + scan control) shown with the filters. */
   sidebar?: ReactNode;
+  vehicleType?: VehicleType;
 }) {
   const t = useT(locale);
   // Server-provided page + counts; refreshed on every filter/sort/page change.
@@ -218,6 +222,9 @@ export function DealTabs({
   const [ratings, setRatings] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [brandsSel, setBrandsSel] = useState<string[]>([]);
+  const [fuelTypes, setFuelTypes] = useState<string[]>([]);
+  const [gearboxes, setGearboxes] = useState<string[]>([]);
+  const isCar = vehicleType === 'car';
 
   const rangeInvalid = debouncedKmMax < debouncedKmMin || debouncedCcMax < debouncedCcMin;
 
@@ -232,6 +239,8 @@ export function DealTabs({
     setRatings([]);
     setCities([]);
     setBrandsSel([]);
+    setFuelTypes([]);
+    setGearboxes([]);
     resetPage();
   };
 
@@ -264,12 +273,14 @@ export function DealTabs({
     }
     const input: DealsPageInput = {
       tab: active,
+      vehicleType,
       search: debouncedQuery.trim(),
       mileageMin: debouncedKmMin,
-      // Slider pinned at the data's max means "no upper bound".
       mileageMax: debouncedKmMax >= kmCap ? 0 : debouncedKmMax,
-      ccMin: debouncedCcMin,
-      ccMax: debouncedCcMax >= ccCap ? 0 : debouncedCcMax,
+      ccMin: isCar ? 0 : debouncedCcMin,
+      ccMax: isCar ? 0 : debouncedCcMax >= ccCap ? 0 : debouncedCcMax,
+      fuelTypes: isCar ? (fuelTypes as FuelType[]) : [],
+      gearboxes: isCar ? (gearboxes as GearboxType[]) : [],
       ratings,
       cities,
       brands: brandsSel,
@@ -297,10 +308,14 @@ export function DealTabs({
     ratings,
     cities,
     brandsSel,
+    fuelTypes,
+    gearboxes,
     refreshKey,
     kmCap,
     ccCap,
     rangeInvalid,
+    vehicleType,
+    isCar,
   ]);
 
   const toggleWatch = (modelId: string) => {
@@ -332,7 +347,7 @@ export function DealTabs({
 
   const emptyNote = (id: DealTab): ReactNode => {
     if (id === 'daily') return t.empty.daily;
-    if (id === 'saved') return t.empty.saved;
+    if (id === 'saved') return isCar ? t.empty.savedCar : t.empty.saved;
     if (id === 'watched') {
       return watched.size > 0 ? (
         t.empty.watchedNoListings
@@ -403,6 +418,7 @@ export function DealTabs({
           </div>
         </div>
 
+        {!isCar && (
         <div className="sidebar-section">
           <h3 className="sidebar-title">{t.filters.displacement}</h3>
           <div className="sidebar-row">
@@ -428,6 +444,34 @@ export function DealTabs({
             </label>
           </div>
         </div>
+        )}
+
+        {isCar && (
+          <>
+            <MultiSelect
+              locale={locale}
+              label={t.filters.fuel}
+              options={FUEL_TYPES.map((f) => ({ value: f, label: t.filters[f] }))}
+              selected={fuelTypes}
+              onChange={(v) => {
+                setFuelTypes(v);
+                resetPage();
+              }}
+              allLabel={t.filters.allFuels}
+            />
+            <MultiSelect
+              locale={locale}
+              label={t.filters.gearbox}
+              options={GEARBOX_TYPES.map((g) => ({ value: g, label: t.filters[g] }))}
+              selected={gearboxes}
+              onChange={(v) => {
+                setGearboxes(v);
+                resetPage();
+              }}
+              allLabel={t.filters.allGearboxes}
+            />
+          </>
+        )}
 
         <MultiSelect
           locale={locale}

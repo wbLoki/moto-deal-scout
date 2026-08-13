@@ -45,6 +45,20 @@ describe('listingFromAvitoAd', () => {
     });
   });
 
+  it('prefers classifieds photos over a seller imageUrl on the ad', () => {
+    const listing = listingFromAvitoAd(
+      {
+        listId: '58415881',
+        subject: 'BMW GT 400',
+        price: { value: 108000 },
+        imageUrl: 'https://content.avito.ma/users/42.jpg',
+        images: ['https://content.avito.ma/classifieds/images/99?t=images'],
+      },
+      url,
+    );
+    expect(listing.imageUrl).toBe('https://content.avito.ma/classifieds/images/99?t=images');
+  });
+
   it('rejects ads with no asking price', () => {
     expect(() =>
       listingFromAvitoAd({ listId: '1', subject: 'x', price: null }, url),
@@ -132,6 +146,49 @@ describe('parseAvitoSearchCards', () => {
     `;
     const listings = parseAvitoSearchCards(html, new Date('2026-01-01T00:00:00Z'));
     expect(listings[0]?.imageUrl).toBe('https://content.avito.ma/classifieds/images/99?t=images');
+  });
+
+  it('prefers the listing photo when a seller portrait comes first in the card', () => {
+    const html = `
+      <a data-testid="ad-card-v2-1" href="/fr/casa/motos/Yamaha_MT-07_111.htm">
+        <h3>Yamaha MT-07</h3>
+        <img src="https://content.avito.ma/users/42.jpg" alt="seller" />
+        <img src="https://content.avito.ma/classifieds/images/99?t=images" />
+        <span>65 000</span><span>DH</span>
+        <span>Casablanca</span>
+        <span>il y a 2 jours</span>
+      </a>
+    `;
+    const listings = parseAvitoSearchCards(html, new Date('2026-01-01T00:00:00Z'));
+    expect(listings[0]?.imageUrl).toBe('https://content.avito.ma/classifieds/images/99?t=images');
+  });
+
+  it('uses __NEXT_DATA__ listing photo instead of a seller portrait on the card', () => {
+    const next = {
+      props: {
+        pageProps: {
+          ads: [
+            {
+              listId: '111',
+              imageUrl: 'https://content.avito.ma/users/42.jpg',
+              defaultImage: 'https://content.avito.ma/classifieds/images/101?t=images',
+            },
+          ],
+        },
+      },
+    };
+    const html = `
+      <a data-testid="ad-card-v2-1" href="/fr/casa/motos/Yamaha_MT-07_111.htm">
+        <h3>Yamaha MT-07</h3>
+        <img src="https://content.avito.ma/users/42.jpg" />
+        <span>65 000</span><span>DH</span>
+        <span>Casablanca</span>
+        <span>il y a 2 jours</span>
+      </a>
+      <script id="__NEXT_DATA__" type="application/json">${JSON.stringify(next)}</script>
+    `;
+    const listings = parseAvitoSearchCards(html, new Date('2026-01-01T00:00:00Z'));
+    expect(listings[0]?.imageUrl).toBe('https://content.avito.ma/classifieds/images/101?t=images');
   });
 
   it('fills imageUrl from __NEXT_DATA__ when the card only has an avatar', () => {

@@ -13,8 +13,14 @@ const AVITO_ID_RE = /_(\d+)\.htm(?:$|\?)/i;
 const BIKER_HOST = /(^|\.)biker\.ma$/i;
 const BIKER_ID_RE = /\/(?:annonce\/)?detail-moto\/[^/]+\/(\d+)(?:$|\?)/i;
 
+const WANDALOO_HOST = /(^|\.)wandaloo\.com$/i;
+const WANDALOO_ID_RE = /\/occasion\/[^/]+\/(\d+)\.html(?:$|\?)/i;
+
+const MOTEUR_HOST = /(^|\.)moteur\.ma$/i;
+const MOTEUR_ID_RE = /\/detail-annonce\/(\d+)\//i;
+
 /**
- * If `text` contains an Avito or Biker listing URL, return the first one.
+ * If `text` contains a known marketplace listing URL, return the first one.
  * Used by the compare paste path so a bare link can be resolved from our DB
  * (we already store price from the daily scan).
  */
@@ -31,7 +37,7 @@ export function isUrlOnlyPaste(text: string): boolean {
   return extractListingUrl(trimmed) !== undefined;
 }
 
-/** Pure parse of a single Avito/Biker listing URL. */
+/** Pure parse of a single marketplace listing URL. */
 export function parseListingUrl(raw: string): ParsedListingUrl | undefined {
   let parsed: URL;
   try {
@@ -43,13 +49,30 @@ export function parseListingUrl(raw: string): ParsedListingUrl | undefined {
   if (AVITO_HOST.test(parsed.hostname)) {
     const id = AVITO_ID_RE.exec(parsed.pathname)?.[1];
     if (!id) return undefined;
-    return { sourceId: 'avito', externalId: id, url: parsed.toString() };
+    const isCar = /\/voitures/i.test(parsed.pathname);
+    return {
+      sourceId: isCar ? 'avito-cars' : 'avito',
+      externalId: id,
+      url: parsed.toString(),
+    };
   }
 
   if (BIKER_HOST.test(parsed.hostname)) {
     const id = BIKER_ID_RE.exec(parsed.pathname)?.[1];
     if (!id) return undefined;
     return { sourceId: 'biker', externalId: id, url: parsed.toString() };
+  }
+
+  if (WANDALOO_HOST.test(parsed.hostname)) {
+    const id = WANDALOO_ID_RE.exec(parsed.pathname)?.[1];
+    if (!id) return undefined;
+    return { sourceId: 'wandaloo', externalId: id, url: parsed.toString() };
+  }
+
+  if (MOTEUR_HOST.test(parsed.hostname)) {
+    const id = MOTEUR_ID_RE.exec(parsed.pathname)?.[1];
+    if (!id) return undefined;
+    return { sourceId: 'moteur', externalId: id, url: parsed.toString() };
   }
 
   return undefined;

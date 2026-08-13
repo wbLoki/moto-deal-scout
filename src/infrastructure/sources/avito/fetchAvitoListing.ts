@@ -1,4 +1,6 @@
-import type { Listing } from '../../../domain/entities/Listing.js';
+import type { Listing, MarketplaceId } from '../../../domain/entities/Listing.js';
+import { vehicleTypeForMarketplace } from '../../../domain/entities/Listing.js';
+import { parseFuelType, parseGearbox } from '../../../domain/entities/VehicleType.js';
 import { parseNumber, parseYear } from '../shared/textParsing.js';
 import { parseListingUrl } from '../../../application/services/parseListingUrl.js';
 import { normalizeListingImageUrl } from './parseAvitoSearchCards.js';
@@ -72,6 +74,7 @@ export function listingFromAvitoAd(
   ad: AvitoAd,
   pageUrl: string,
   scrapedAt: Date = new Date(),
+  sourceId: MarketplaceId = 'avito',
 ): Listing {
   const parsed = parseListingUrl(pageUrl);
   const externalId = String(ad.listId ?? parsed?.externalId ?? '');
@@ -90,6 +93,8 @@ export function listingFromAvitoAd(
   const yearRaw = findParam(ad.params, ['regdate']);
   const mileageRaw = findParam(ad.params, ['mileage_exact', 'mileage']);
   const ccRaw = findParam(ad.params, ['cylinder_size']);
+  const fuelRaw = findParam(ad.params, ['fuel', 'carburant', 'fuel_type']);
+  const gearboxRaw = findParam(ad.params, ['gearbox', 'transmission', 'boite', 'gearbox_type']);
 
   const year =
     typeof yearRaw === 'number' ? yearRaw : parseYear(paramText(yearRaw));
@@ -99,7 +104,7 @@ export function listingFromAvitoAd(
     typeof ccRaw === 'number' ? ccRaw : parseNumber(paramText(ccRaw));
 
   return {
-    sourceId: 'avito' as const,
+    sourceId,
     externalId,
     url: pageUrl,
     title: (ad.subject ?? '').trim() || `Avito #${externalId}`,
@@ -111,6 +116,9 @@ export function listingFromAvitoAd(
       displacementCc != null && displacementCc >= 25 && displacementCc <= 3500
         ? displacementCc
         : undefined,
+    vehicleType: vehicleTypeForMarketplace(sourceId),
+    fuelType: parseFuelType(paramText(fuelRaw)),
+    gearbox: parseGearbox(paramText(gearboxRaw)),
     city: ad.location?.city?.name?.trim() || 'Maroc',
     imageUrl: extractAdImage(ad),
     postedAt: undefined,
@@ -148,7 +156,7 @@ function findAvitoCdnUrl(node: unknown, depth = 0): string | undefined {
   if (depth > 6 || node == null) return undefined;
   if (typeof node === 'string') {
     const url = normalizeListingImageUrl(node);
-    return url && /content\.avito\.ma/i.test(url) ? url : undefined;
+    return url && /classifieds\/images/i.test(url) ? url : undefined;
   }
   if (Array.isArray(node)) {
     for (const item of node) {
@@ -196,7 +204,8 @@ export function listingFromAvitoHtml(
     throw new AvitoListingFetchError('Avito page had no listing data (__NEXT_DATA__).');
   }
   const ad = adFromNextData(JSON.parse(match[1]));
-  return listingFromAvitoAd(ad, pageUrl, scrapedAt);
+  const parsed = parseListingUrl(pageUrl);
+  return listingFromAvitoAd(ad, pageUrl, scrapedAt, parsed?.sourceId ?? 'avito');
 }
 
 /**
@@ -206,8 +215,8 @@ export function listingFromAvitoHtml(
  */
 export async function fetchAvitoListing(url: string): Promise<Listing> {
   const parsed = parseListingUrl(url);
-  if (!parsed || parsed.sourceId !== 'avito') {
-    throw new AvitoListingFetchError('URL must be an Avito.ma motorcycle listing link.');
+  if (!parsed || (parsed.sourceId !== 'avito' && parsed.sourceId !== 'avito-cars')) {
+    throw new AvitoListingFetchError('URL must be an Avito.ma listing link.');
   }
 
   try {

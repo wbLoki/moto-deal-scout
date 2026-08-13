@@ -23,6 +23,7 @@ export const defaultCriteria: SearchCriteria = {
       priceRangeMAD: { min: 65000, max: 95000 },
       maxMileageKm: 30000,
       minYear: 2017,
+      vehicleType: 'motorcycle',
     },
     {
       id: 'honda-cb500f',
@@ -32,6 +33,7 @@ export const defaultCriteria: SearchCriteria = {
       priceRangeMAD: { min: 55000, max: 80000 },
       maxMileageKm: 35000,
       minYear: 2016,
+      vehicleType: 'motorcycle',
     },
     {
       id: 'kawasaki-z650',
@@ -41,6 +43,7 @@ export const defaultCriteria: SearchCriteria = {
       priceRangeMAD: { min: 60000, max: 90000 },
       maxMileageKm: 30000,
       minYear: 2017,
+      vehicleType: 'motorcycle',
     },
   ],
   global: {

@@ -9,6 +9,7 @@ import {
   type Paged,
   type ReviewListing,
 } from '../../../src/reviewQueue.js';
+import { parseVehicleType } from '../../../src/domain/entities/VehicleType.js';
 import { AdminNav } from '../../AdminNav.js';
 import { PageShell } from '../../PageShell.js';
 import { dismissReviewAction, promoteReviewAction, updateListingAction } from './actions.js';
@@ -36,6 +37,7 @@ function fmtDay(iso: string | null): string {
 interface SearchParams {
   readonly rp?: string;
   readonly ip?: string;
+  readonly type?: string;
 }
 
 export default function AdminReviewPage({
@@ -56,19 +58,20 @@ async function AdminReviewBody({ searchParams }: { searchParams: Promise<SearchP
   if (session.user.role !== 'admin') redirect('/');
 
   const params = await searchParams;
+  const vehicleType = parseVehicleType(params.type);
   const reviewPage = toInt(params.rp);
   const incompletePage = toInt(params.ip);
 
   const [queue, incomplete, models] = await Promise.all([
-    listReviewQueue({ page: reviewPage, pageSize: 25 }),
-    listIncompleteListings({ page: incompletePage, pageSize: 25 }),
-    listModelOptions(),
+    listReviewQueue({ page: reviewPage, pageSize: 25, vehicleType }),
+    listIncompleteListings({ page: incompletePage, pageSize: 25, vehicleType }),
+    listModelOptions(vehicleType),
   ]);
 
   return (
     <>
       <h1 className="title">Admin · Review</h1>
-      <AdminNav active="review" />
+      <AdminNav active="review" vehicleType={vehicleType} />
       <p className="subtitle">
         Listings the crawler set aside instead of showing users. <strong>Missing model</strong>{' '}
         names a brand we know but no model in the catalog — add or pick a model to publish it.{' '}
@@ -88,16 +91,26 @@ async function AdminReviewBody({ searchParams }: { searchParams: Promise<SearchP
               key={`${r.sourceId}:${r.externalId}`}
               row={r}
               models={models}
+              vehicleType={vehicleType}
             />
           ))
         )}
-        <Pager paged={queue} param="rp" other={['ip', String(incomplete.page)]} />
+        <Pager
+          paged={queue}
+          param="rp"
+          other={['ip', String(incomplete.page)]}
+          vehicleType={vehicleType}
+        />
       </section>
 
       <section className="admin-section">
         <h2 className="settings-title">Incomplete data ({incomplete.total}) — fill the gaps</h2>
         {incomplete.rows.length === 0 ? (
-          <div className="empty">Every stored listing has a year, mileage, and displacement.</div>
+          <div className="empty">
+            {vehicleType === 'car'
+              ? 'Every stored listing has a year and mileage.'
+              : 'Every stored listing has a year, mileage, and displacement.'}
+          </div>
         ) : (
           <div className="table-wrap">
             <table className="user-table">
@@ -109,19 +122,24 @@ async function AdminReviewBody({ searchParams }: { searchParams: Promise<SearchP
                   <th>Price</th>
                   <th>Year</th>
                   <th>Mileage</th>
-                  <th>CC</th>
+                  {vehicleType !== 'car' && <th>CC</th>}
                   <th>Save</th>
                 </tr>
               </thead>
               <tbody>
                 {incomplete.rows.map((l) => (
-                  <IncompleteRow key={`${l.sourceId}:${l.externalId}`} row={l} />
+                  <IncompleteRow key={`${l.sourceId}:${l.externalId}`} row={l} hideCc={vehicleType === 'car'} />
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <Pager paged={incomplete} param="ip" other={['rp', String(queue.page)]} />
+        <Pager
+          paged={incomplete}
+          param="ip"
+          other={['rp', String(queue.page)]}
+          vehicleType={vehicleType}
+        />
       </section>
     </>
   );
@@ -130,9 +148,11 @@ async function AdminReviewBody({ searchParams }: { searchParams: Promise<SearchP
 function ReviewCard({
   row,
   models,
+  vehicleType,
 }: {
   row: ReviewListing;
   models: { id: string; label: string }[];
+  vehicleType: 'motorcycle' | 'car';
 }) {
   return (
     <div className="request-card" style={{ display: 'block' }}>
@@ -153,6 +173,7 @@ function ReviewCard({
       >
         <input type="hidden" name="sourceId" value={row.sourceId} />
         <input type="hidden" name="externalId" value={row.externalId} />
+        <input type="hidden" name="vehicleType" value={vehicleType} />
 
         <label className="settings-hint" style={{ display: 'inline-flex', gap: '0.35rem' }}>
           Model:
@@ -184,7 +205,9 @@ function ReviewCard({
 
         <input type="text" name="year" defaultValue={row.year ?? ''} placeholder="Year" aria-label="Year" style={{ ...inputStyle, maxWidth: '5rem' }} />
         <input type="text" name="mileageKm" defaultValue={row.mileageKm ?? ''} placeholder="Km" aria-label="Mileage" style={{ ...inputStyle, maxWidth: '6rem' }} />
-        <input type="text" name="displacementCc" defaultValue={row.displacementCc ?? ''} placeholder="CC" aria-label="Displacement" style={{ ...inputStyle, maxWidth: '5rem' }} />
+        {vehicleType !== 'car' && (
+          <input type="text" name="displacementCc" defaultValue={row.displacementCc ?? ''} placeholder="CC" aria-label="Displacement" style={{ ...inputStyle, maxWidth: '5rem' }} />
+        )}
 
         <button className="btn btn-primary btn-small" type="submit">
           Publish
@@ -202,7 +225,7 @@ function ReviewCard({
   );
 }
 
-function IncompleteRow({ row }: { row: IncompleteListing }) {
+function IncompleteRow({ row, hideCc }: { row: IncompleteListing; hideCc: boolean }) {
   return (
     <tr>
       <td>{row.sourceId}</td>
@@ -219,7 +242,9 @@ function IncompleteRow({ row }: { row: IncompleteListing }) {
           <input type="hidden" name="externalId" value={row.externalId} />
           <input type="text" name="year" defaultValue={row.year ?? ''} placeholder="Year" aria-label="Year" style={{ ...inputStyle, maxWidth: '5rem' }} />
           <input type="text" name="mileageKm" defaultValue={row.mileageKm ?? ''} placeholder="Km" aria-label="Mileage" style={{ ...inputStyle, maxWidth: '6rem' }} />
-          <input type="text" name="displacementCc" defaultValue={row.displacementCc ?? ''} placeholder="CC" aria-label="Displacement" style={{ ...inputStyle, maxWidth: '5rem' }} />
+          {!hideCc && (
+            <input type="text" name="displacementCc" defaultValue={row.displacementCc ?? ''} placeholder="CC" aria-label="Displacement" style={{ ...inputStyle, maxWidth: '5rem' }} />
+          )}
           <button className="btn btn-small" type="submit">
             Save
           </button>
@@ -233,17 +258,20 @@ function Pager<T>({
   paged,
   param,
   other,
+  vehicleType,
 }: {
   paged: Paged<T>;
   param: string;
   /** [name, value] of the other section's page param, preserved across clicks. */
   other: [string, string];
+  vehicleType: 'motorcycle' | 'car';
 }) {
   if (paged.totalPages <= 1) return null;
   const href = (p: number): string => {
     const qs = new URLSearchParams();
     qs.set(param, String(p));
     if (other[1] && other[1] !== '1') qs.set(other[0], other[1]);
+    if (vehicleType === 'car') qs.set('type', 'car');
     return `/admin/review?${qs.toString()}`;
   };
   return (

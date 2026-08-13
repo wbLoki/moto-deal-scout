@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import type { Client } from '@libsql/client';
 import type { Env } from '../../../config/env.js';
 import { loadEnv } from '../../../config/env.js';
-import { ADDITIVE_COLUMNS, MIGRATIONS } from './schema.js';
+import { ADDITIVE_COLUMNS, MIGRATIONS, POST_COLUMN_INDEXES } from './schema.js';
 
 export interface DatabaseConfig {
   /**
@@ -84,6 +84,27 @@ async function applyMigrations(client: Client): Promise<void> {
     await client.execute(statement);
   }
   await ensureColumns(client);
+  for (const statement of POST_COLUMN_INDEXES) {
+    await client.execute(statement);
+  }
+  await copyLegacySearchRanges(client);
+}
+
+/**
+ * Copies pre-cars `user_search_ranges` rows into the per-type table as
+ * motorcycle ranges. Idempotent: skips users who already have a motorcycle row.
+ */
+async function copyLegacySearchRanges(client: Client): Promise<void> {
+  await client.execute(`
+    INSERT INTO user_vehicle_search_ranges
+      (user_id, vehicle_type, budget_min, budget_max, year_min, year_max, updated_at)
+    SELECT user_id, 'motorcycle', budget_min, budget_max, year_min, year_max, updated_at
+      FROM user_search_ranges
+     WHERE NOT EXISTS (
+       SELECT 1 FROM user_vehicle_search_ranges r
+        WHERE r.user_id = user_search_ranges.user_id AND r.vehicle_type = 'motorcycle'
+     )
+  `);
 }
 
 async function ensureMigrated(config: DatabaseConfig): Promise<void> {

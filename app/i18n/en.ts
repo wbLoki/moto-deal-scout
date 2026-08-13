@@ -68,6 +68,9 @@ export const en = {
   },
   nav: {
     compare: 'Compare a bike',
+    compareCar: 'Compare a car',
+    motos: 'Motos',
+    cars: 'Cars',
     notifications: 'Notifications',
     notificationsUnread: (n: number) => `Notifications (${n} unread)`,
     profile: 'Profile',
@@ -113,6 +116,17 @@ export const en = {
     year: 'Model year',
     mileage: 'Mileage (km)',
     displacement: 'Displacement (cc)',
+    fuel: 'Fuel',
+    gearbox: 'Gearbox',
+    allFuels: 'All fuels',
+    allGearboxes: 'All gearboxes',
+    essence: 'Petrol',
+    diesel: 'Diesel',
+    hybrid: 'Hybrid',
+    electric: 'Electric',
+    lpg: 'LPG',
+    manual: 'Manual',
+    automatic: 'Automatic',
     dealRating: 'Deal rating',
     brand: 'Brand',
     city: 'City',
@@ -158,6 +172,7 @@ export const en = {
   empty: {
     daily: 'No new listings today yet — the daily scan runs each morning.',
     saved: 'No saved bikes yet — tap the bookmark on any card to save it here.',
+    savedCar: 'No saved cars yet — tap the bookmark on any card to save it here.',
     watchedNoListings: 'No listings for your followed models in range right now.',
     watchedLead:
       "You're not following any models yet — tap the eye on a card, or pick some on your ",
@@ -234,6 +249,8 @@ export const en = {
     title: 'Request a model',
     subtitle:
       "Suggest a motorcycle model for the scanner to track. An admin reviews and approves it before it's added to the daily scan.",
+    subtitleCar:
+      "Suggest a car model for the scanner to track. An admin reviews and approves it before it's added to the daily scan.",
     yourRequests: (n: number) => `Your requests (${n})`,
     none: "You haven't requested any models yet.",
     brand: 'Brand',
@@ -257,8 +274,11 @@ export const en = {
   },
   compare: {
     title: 'Compare your bike',
+    titleCar: 'Compare your car',
     subtitle:
       "Enter a bike's details to see how good the deal is — the same rating we put on every listing — and get a suggested fair price. No account needed; sign in to unlock AI estimates for un-tracked bikes and pasted ads.",
+    subtitleCar:
+      "Enter a car's details to see how good the deal is — the same rating we put on every listing — and get a suggested fair price. No account needed; sign in to unlock AI estimates for un-tracked cars and pasted ads.",
     brand: 'Brand',
     model: 'Model',
     year: 'Year',

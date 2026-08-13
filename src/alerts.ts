@@ -4,6 +4,7 @@ import type { DailyReport, PriceDrop } from './domain/entities/DailyReport.js';
 import type { NewNotification } from './domain/entities/Notification.js';
 import type { ScoredListing } from './domain/entities/ScoredListing.js';
 import type { SearchRange } from './domain/entities/SearchCriteria.js';
+import type { VehicleType } from './domain/entities/VehicleType.js';
 import { listingWithinRange } from './domain/services/rangeFilter.js';
 import {
   EmailAlertProvider,
@@ -12,7 +13,7 @@ import {
 import { openDatabase, resolveDatabaseConfig } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlNotificationRepository } from './infrastructure/persistence/libsql/LibsqlNotificationRepository.js';
 import { LibsqlUserSearchRangeRepository } from './infrastructure/persistence/libsql/LibsqlUserSearchRangeRepository.js';
-import { DEFAULT_SEARCH_RANGE } from './settingsModel.js';
+import { defaultSearchRangeFor } from './settingsModel.js';
 import type { Env } from './config/env.js';
 
 const madFmt = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
@@ -37,13 +38,13 @@ function listingKey(sourceId: string, externalId: string): string {
 export function newDealNotifications(
   deals: readonly ScoredListing[],
   watchersByModel: ReadonlyMap<string, readonly string[]>,
-  rangeFor: (userId: string) => SearchRange,
+  rangeFor: (userId: string, vehicleType: VehicleType) => SearchRange,
 ): NewNotification[] {
   const rows: NewNotification[] = [];
   for (const deal of deals) {
     const watchers = watchersByModel.get(deal.match.criteria.id) ?? [];
     for (const userId of watchers) {
-      if (!listingWithinRange(deal.listing, rangeFor(userId))) continue;
+      if (!listingWithinRange(deal.listing, rangeFor(userId, deal.match.criteria.vehicleType))) continue;
       rows.push({
         userId,
         type: 'new_deal',
@@ -70,14 +71,14 @@ export function priceDropNotifications(
   drops: readonly PriceDrop[],
   watchersByModel: ReadonlyMap<string, readonly string[]>,
   saversByListing: ReadonlyMap<string, readonly string[]>,
-  rangeFor: (userId: string) => SearchRange,
+  rangeFor: (userId: string, vehicleType: VehicleType) => SearchRange,
 ): NewNotification[] {
   const rows: NewNotification[] = [];
   for (const drop of drops) {
     const key = listingKey(drop.listing.sourceId, drop.listing.externalId);
     const recipients = new Set<string>(saversByListing.get(key) ?? []);
     for (const userId of watchersByModel.get(drop.model.id) ?? []) {
-      if (listingWithinRange(drop.listing, rangeFor(userId))) recipients.add(userId);
+      if (listingWithinRange(drop.listing, rangeFor(userId, drop.model.vehicleType))) recipients.add(userId);
     }
     for (const userId of recipients) {
       rows.push({
@@ -132,12 +133,22 @@ export async function runUserAlerts(report: DailyReport): Promise<AlertOutcome> 
     // Resolve every involved watcher's range up front, then fan out purely.
     const userIds = new Set<string>();
     for (const users of watchersByModel.values()) for (const u of users) userIds.add(u);
-    const rangeByUser = new Map<string, SearchRange>();
+    const rangeByUserType = new Map<string, SearchRange>();
     for (const userId of userIds) {
-      rangeByUser.set(userId, (await rangeRepo.get(userId)) ?? DEFAULT_SEARCH_RANGE);
+      rangeByUserType.set(
+        `${userId}:motorcycle`,
+        (await rangeRepo.get(userId, 'motorcycle')) ?? defaultSearchRangeFor('motorcycle'),
+      );
+      rangeByUserType.set(
+        `${userId}:car`,
+        (await rangeRepo.get(userId, 'car')) ?? defaultSearchRangeFor('car'),
+      );
     }
-    const rangeFor = (userId: string): SearchRange =>
-      rangeByUser.get(userId) ?? DEFAULT_SEARCH_RANGE;
+    const rangeFor = (
+      userId: string,
+      vehicleType: VehicleType,
+    ): SearchRange =>
+      rangeByUserType.get(`${userId}:${vehicleType}`) ?? defaultSearchRangeFor(vehicleType);
 
     const rows = [
       ...newDealNotifications(report.goodDeals, watchersByModel, rangeFor),

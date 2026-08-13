@@ -33,13 +33,17 @@ const JSON_SCHEMA: JsonObjectSchema = {
   required: ['fairMinMAD', 'fairMaxMAD', 'typicalMaxMileageKm', 'typicalMinYear', 'confidence', 'rationale'],
 };
 
-const SYSTEM = [
-  'You are a used-motorcycle pricing expert for the Moroccan market.',
-  'Report a fair private-sale price range in Moroccan dirham (MAD) for the given bike.',
-  "Our own market-calibrated data is the source of truth and is used whenever we have it; you are consulted ONLY for models we lack data on.",
-  'Base the range on realistic Moroccan resale values (imports, taxes and local demand make these differ from Europe). Be slightly conservative and, if unsure, widen the range and lower your confidence.',
-  'Adjust for the specific year and mileage when provided. Also give a typical high-mileage threshold and a typical minimum desirable model year for this model.',
-].join(' ');
+function systemPrompt(vehicleType: BikeInput['vehicleType']): string {
+  const kind = vehicleType === 'car' ? 'used-car' : 'used-motorcycle';
+  const noun = vehicleType === 'car' ? 'car' : 'bike';
+  return [
+    `You are a ${kind} pricing expert for the Moroccan market.`,
+    `Report a fair private-sale price range in Moroccan dirham (MAD) for the given ${noun}.`,
+    "Our own market-calibrated data is the source of truth and is used whenever we have it; you are consulted ONLY for models we lack data on.",
+    'Base the range on realistic Moroccan resale values (imports, taxes and local demand make these differ from Europe). Be slightly conservative and, if unsure, widen the range and lower your confidence.',
+    'Adjust for the specific year and mileage when provided. Also give a typical high-mileage threshold and a typical minimum desirable model year for this model.',
+  ].join(' ');
+}
 
 function userPrompt(input: BikeInput): string {
   const lines = [`Brand: ${input.brand}`, `Model: ${input.model}`];
@@ -56,10 +60,13 @@ function userPrompt(input: BikeInput): string {
  */
 export async function estimateFairRange(ai: AiExtractor, input: BikeInput): Promise<AiRangeEstimate> {
   const raw = await ai.extract({
-    system: SYSTEM,
+    system: systemPrompt(input.vehicleType),
     user: userPrompt(input),
     toolName: 'report_fair_price',
-    toolDescription: 'Report the fair used price range and typical specs for this motorcycle.',
+    toolDescription:
+      input.vehicleType === 'car'
+        ? 'Report the fair used price range and typical specs for this car.'
+        : 'Report the fair used price range and typical specs for this motorcycle.',
     jsonSchema: JSON_SCHEMA,
     schema: estimateSchema,
     maxTokens: 600,
@@ -95,6 +102,7 @@ export async function estimateAndEvaluate(
     priceRangeMAD: { min: est.fairMinMAD, max: est.fairMaxMAD },
     maxMileageKm: est.typicalMaxMileageKm,
     minYear: est.typicalMinYear,
+    vehicleType: input.vehicleType ?? 'motorcycle',
   };
   const { rating, suggestion } = scoreAgainstModel(input, model, global);
   return {

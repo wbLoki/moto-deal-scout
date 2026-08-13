@@ -44,13 +44,34 @@ async function ProfileBody() {
       </section>
 
       <section className="admin-section">
-        <h2 className="settings-title">{t.profile.watchedModels}</h2>
+        <h2 className="settings-title">{t.nav.motos}</h2>
         <p className="settings-hint">{t.profile.watchedHint}</p>
         <WatchedModelsForm
-          models={models.map((m) => ({ id: m.id, brand: m.brand, model: m.model }))}
-          watchedIds={profile.watchedModelIds}
+          models={models
+            .filter((m) => m.vehicleType === 'motorcycle')
+            .map((m) => ({ id: m.id, brand: m.brand, model: m.model }))}
+          watchedIds={profile.watchedModelIds.filter((id) =>
+            models.some((m) => m.id === id && m.vehicleType === 'motorcycle'),
+          )}
           mode="profile"
           locale={locale}
+          vehicleType="motorcycle"
+        />
+      </section>
+
+      <section className="admin-section">
+        <h2 className="settings-title">{t.nav.cars}</h2>
+        <p className="settings-hint">{t.profile.watchedHint}</p>
+        <WatchedModelsForm
+          models={models
+            .filter((m) => m.vehicleType === 'car')
+            .map((m) => ({ id: m.id, brand: m.brand, model: m.model }))}
+          watchedIds={profile.watchedModelIds.filter((id) =>
+            models.some((m) => m.id === id && m.vehicleType === 'car'),
+          )}
+          mode="profile"
+          locale={locale}
+          vehicleType="car"
         />
       </section>
     </>

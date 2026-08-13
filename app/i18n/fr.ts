@@ -33,6 +33,9 @@ export const fr: Dictionary = {
   },
   nav: {
     compare: 'Comparer une moto',
+    compareCar: 'Comparer une voiture',
+    motos: 'Motos',
+    cars: 'Voitures',
     notifications: 'Notifications',
     notificationsUnread: (n: number) => `Notifications (${n} non lues)`,
     profile: 'Profil',
@@ -78,6 +81,17 @@ export const fr: Dictionary = {
     year: 'Année du modèle',
     mileage: 'Kilométrage (km)',
     displacement: 'Cylindrée (cm³)',
+    fuel: 'Carburant',
+    gearbox: 'Boîte',
+    allFuels: 'Tous carburants',
+    allGearboxes: 'Toutes boîtes',
+    essence: 'Essence',
+    diesel: 'Diesel',
+    hybrid: 'Hybride',
+    electric: 'Électrique',
+    lpg: 'GPL',
+    manual: 'Manuelle',
+    automatic: 'Automatique',
     dealRating: 'Note de l’affaire',
     brand: 'Marque',
     city: 'Ville',
@@ -123,6 +137,7 @@ export const fr: Dictionary = {
   empty: {
     daily: 'Pas encore de nouvelles annonces aujourd’hui — le scan quotidien tourne chaque matin.',
     saved: 'Aucune moto enregistrée — touchez le signet d’une carte pour l’ajouter ici.',
+    savedCar: 'Aucune voiture enregistrée — touchez le signet d’une carte pour l’ajouter ici.',
     watchedNoListings: 'Aucune annonce pour vos modèles suivis dans cette fourchette.',
     watchedLead:
       'Vous ne suivez encore aucun modèle — touchez l’œil sur une carte, ou choisissez-en sur votre ',
@@ -199,6 +214,8 @@ export const fr: Dictionary = {
     title: 'Demander un modèle',
     subtitle:
       'Proposez un modèle de moto à suivre. Un admin examine et valide avant l’ajout au scan quotidien.',
+    subtitleCar:
+      'Proposez un modèle de voiture à suivre. Un admin examine et valide avant l’ajout au scan quotidien.',
     yourRequests: (n: number) => `Vos demandes (${n})`,
     none: 'Vous n’avez encore demandé aucun modèle.',
     brand: 'Marque',
@@ -222,8 +239,11 @@ export const fr: Dictionary = {
   },
   compare: {
     title: 'Comparer votre moto',
+    titleCar: 'Comparer votre voiture',
     subtitle:
       'Saisissez les détails d’une moto pour voir la qualité de l’affaire — la même note que sur chaque annonce — et un prix juste suggéré. Pas besoin de compte ; connectez-vous pour les estimations IA et les annonces collées.',
+    subtitleCar:
+      'Saisissez les détails d’une voiture pour voir la qualité de l’affaire — la même note que sur chaque annonce — et un prix juste suggéré. Pas besoin de compte ; connectez-vous pour les estimations IA et les annonces collées.',
     brand: 'Marque',
     model: 'Modèle',
     year: 'Année',

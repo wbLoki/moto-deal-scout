@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Client } from '@libsql/client';
 import type { ModelRequest, ModelRequestStatus } from '../../../domain/entities/ModelRequest.js';
+import { parseVehicleType } from '../../../domain/entities/VehicleType.js';
 import type {
   ModelRequestRepository,
   NewModelRequest,
@@ -17,6 +18,7 @@ interface RequestRow {
   decided_at: string | null;
   decided_by: string | null;
   requester_email?: string | null;
+  vehicle_type: string | null;
 }
 
 function mapRow(row: RequestRow): ModelRequest {
@@ -30,6 +32,7 @@ function mapRow(row: RequestRow): ModelRequest {
     createdAt: new Date(row.created_at),
     decidedAt: row.decided_at ? new Date(row.decided_at) : undefined,
     decidedBy: row.decided_by ?? undefined,
+    vehicleType: parseVehicleType(row.vehicle_type),
     ...(row.requester_email ? { requesterEmail: row.requester_email } : {}),
   };
 }
@@ -40,9 +43,16 @@ export class LibsqlModelRequestRepository implements ModelRequestRepository {
   async create(request: NewModelRequest): Promise<ModelRequest> {
     const id = randomUUID();
     await this.client.execute({
-      sql: `INSERT INTO model_requests (id, user_id, brand, model, note, status)
-            VALUES (?, ?, ?, ?, ?, 'pending')`,
-      args: [id, request.userId, request.brand, request.model, request.note ?? null],
+      sql: `INSERT INTO model_requests (id, user_id, brand, model, note, status, vehicle_type)
+            VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+      args: [
+        id,
+        request.userId,
+        request.brand,
+        request.model,
+        request.note ?? null,
+        request.vehicleType,
+      ],
     });
     const created = await this.findById(id);
     if (!created) throw new Error('Model request creation failed');

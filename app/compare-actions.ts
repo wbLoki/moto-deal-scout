@@ -12,6 +12,7 @@ import {
 } from '../src/compareModel.js';
 import { AiUnavailableError } from '../src/infrastructure/ai/AnthropicClient.js';
 import type { ErrorKey } from './i18n/en.js';
+import type { VehicleType } from '../src/domain/entities/VehicleType.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -41,6 +42,7 @@ const schema = z.object({
     (value) => (value === '' || value === null || value === undefined ? undefined : value),
     z.string().trim().max(60).optional(),
   ),
+  vehicleType: z.enum(['motorcycle', 'car']).optional(),
 });
 
 export interface EvaluateResult {
@@ -57,7 +59,11 @@ export async function evaluateBikeAction(raw: unknown): Promise<EvaluateResult> 
   const parsed = schema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: 'check_inputs' };
   try {
-    const evaluation = await getBikeEvaluation(parsed.data);
+    const { vehicleType, ...rest } = parsed.data;
+    const evaluation = await getBikeEvaluation({
+      ...rest,
+      ...(vehicleType ? { vehicleType } : {}),
+    });
     return { ok: true, evaluation };
   } catch {
     return { ok: false, error: 'evaluate_failed' };
@@ -84,7 +90,11 @@ export async function estimateWithAiAction(raw: unknown): Promise<AiEvaluateResu
   const parsed = schema.safeParse(raw);
   if (!parsed.success) return { ok: false, reason: 'invalid', error: 'check_inputs' };
   try {
-    const evaluation = await getAiEstimate(parsed.data);
+    const { vehicleType, ...rest } = parsed.data;
+    const evaluation = await getAiEstimate({
+      ...rest,
+      ...(vehicleType ? { vehicleType } : {}),
+    });
     return { ok: true, evaluation };
   } catch (err) {
     if (
@@ -113,6 +123,7 @@ export interface PastedListingActionResult {
  */
 export async function evaluatePastedListingAction(
   rawText: unknown,
+  vehicleType: VehicleType = 'motorcycle',
 ): Promise<PastedListingActionResult> {
   const session = await auth();
   if (!session?.user?.id) return { ok: false, reason: 'auth' };
@@ -121,7 +132,7 @@ export async function evaluatePastedListingAction(
     return { ok: false, reason: 'invalid', error: 'paste_more' };
   }
   try {
-    const { extracted, evaluation } = await getPastedListingEvaluation(parsed.data);
+    const { extracted, evaluation } = await getPastedListingEvaluation(parsed.data, vehicleType);
     return { ok: true, extracted, evaluation };
   } catch (err) {
     // `instanceof` can fail across OpenNext chunk boundaries; also match by name.

@@ -1,5 +1,6 @@
 import type { StoredModel } from '../entities/Model.js';
 import type { ModelCriteria } from '../entities/SearchCriteria.js';
+import type { VehicleType } from '../entities/VehicleType.js';
 
 /**
  * Admin-managed set of tracked models. The scanner reads only the enabled
@@ -27,4 +28,9 @@ export interface ModelRepository {
   applyCalibration(id: string, min: number, max: number, samples: number): Promise<void>;
   /** Populates the table from the given models only if it's currently empty. */
   seedIfEmpty(models: readonly ModelCriteria[]): Promise<void>;
+  /** Seeds models for one vehicle type when that type has no rows yet. */
+  seedIfEmptyForType(
+    models: readonly ModelCriteria[],
+    vehicleType: VehicleType,
+  ): Promise<void>;
 }

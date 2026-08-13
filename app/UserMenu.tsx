@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ChevronDownIcon, LogOutIcon, ShieldIcon, UserIcon } from './icons.js';
 import { useT } from './i18n/I18nProvider.js';
 import type { Locale } from './i18n/locales.js';
@@ -20,6 +21,8 @@ type UserMenuProps = {
  */
 export function UserMenu({ email, isAdmin, locale, signOutAction }: UserMenuProps) {
   const t = useT(locale);
+  const pathname = usePathname();
+  const onCars = pathname === '/cars' || pathname.startsWith('/cars/');
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const initial = email.trim().charAt(0).toUpperCase() || '?';
@@ -76,7 +79,7 @@ export function UserMenu({ email, isAdmin, locale, signOutAction }: UserMenuProp
             <span>{t.nav.profile}</span>
           </Link>
           <Link
-            href="/requests"
+            href={onCars ? '/cars/requests' : '/requests'}
             role="menuitem"
             className="user-menu-item"
             onClick={() => setOpen(false)}

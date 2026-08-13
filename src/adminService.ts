@@ -2,11 +2,12 @@ import { z } from 'zod';
 import { loadCriteria } from './config/loadCriteria.js';
 import { loadEnv } from './config/env.js';
 import type { StoredModel } from './domain/entities/Model.js';
+import type { ModelRequest } from './domain/entities/ModelRequest.js';
 import { modelId } from './domain/services/provisionalModel.js';
 import { openDatabaseFromEnv } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
 import { seedModelsOnce } from './infrastructure/persistence/libsql/seedModelsOnce.js';
-import type { ModelRequest } from './domain/entities/ModelRequest.js';
+import type { VehicleType } from './domain/entities/VehicleType.js';
 import { LibsqlModelRequestRepository } from './infrastructure/persistence/libsql/LibsqlModelRequestRepository.js';
 
 export const modelFormSchema = z
@@ -24,6 +25,7 @@ export const modelFormSchema = z
     minYear: z.number().int().gte(1980).lte(2100),
     enabled: z.boolean().default(true),
     autoCalibrate: z.boolean().default(true),
+    vehicleType: z.enum(['motorcycle', 'car']).default('motorcycle'),
   })
   .refine((m) => m.priceMax >= m.priceMin, { message: 'Max price must be >= min price' });
 
@@ -40,6 +42,7 @@ function toStoredModel(input: ModelFormInput): StoredModel {
     minYear: input.minYear,
     enabled: input.enabled,
     autoCalibrate: input.autoCalibrate,
+    vehicleType: input.vehicleType,
   };
 }
 
@@ -57,7 +60,9 @@ export async function listAllModels(): Promise<StoredModel[]> {
 }
 
 /** Admin models home: tracked models + pending requests in one DB session. */
-export async function getAdminModelsPage(): Promise<{
+export async function getAdminModelsPage(
+  vehicleType: VehicleType = 'motorcycle',
+): Promise<{
   models: StoredModel[];
   pending: ModelRequest[];
 }> {
@@ -69,7 +74,10 @@ export async function getAdminModelsPage(): Promise<{
       new LibsqlModelRepository(db).listAll(),
       new LibsqlModelRequestRepository(db).listPending(),
     ]);
-    return { models, pending };
+    return {
+      models: models.filter((m) => m.vehicleType === vehicleType),
+      pending: pending.filter((r) => r.vehicleType === vehicleType),
+    };
   } finally {
     db.close();
   }

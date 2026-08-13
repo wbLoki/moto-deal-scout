@@ -25,9 +25,10 @@ const envSchema = z.object({
 
   /**
    * Comma-separated marketplace source ids to scrape (e.g. `avito,biker`).
-   * Both run when unset. GHA daily scan is Biker-only (datacenter IPs can't
-   * clear Avito's Cloudflare challenge). Avito runs on a residential box
-   * (local/Pi Playwright). A `--source` CLI flag overrides it.
+   * All sources run when unset. GHA daily scan is Biker-only (datacenter IPs
+   * can't clear Avito's Cloudflare challenge). Avito motos, Avito cars, and
+   * Moteur run on a residential box (local/Pi Playwright). A `--source` CLI
+   * flag overrides it.
    */
   SCRAPE_SOURCES: z.string().min(1).optional(),
   /** Milliseconds to wait between requests to the same marketplace, to stay polite. */

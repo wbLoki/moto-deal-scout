@@ -206,6 +206,8 @@ export interface ScannedListingsQuery {
   readonly page?: number;
   /** Rows per page. Defaults to 50, capped at 200. */
   readonly pageSize?: number;
+  /** Restrict to one vehicle market. Defaults to motorcycle. */
+  readonly vehicleType?: import('./domain/entities/VehicleType.js').VehicleType;
 }
 
 interface ScannedRow {
@@ -256,6 +258,9 @@ export async function listScannedListings(
     where.push(`substr(${dateField}, 1, 10) <= ?`);
     args.push(query.to);
   }
+  const vehicleType = query.vehicleType ?? 'motorcycle';
+  where.push("COALESCE(vehicle_type, 'motorcycle') = ?");
+  args.push(vehicleType);
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const db = await openDatabaseFromEnv();
@@ -265,9 +270,12 @@ export async function listScannedListings(
     const page = Math.min(Math.max(query.page ?? 1, 1), totalPages);
     const offset = (page - 1) * pageSize;
 
-    const sourcesRes = await db.execute(
-      'SELECT DISTINCT source_id AS s FROM listings ORDER BY s',
-    );
+    const sourcesRes = await db.execute({
+      sql: `SELECT DISTINCT source_id AS s FROM listings
+             WHERE COALESCE(vehicle_type, 'motorcycle') = ?
+             ORDER BY s`,
+      args: [vehicleType],
+    });
     const sources = (sourcesRes.rows as unknown as { s: string }[]).map((r) => r.s);
 
     const result = await db.execute({

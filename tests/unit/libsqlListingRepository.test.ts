@@ -73,6 +73,26 @@ describe('LibsqlListingRepository', () => {
     expect(kept?.listing.imageUrl).toBe('https://content.avito.ma/classifieds/images/1?t=images');
   });
 
+  it('refreshMissingImage replaces a stored seller portrait', async () => {
+    await repo.save(
+      buildScored({
+        listing: makeListing({
+          externalId: 'img-seller',
+          imageUrl: 'https://content.avito.ma/users/42.jpg',
+        }),
+      }),
+    );
+    await repo.refreshMissingImage(
+      'avito',
+      'img-seller',
+      'https://content.avito.ma/classifieds/images/9?t=images',
+    );
+    const filled = await repo.findBySourceExternalId('avito', 'img-seller');
+    expect(filled?.listing.imageUrl).toBe(
+      'https://content.avito.ma/classifieds/images/9?t=images',
+    );
+  });
+
   it('excludes good deals from before the given date', async () => {
     await repo.save(buildScored({ listing: makeListing({ externalId: 'c' }), isGoodDeal: true }));
 

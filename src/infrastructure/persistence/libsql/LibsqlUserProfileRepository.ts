@@ -1,4 +1,5 @@
 import type { Client, InStatement } from '@libsql/client';
+import type { VehicleType } from '../../../domain/entities/VehicleType.js';
 import type { UserProfileRepository } from '../../../domain/interfaces/UserProfileRepository.js';
 
 export class LibsqlUserProfileRepository implements UserProfileRepository {
@@ -16,6 +17,26 @@ export class LibsqlUserProfileRepository implements UserProfileRepository {
     // Replace the whole set atomically: clear, then insert the new ids.
     const statements: InStatement[] = [
       { sql: 'DELETE FROM user_watched_models WHERE user_id = ?', args: [userId] },
+      ...[...new Set(modelIds)].map((modelId) => ({
+        sql: 'INSERT INTO user_watched_models (user_id, model_id) VALUES (?, ?)',
+        args: [userId, modelId],
+      })),
+    ];
+    await this.client.batch(statements, 'write');
+  }
+
+  async setWatchedModelIdsForType(
+    userId: string,
+    vehicleType: VehicleType,
+    modelIds: readonly string[],
+  ): Promise<void> {
+    const statements: InStatement[] = [
+      {
+        sql: `DELETE FROM user_watched_models
+               WHERE user_id = ?
+                 AND model_id IN (SELECT id FROM models WHERE vehicle_type = ?)`,
+        args: [userId, vehicleType],
+      },
       ...[...new Set(modelIds)].map((modelId) => ({
         sql: 'INSERT INTO user_watched_models (user_id, model_id) VALUES (?, ?)',
         args: [userId, modelId],

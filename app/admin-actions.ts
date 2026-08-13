@@ -8,6 +8,7 @@ import { PUBLIC_DASHBOARD_TAG } from '../src/readModel.js';
 
 function revalidatePublicHome(): void {
   revalidatePath('/');
+  revalidatePath('/cars');
   revalidateTag(PUBLIC_DASHBOARD_TAG);
 }
 
@@ -39,6 +40,7 @@ function modelInputFrom(formData: FormData) {
     minYear: num(formData, 'minYear'),
     enabled: formData.get('enabled') === 'on',
     autoCalibrate: formData.get('autoCalibrate') === 'on',
+    vehicleType: str(formData, 'vehicleType') === 'car' ? 'car' : 'motorcycle',
   };
 }
 

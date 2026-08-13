@@ -3,12 +3,15 @@ import { loadEnv } from './config/env.js';
 import { estimateAndEvaluate } from './application/services/aiPriceEstimator.js';
 import { parseListing } from './application/services/aiListingParser.js';
 import { CatalogModelResolver } from './application/services/CatalogModelResolver.js';
+import { CAR_CATALOG } from './catalog/carCatalog.js';
+import { MOTORCYCLE_CATALOG } from './catalog/motorcycleCatalog.js';
 import {
   extractListingUrl,
   type ParsedListingUrl,
 } from './application/services/parseListingUrl.js';
 import { evaluateBike, type BikeEvaluation, type BikeInput } from './application/services/evaluateBike.js';
 import type { Listing } from './domain/entities/Listing.js';
+import type { VehicleType } from './domain/entities/VehicleType.js';
 import { createAiExtractor } from './infrastructure/ai/aiExtractor.js';
 import {
   AvitoListingFetchError,
@@ -42,7 +45,9 @@ export async function getBikeEvaluation(input: BikeInput): Promise<BikeEvaluatio
   const config = await loadCriteria(env.CRITERIA_CONFIG_PATH);
   const db = await openDatabase(resolveDatabaseConfig(env));
   try {
-    const models = await new LibsqlModelRepository(db).listEnabledCriteria();
+    const models = (await new LibsqlModelRepository(db).listEnabledCriteria()).filter(
+      (m) => m.vehicleType === (input.vehicleType ?? 'motorcycle'),
+    );
     return evaluateBike(input, { models, global: config.global });
   } finally {
     db.close();
@@ -72,8 +77,9 @@ function bikeInputFromListing(
   listing: Listing,
   hint?: { brand?: string; model?: string },
 ): BikeInput {
+  const catalog = listing.vehicleType === 'car' ? CAR_CATALOG : MOTORCYCLE_CATALOG;
   const match =
-    new CatalogModelResolver().resolve(
+    new CatalogModelResolver(catalog).resolve(
       `${listing.title} ${listing.description?.slice(0, 120) ?? ''}`.trim(),
     ) ??
     (hint?.brand && hint?.model
@@ -92,6 +98,7 @@ function bikeInputFromListing(
     ...(listing.displacementCc != null ? { displacementCc: listing.displacementCc } : {}),
     priceMAD: listing.priceMAD,
     ...(listing.city.trim() ? { city: listing.city } : {}),
+    vehicleType: listing.vehicleType,
   };
 }
 
@@ -123,7 +130,7 @@ async function bikeInputFromStoredUrl(ref: ParsedListingUrl): Promise<BikeInput 
 async function scanListingUrl(url: string): Promise<BikeInput> {
   const ref = extractListingUrl(url);
   if (!ref) {
-    throw new ListingUrlScanError('Paste an Avito.ma or Biker.ma listing link.');
+    throw new ListingUrlScanError('Paste a marketplace listing link.');
   }
 
   try {
@@ -132,17 +139,23 @@ async function scanListingUrl(url: string): Promise<BikeInput> {
       return bikeInputFromListing(listing, { brand, model });
     }
 
-    try {
-      const listing = await fetchAvitoListing(ref.url);
-      return bikeInputFromListing(listing);
-    } catch (liveErr) {
-      const fromDb = await bikeInputFromStoredUrl(ref);
-      if (fromDb) return fromDb;
-      if (liveErr instanceof AvitoListingFetchError) {
-        throw new ListingUrlScanError(liveErr.message);
+    if (ref.sourceId === 'avito' || ref.sourceId === 'avito-cars') {
+      try {
+        const listing = await fetchAvitoListing(ref.url);
+        return bikeInputFromListing(listing);
+      } catch (liveErr) {
+        const fromDb = await bikeInputFromStoredUrl(ref);
+        if (fromDb) return fromDb;
+        if (liveErr instanceof AvitoListingFetchError) {
+          throw new ListingUrlScanError(liveErr.message);
+        }
+        throw liveErr;
       }
-      throw liveErr;
     }
+
+    const fromDb = await bikeInputFromStoredUrl(ref);
+    if (fromDb) return fromDb;
+    throw new ListingUrlScanError('Could not scan that listing link.');
   } catch (err) {
     if (err instanceof ListingUrlScanError) throw err;
     if (err instanceof BikerListingFetchError || err instanceof AvitoListingFetchError) {
@@ -161,7 +174,10 @@ async function scanListingUrl(url: string): Promise<BikeInput> {
  * - Avito URL → Browser Rendering (Workers binding), DB fallback, then evaluate.
  * - Free-text ad → AI extraction, then evaluate.
  */
-export async function getPastedListingEvaluation(text: string): Promise<PastedListingResult> {
+export async function getPastedListingEvaluation(
+  text: string,
+  vehicleType: VehicleType = 'motorcycle',
+): Promise<PastedListingResult> {
   const listingRef = extractListingUrl(text);
   if (listingRef) {
     const extracted = await scanListingUrl(listingRef.url);
@@ -170,7 +186,7 @@ export async function getPastedListingEvaluation(text: string): Promise<PastedLi
   }
 
   const ai = createAiExtractor();
-  const extracted = await parseListing(ai, text);
+  const extracted = await parseListing(ai, text, vehicleType);
   const evaluation = await getBikeEvaluation(extracted);
   return { extracted, evaluation };
 }

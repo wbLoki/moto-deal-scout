@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { catalogContains, suggestAliases } from './catalog/motorcycleCatalog.js';
+import { CAR_CATALOG } from './catalog/carCatalog.js';
+import { catalogContains, MOTORCYCLE_CATALOG, suggestAliases } from './catalog/motorcycleCatalog.js';
 import type { ModelRequest } from './domain/entities/ModelRequest.js';
 import { modelId, provisionalModel } from './domain/services/provisionalModel.js';
 import { openDatabaseFromEnv } from './infrastructure/persistence/libsql/Database.js';
@@ -10,6 +11,7 @@ export const modelRequestSchema = z.object({
   brand: z.string().trim().min(1).max(40),
   model: z.string().trim().min(1).max(60),
   note: z.string().trim().max(500).optional(),
+  vehicleType: z.enum(['motorcycle', 'car']).default('motorcycle'),
 });
 
 export type SubmitRequestResult =
@@ -33,7 +35,7 @@ export async function submitModelRequest(
   userId: string,
   input: unknown,
 ): Promise<SubmitRequestResult> {
-  const { brand, model, note } = modelRequestSchema.parse(input);
+  const { brand, model, note, vehicleType } = modelRequestSchema.parse(input);
   const db = await openDatabaseFromEnv();
   try {
     const key = (s: string): string =>
@@ -45,7 +47,9 @@ export async function submitModelRequest(
     const existing = await new LibsqlModelRepository(db).listAll();
 
     const tracked = existing.find(
-      (m) => m.id === wantedId || (key(m.brand) === key(brand) && key(m.model) === key(model)),
+      (m) =>
+        m.vehicleType === vehicleType &&
+        (m.id === wantedId || (key(m.brand) === key(brand) && key(m.model) === key(model))),
     );
     if (tracked) {
       return {
@@ -56,7 +60,7 @@ export async function submitModelRequest(
       };
     }
 
-    if (catalogContains(brand, model)) {
+    if (catalogContains(brand, model, vehicleType === 'car' ? CAR_CATALOG : MOTORCYCLE_CATALOG)) {
       return {
         status: 'duplicate',
         code: 'in_catalog',
@@ -70,6 +74,7 @@ export async function submitModelRequest(
       brand,
       model,
       note,
+      vehicleType,
     });
     return { status: 'created', request };
   } finally {
@@ -112,6 +117,7 @@ export async function approveModelRequest(requestId: string, adminId: string): P
         brand: request.brand,
         model: request.model,
         aliases: suggestAliases(request.model),
+        vehicleType: request.vehicleType,
       }),
     );
     await requests.setStatus(requestId, 'approved', adminId);
