@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckIcon, ChevronDownIcon } from './icons.js';
 import type { FilterOption } from './dealFilters.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { Locale } from './i18n/locales.js';
 
 /**
  * A labelled dropdown that lets the user pick several options via checkboxes.
@@ -15,13 +17,16 @@ export function MultiSelect({
   selected,
   onChange,
   allLabel,
+  locale,
 }: {
   label: string;
   options: readonly FilterOption[];
   selected: readonly string[];
   onChange: (values: string[]) => void;
   allLabel: string;
+  locale: Locale;
 }) {
+  const t = useT(locale);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -52,8 +57,8 @@ export function MultiSelect({
     selected.length === 0
       ? allLabel
       : selected.length === 1
-        ? (options.find((o) => o.value === selected[0])?.label ?? '1 selected')
-        : `${selected.length} selected`;
+        ? (options.find((o) => o.value === selected[0])?.label ?? t.filters.nSelected(1))
+        : t.filters.nSelected(selected.length);
 
   return (
     <div className="multiselect" ref={ref}>

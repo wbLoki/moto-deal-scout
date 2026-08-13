@@ -8,12 +8,17 @@ import {
   submitModelRequest,
 } from '../src/requestService.js';
 import { PUBLIC_DASHBOARD_TAG } from '../src/readModel.js';
+import type { ErrorKey } from './i18n/en.js';
+import { errorKeyFromCaught } from './i18n/errorKey.js';
+
+export type DuplicateRequestCode = 'already_tracked' | 'in_catalog';
 
 export interface RequestFormState {
   ok?: boolean;
-  error?: string;
-  /** Neutral note — e.g. the model is already tracked, so no request was filed. */
-  message?: string;
+  error?: ErrorKey;
+  duplicate?: DuplicateRequestCode;
+  brand?: string;
+  model?: string;
 }
 
 function str(formData: FormData, key: string): string {
@@ -27,18 +32,24 @@ export async function submitRequestAction(
   formData: FormData,
 ): Promise<RequestFormState> {
   const session = await auth();
-  if (!session?.user?.id) return { error: 'Not signed in.' };
+  if (!session?.user?.id) return { error: 'not_signed_in' };
   try {
     const result = await submitModelRequest(session.user.id, {
       brand: str(formData, 'brand'),
       model: str(formData, 'model'),
       note: str(formData, 'note').trim() || undefined,
     });
-    if (result.status === 'duplicate') return { message: result.message };
+    if (result.status === 'duplicate') {
+      return {
+        duplicate: result.code,
+        brand: result.brand,
+        model: result.model,
+      };
+    }
     revalidatePath('/requests');
     return { ok: true };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Failed to submit request.' };
+    return { error: errorKeyFromCaught(err, 'request_failed') };
   }
 }
 

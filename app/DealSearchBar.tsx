@@ -1,17 +1,22 @@
 'use client';
 
 import { SearchIcon } from './icons.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { Locale } from './i18n/locales.js';
 
 /** Shared text search over the visible deals (brand / model / city). */
 export function DealSearchBar({
   value,
   onChange,
-  placeholder = 'Search by brand, model or city…',
+  placeholder,
+  locale,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  locale: Locale;
 }) {
+  const t = useT(locale);
   return (
     <div className="deal-search">
       <SearchIcon size={18} className="deal-search-icon" />
@@ -19,8 +24,8 @@ export function DealSearchBar({
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        aria-label="Search deals"
+        placeholder={placeholder ?? t.filters.searchPlaceholder}
+        aria-label={t.filters.searchAria}
       />
     </div>
   );

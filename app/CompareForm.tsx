@@ -10,6 +10,9 @@ import {
 import { EvaluationPanel, bikeDetailBits } from './EvaluationPanel.js';
 import { SignInModal } from './SignInModal.js';
 import type { BikeEvaluation, BikeInput } from '../src/compareModel.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { ErrorKey, SignInFeature } from './i18n/en.js';
+import type { Locale } from './i18n/locales.js';
 
 interface CatalogBrand {
   readonly brand: string;
@@ -36,10 +39,13 @@ interface ResultState {
 export function CompareForm({
   catalog,
   signedIn,
+  locale,
 }: {
   catalog: readonly CatalogBrand[];
   signedIn: boolean;
+  locale: Locale;
 }) {
+  const t = useT(locale);
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
   const [year, setYear] = useState('');
@@ -50,8 +56,8 @@ export function CompareForm({
   const [pasteText, setPasteText] = useState('');
   const [touched, setTouched] = useState(false);
   const [result, setResult] = useState<ResultState | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [signInFeature, setSignInFeature] = useState<string | null>(null);
+  const [error, setError] = useState<ErrorKey | null>(null);
+  const [signInFeature, setSignInFeature] = useState<SignInFeature | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const models = useMemo(
@@ -91,14 +97,14 @@ export function CompareForm({
       if (res.ok && res.evaluation) setResult({ evaluation: res.evaluation, bike: input });
       else {
         setResult(null);
-        setError(res.error ?? 'Something went wrong.');
+        setError(res.error ?? 'evaluate_failed');
       }
     });
   };
 
   const estimateWithAi = () => {
     if (!signedIn) {
-      setSignInFeature('get AI price estimates');
+      setSignInFeature('aiEstimate');
       return;
     }
     setError(null);
@@ -106,14 +112,14 @@ export function CompareForm({
       const input = buildInput();
       const res = await estimateWithAiAction(input);
       if (res.ok && res.evaluation) setResult({ evaluation: res.evaluation, bike: input });
-      else if (res.reason === 'auth') setSignInFeature('get AI price estimates');
-      else setError(res.error ?? 'The AI estimate failed.');
+      else if (res.reason === 'auth') setSignInFeature('aiEstimate');
+      else setError(res.error ?? 'ai_estimate_failed');
     });
   };
 
   const evaluatePasted = () => {
     if (!signedIn) {
-      setSignInFeature('use the AI listing reader');
+      setSignInFeature('aiReader');
       return;
     }
     setError(null);
@@ -128,9 +134,9 @@ export function CompareForm({
           fromPaste: true,
         });
       } else if (res.reason === 'auth') {
-        setSignInFeature('use the AI listing reader');
+        setSignInFeature('aiReader');
       } else {
-        setError(res.error ?? 'Couldn’t read that listing.');
+        setError(res.error ?? 'read_listing_failed');
       }
     });
   };
@@ -150,7 +156,7 @@ export function CompareForm({
       <form className="compare-form panel" onSubmit={submit}>
         <div className="compare-grid">
           <label className="field">
-            <span>Brand</span>
+            <span>{t.compare.brand}</span>
             <select
               value={brand}
               onChange={(e) => {
@@ -158,7 +164,7 @@ export function CompareForm({
                 setModel('');
               }}
             >
-              <option value="">Select a brand…</option>
+              <option value="">{t.compare.selectBrand}</option>
               {catalog.map((b) => (
                 <option key={b.brand} value={b.brand}>
                   {b.brand}
@@ -168,9 +174,9 @@ export function CompareForm({
           </label>
 
           <label className="field">
-            <span>Model</span>
+            <span>{t.compare.model}</span>
             <select value={model} onChange={(e) => setModel(e.target.value)} disabled={!brand}>
-              <option value="">{brand ? 'Select a model…' : 'Pick a brand first'}</option>
+              <option value="">{brand ? t.compare.selectModel : t.compare.pickBrandFirst}</option>
               {models.map((m) => (
                 <option key={m} value={m}>
                   {m}
@@ -180,9 +186,9 @@ export function CompareForm({
           </label>
 
           <label className="field">
-            <span>Year</span>
+            <span>{t.compare.year}</span>
             <select value={year} onChange={(e) => setYear(e.target.value)}>
-              <option value="">Any</option>
+              <option value="">{t.common.any}</option>
               {YEARS.map((y) => (
                 <option key={y} value={y}>
                   {y}
@@ -192,72 +198,68 @@ export function CompareForm({
           </label>
 
           <label className="field">
-            <span>Mileage (km)</span>
+            <span>{t.compare.mileage}</span>
             <input
               type="number"
               min={0}
               step={1000}
               value={mileage}
-              placeholder="Optional"
+              placeholder={t.common.optional}
               onChange={(e) => setMileage(e.target.value)}
             />
           </label>
 
           <label className="field">
-            <span>Displacement (cc)</span>
+            <span>{t.compare.displacement}</span>
             <input
               type="number"
               min={25}
               max={3500}
               step={1}
               value={displacement}
-              placeholder="Optional"
+              placeholder={t.common.optional}
               onChange={(e) => setDisplacement(e.target.value)}
             />
           </label>
 
           <label className="field">
-            <span>Asking price (MAD)</span>
+            <span>{t.compare.price}</span>
             <input
               type="number"
               min={0}
               step={1000}
               value={price}
-              placeholder="Optional — for a rating"
+              placeholder={t.compare.pricePlaceholder}
               onChange={(e) => setPrice(e.target.value)}
             />
           </label>
 
           <label className="field">
-            <span>City</span>
+            <span>{t.compare.city}</span>
             <input
               type="text"
               value={city}
-              placeholder="Optional — e.g. Casablanca"
+              placeholder={t.compare.cityPlaceholder}
               onChange={(e) => setCity(e.target.value)}
             />
           </label>
         </div>
 
-        {touched && !canSubmit && (
-          <p className="settings-error">Pick a brand and model to evaluate.</p>
-        )}
+        {touched && !canSubmit && <p className="settings-error">{t.compare.pickBrandModel}</p>}
 
         <button className="btn btn-primary" type="submit" disabled={isPending}>
-          {isPending ? 'Evaluating…' : 'Evaluate'}
+          {isPending ? t.compare.evaluating : t.compare.evaluate}
         </button>
       </form>
 
       <details className="compare-paste panel">
-        <summary>Or paste a listing link / ad text{signedIn ? '' : ' (sign in)'}</summary>
-        <p className="settings-hint">
-          Paste an Avito or Biker listing link to scan it live, or the ad text and let AI read it.
-        </p>
+        <summary>{signedIn ? t.compare.pasteSummary : t.compare.pasteSummaryGuest}</summary>
+        <p className="settings-hint">{t.compare.pasteHint}</p>
         <textarea
           className="compare-textarea"
           rows={5}
           value={pasteText}
-          placeholder="Paste the ad text here…"
+          placeholder={t.compare.pastePlaceholder}
           onChange={(e) => setPasteText(e.target.value)}
         />
         <button
@@ -266,14 +268,15 @@ export function CompareForm({
           disabled={isPending || pasteText.trim().length < 10}
           onClick={evaluatePasted}
         >
-          {isPending ? 'Scanning…' : 'Parse & evaluate'}
+          {isPending ? t.compare.scanning : t.compare.parseEvaluate}
         </button>
       </details>
 
-      {error && <p className="settings-error">{error}</p>}
+      {error && <p className="settings-error">{t.errors[error]}</p>}
 
       {result && (
         <CompareResult
+          locale={locale}
           evaluation={result.evaluation}
           bike={result.bike}
           {...(result.fromPaste ? { fromPaste: true } : {})}
@@ -284,7 +287,11 @@ export function CompareForm({
         />
       )}
 
-      <SignInModal feature={signInFeature} onClose={() => setSignInFeature(null)} />
+      <SignInModal
+        locale={locale}
+        feature={signInFeature}
+        onClose={() => setSignInFeature(null)}
+      />
     </div>
   );
 }
@@ -297,6 +304,7 @@ function CompareResult({
   model,
   onEstimateAi,
   aiPending,
+  locale,
 }: {
   evaluation: BikeEvaluation;
   bike: BikeInput;
@@ -305,23 +313,25 @@ function CompareResult({
   model: string;
   onEstimateAi: () => void;
   aiPending: boolean;
+  locale: Locale;
 }) {
+  const t = useT(locale);
   if (evaluation.status === 'not-found') {
     return (
       <div className="compare-result panel">
-        <h2 className="compare-heading">Evaluation</h2>
+        <h2 className="compare-heading">{t.compare.evaluation}</h2>
         <p className="compare-bike-name">
           {brand} {model}
         </p>
         <BikeMeta bike={bike} />
         <p className="subtitle">
-          We couldn&apos;t match “{brand} {model}” to a model we price. You can{' '}
+          {t.compare.notMatchedLead(brand, model)}
           <Link href="/requests" className="card-link">
-            request it
-          </Link>{' '}
-          — or get an AI estimate now.
+            {t.compare.notMatchedLink}
+          </Link>
+          {t.compare.notMatchedTail}
         </p>
-        <AiEstimateCta onEstimateAi={onEstimateAi} aiPending={aiPending} />
+        <AiEstimateCta locale={locale} onEstimateAi={onEstimateAi} aiPending={aiPending} />
       </div>
     );
   }
@@ -329,26 +339,27 @@ function CompareResult({
   if (evaluation.status === 'calibrating') {
     return (
       <div className="compare-result panel">
-        <h2 className="compare-heading">Evaluation</h2>
+        <h2 className="compare-heading">{t.compare.evaluation}</h2>
         <p className="compare-bike-name">
           {evaluation.matched?.brand} {evaluation.matched?.model}
         </p>
-        <span className="tag tag-calibrating">Calibrating</span>
+        <span className="tag tag-calibrating">{t.tiers.calibrating}</span>
         <BikeMeta bike={bike} />
-        <p className="subtitle">
-          We don&apos;t have enough recent listings for a fair price yet — get an AI estimate in the
-          meantime.
-        </p>
-        <AiEstimateCta onEstimateAi={onEstimateAi} aiPending={aiPending} />
+        <p className="subtitle">{t.compare.calibratingHint}</p>
+        <AiEstimateCta locale={locale} onEstimateAi={onEstimateAi} aiPending={aiPending} />
       </div>
     );
   }
 
   return (
-    <EvaluationPanel evaluation={evaluation} bike={bike}>
-      {fromPaste && <p className="compare-extracted">Read from the ad</p>}
+    <EvaluationPanel locale={locale} evaluation={evaluation} bike={bike}>
+      {fromPaste && <p className="compare-extracted">{t.compare.readFromAd}</p>}
       {evaluation.status === 'ai-estimated' && evaluation.ai && (
-        <AiBanner confidence={evaluation.ai.confidence} rationale={evaluation.ai.rationale} />
+        <AiBanner
+          locale={locale}
+          confidence={evaluation.ai.confidence}
+          rationale={evaluation.ai.rationale}
+        />
       )}
     </EvaluationPanel>
   );
@@ -369,26 +380,38 @@ function BikeMeta({ bike }: { bike: BikeInput }) {
 function AiBanner({
   confidence,
   rationale,
+  locale,
 }: {
   confidence: 'low' | 'medium' | 'high';
   rationale: string;
+  locale: Locale;
 }) {
+  const t = useT(locale);
   return (
     <div className="ai-banner">
       <div className="ai-banner-head">
-        <span className="ai-badge">AI estimate</span>
-        <span className="ai-confidence">confidence: {confidence}</span>
+        <span className="ai-badge">{t.compare.aiEstimate}</span>
+        <span className="ai-confidence">{t.compare.confidence(confidence)}</span>
       </div>
       <p className="ai-rationale">{rationale}</p>
-      <p className="ai-disclaimer">Not from our market data — an AI estimate. Verify before acting.</p>
+      <p className="ai-disclaimer">{t.compare.disclaimer}</p>
     </div>
   );
 }
 
-function AiEstimateCta({ onEstimateAi, aiPending }: { onEstimateAi: () => void; aiPending: boolean }) {
+function AiEstimateCta({
+  onEstimateAi,
+  aiPending,
+  locale,
+}: {
+  onEstimateAi: () => void;
+  aiPending: boolean;
+  locale: Locale;
+}) {
+  const t = useT(locale);
   return (
     <button className="btn" type="button" onClick={onEstimateAi} disabled={aiPending}>
-      {aiPending ? 'Estimating…' : 'Estimate with AI (beta)'}
+      {aiPending ? t.compare.estimating : t.compare.estimateAi}
     </button>
   );
 }

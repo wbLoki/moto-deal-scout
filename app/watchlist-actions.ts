@@ -4,10 +4,12 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { auth } from '../auth.js';
 import { completeOnboarding, saveWatchedModels, setWatchedModel } from '../src/watchlist.js';
+import type { ErrorKey } from './i18n/en.js';
+import { errorKeyFromCaught } from './i18n/errorKey.js';
 
 export interface WatchlistState {
   ok?: boolean;
-  error?: string;
+  error?: ErrorKey;
 }
 
 /** Saves the picked models for the signed-in user (also completes onboarding). */
@@ -16,7 +18,7 @@ export async function saveWatchedModelsAction(
   formData: FormData,
 ): Promise<WatchlistState> {
   const session = await auth();
-  if (!session?.user?.id) return { error: 'Not signed in.' };
+  if (!session?.user?.id) return { error: 'not_signed_in' };
   const modelIds = formData.getAll('models').filter((v): v is string => typeof v === 'string');
   try {
     await saveWatchedModels(session.user.id, modelIds);
@@ -24,7 +26,7 @@ export async function saveWatchedModelsAction(
     revalidatePath('/profile');
     return { ok: true };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Failed to save.' };
+    return { error: errorKeyFromCaught(err, 'watchlist_save_failed') };
   }
 }
 

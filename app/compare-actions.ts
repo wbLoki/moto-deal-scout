@@ -11,6 +11,7 @@ import {
   type BikeInput,
 } from '../src/compareModel.js';
 import { AiUnavailableError } from '../src/infrastructure/ai/AnthropicClient.js';
+import type { ErrorKey } from './i18n/en.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -45,7 +46,7 @@ const schema = z.object({
 export interface EvaluateResult {
   readonly ok: boolean;
   readonly evaluation?: BikeEvaluation;
-  readonly error?: string;
+  readonly error?: ErrorKey;
 }
 
 /**
@@ -54,12 +55,12 @@ export interface EvaluateResult {
  */
 export async function evaluateBikeAction(raw: unknown): Promise<EvaluateResult> {
   const parsed = schema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: 'Please check your inputs and try again.' };
+  if (!parsed.success) return { ok: false, error: 'check_inputs' };
   try {
     const evaluation = await getBikeEvaluation(parsed.data);
     return { ok: true, evaluation };
   } catch {
-    return { ok: false, error: 'Something went wrong evaluating this bike. Try again.' };
+    return { ok: false, error: 'evaluate_failed' };
   }
 }
 
@@ -70,7 +71,7 @@ export interface AiEvaluateResult {
   readonly ok: boolean;
   readonly evaluation?: BikeEvaluation;
   readonly reason?: AiFailReason;
-  readonly error?: string;
+  readonly error?: ErrorKey;
 }
 
 /**
@@ -81,15 +82,18 @@ export async function estimateWithAiAction(raw: unknown): Promise<AiEvaluateResu
   const session = await auth();
   if (!session?.user?.id) return { ok: false, reason: 'auth' };
   const parsed = schema.safeParse(raw);
-  if (!parsed.success) return { ok: false, reason: 'invalid', error: 'Please check your inputs.' };
+  if (!parsed.success) return { ok: false, reason: 'invalid', error: 'check_inputs' };
   try {
     const evaluation = await getAiEstimate(parsed.data);
     return { ok: true, evaluation };
   } catch (err) {
-    if (err instanceof AiUnavailableError || (err instanceof Error && err.name === 'AiUnavailableError')) {
-      return { ok: false, reason: 'ai-unavailable', error: 'AI estimates aren’t configured yet.' };
+    if (
+      err instanceof AiUnavailableError ||
+      (err instanceof Error && err.name === 'AiUnavailableError')
+    ) {
+      return { ok: false, reason: 'ai-unavailable', error: 'ai_unavailable' };
     }
-    return { ok: false, reason: 'error', error: 'The AI estimate failed. Try again.' };
+    return { ok: false, reason: 'error', error: 'ai_estimate_failed' };
   }
 }
 
@@ -100,7 +104,7 @@ export interface PastedListingActionResult {
   readonly extracted?: BikeInput;
   readonly evaluation?: BikeEvaluation;
   readonly reason?: AiFailReason;
-  readonly error?: string;
+  readonly error?: ErrorKey;
 }
 
 /**
@@ -114,30 +118,32 @@ export async function evaluatePastedListingAction(
   if (!session?.user?.id) return { ok: false, reason: 'auth' };
   const parsed = pastedSchema.safeParse(rawText);
   if (!parsed.success) {
-    return { ok: false, reason: 'invalid', error: 'Paste a bit more of the ad text.' };
+    return { ok: false, reason: 'invalid', error: 'paste_more' };
   }
   try {
     const { extracted, evaluation } = await getPastedListingEvaluation(parsed.data);
     return { ok: true, extracted, evaluation };
   } catch (err) {
     // `instanceof` can fail across OpenNext chunk boundaries; also match by name.
-    if (err instanceof AiUnavailableError || (err instanceof Error && err.name === 'AiUnavailableError')) {
-      return { ok: false, reason: 'ai-unavailable', error: 'The AI reader isn’t configured yet.' };
+    if (
+      err instanceof AiUnavailableError ||
+      (err instanceof Error && err.name === 'AiUnavailableError')
+    ) {
+      return { ok: false, reason: 'ai-unavailable', error: 'ai_reader_unavailable' };
     }
     if (
       err instanceof ListingUrlScanError ||
       (err instanceof Error && err.name === 'ListingUrlScanError')
     ) {
+      const msg = err instanceof Error ? err.message : '';
       return {
         ok: false,
         reason: 'invalid',
-        error: err instanceof Error ? err.message : 'Could not scan that listing link.',
+        error:
+          msg.includes('Avito') || msg.includes('Biker') ? 'paste_avito_biker' : 'scan_link_failed',
       };
     }
-    console.error(
-      'evaluatePastedListingAction failed:',
-      err instanceof Error ? err.message : err,
-    );
-    return { ok: false, reason: 'error', error: 'Couldn’t read that listing. Try again.' };
+    console.error('evaluatePastedListingAction failed:', err instanceof Error ? err.message : err);
+    return { ok: false, reason: 'error', error: 'read_listing_failed' };
   }
 }

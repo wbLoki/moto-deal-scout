@@ -66,11 +66,11 @@ export class EmailAlertProvider {
     const notificationsUrl = `${this.baseUrl}/notifications`;
     return `
       <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:0 auto;color:#111">
-        <h2 style="font-size:18px;margin:0 0 16px">Moto Deal Scout alerts</h2>
+        <h2 style="font-size:18px;margin:0 0 16px">Alertes Moto Deal Scout</h2>
         <table style="width:100%;border-collapse:collapse">${rows}</table>
         <p style="font-size:13px;color:#666;margin:20px 0 0">
-          <a href="${notificationsUrl}" style="color:#2563eb">See all your alerts</a>
-          · Manage the models you follow in your profile.
+          <a href="${notificationsUrl}" style="color:#2563eb">Voir toutes vos alertes</a>
+          · Gérez les modèles suivis dans votre profil.
         </p>
       </div>`;
   }
@@ -79,8 +79,8 @@ export class EmailAlertProvider {
     const price = n.priceMAD !== null ? `${madFmt.format(n.priceMAD)} MAD` : '';
     const sub =
       n.type === 'price_drop'
-        ? `Price drop${n.oldPriceMAD !== null ? ` from ${madFmt.format(n.oldPriceMAD)} MAD` : ''}`
-        : 'New deal for a model you follow';
+        ? `Baisse de prix${n.oldPriceMAD !== null ? ` depuis ${madFmt.format(n.oldPriceMAD)} MAD` : ''}`
+        : 'Nouvelle affaire pour un modèle que vous suivez';
     return `
       <tr>
         <td style="padding:10px 0;border-bottom:1px solid #eee">
@@ -94,13 +94,14 @@ export class EmailAlertProvider {
 function subjectFor(notifications: readonly StoredNotification[]): string {
   const types = new Set<NotificationType>(notifications.map((n) => n.type));
   const count = notifications.length;
+  const n = count === 1 ? '' : 's';
   if (types.has('price_drop') && types.has('new_deal')) {
-    return `${count} new motorcycle deal${count === 1 ? '' : 's'} & price drop${count === 1 ? '' : 's'}`;
+    return `${count} nouvelle${n} affaire${n} moto et baisse${n} de prix`;
   }
   if (types.has('price_drop')) {
-    return `${count} price drop${count === 1 ? '' : 's'} on bikes you follow`;
+    return `${count} baisse${n} de prix sur vos motos`;
   }
-  return `${count} new motorcycle deal${count === 1 ? '' : 's'} for you`;
+  return `${count} nouvelle${n} affaire${n} moto pour vous`;
 }
 
 function escapeHtml(s: string): string {

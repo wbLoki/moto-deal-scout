@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { MoonIcon, SunIcon } from './icons.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { Locale } from './i18n/locales.js';
 
 type StoredTheme = 'system' | 'light' | 'dark';
 
@@ -43,7 +45,8 @@ function effectiveDark(stored: StoredTheme): boolean {
  * following system. The inline script in the root layout reapplies a stored
  * light/dark choice before paint so there's no flash.
  */
-export function ThemeToggle() {
+export function ThemeToggle({ locale }: { locale: Locale }) {
+  const t = useT(locale);
   const [dark, setDark] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -71,15 +74,15 @@ export function ThemeToggle() {
   return (
     <div className="theme-switch-wrap">
       <span className="theme-switch-text" aria-hidden="true">
-        Theme
+        {t.common.theme}
       </span>
       <button
         type="button"
         role="switch"
         className="theme-switch"
         aria-checked={mounted ? dark : undefined}
-        aria-label="Dark mode"
-        title={dark ? 'Dark mode' : 'Light mode'}
+        aria-label={t.common.darkMode}
+        title={dark ? t.common.darkMode : t.common.lightMode}
         onClick={toggle}
       >
         <SunIcon size={16} className="theme-switch-sun" />

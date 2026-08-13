@@ -77,7 +77,7 @@ describe('submitModelRequest', () => {
     const result = await submitModelRequest(userId, { brand: 'yamaha', model: 'mt 07' });
     expect(result.status).toBe('duplicate');
     if (result.status === 'duplicate') {
-      expect(result.message).toContain('already tracked');
+      expect(result.code).toBe('already_tracked');
     }
   });
 
@@ -85,7 +85,7 @@ describe('submitModelRequest', () => {
     const result = await submitModelRequest(userId, { brand: 'Honda', model: 'CB500X' });
     expect(result.status).toBe('duplicate');
     if (result.status === 'duplicate') {
-      expect(result.message).toContain('catalog');
+      expect(result.code).toBe('in_catalog');
     }
   });
 });

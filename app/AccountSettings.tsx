@@ -7,23 +7,37 @@ import {
   updateNameAction,
   type AccountState,
 } from './account-actions.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { Locale } from './i18n/locales.js';
 
 const initial: AccountState = {};
 
-function Status({ state }: { state: AccountState }) {
-  if (!state.message) return null;
-  return <p className={state.ok ? 'settings-status ok' : 'settings-status err'}>{state.message}</p>;
+function Status({ state, locale }: { state: AccountState; locale: Locale }) {
+  const t = useT(locale);
+  if (!state.code) return null;
+  const text =
+    state.code === 'name_updated'
+      ? t.account.nameUpdated
+      : state.code === 'email_updated'
+        ? t.account.emailUpdated
+        : state.code === 'password_changed'
+          ? t.account.passwordChanged
+          : t.errors[state.code];
+  return <p className={state.ok ? 'settings-status ok' : 'settings-status err'}>{text}</p>;
 }
 
 export function AccountSettings({
+  locale,
   email,
   name,
   hasPassword,
 }: {
+  locale: Locale;
   email: string;
   name: string;
   hasPassword: boolean;
 }) {
+  const t = useT(locale);
   const [nameState, nameAction, namePending] = useActionState(updateNameAction, initial);
   const [emailState, emailAction, emailPending] = useActionState(changeEmailAction, initial);
   const [pwState, pwAction, pwPending] = useActionState(changePasswordAction, initial);
@@ -31,27 +45,27 @@ export function AccountSettings({
   return (
     <div className="account">
       <form action={nameAction} className="auth-form account-form">
-        <h3 className="account-form-title">Name</h3>
+        <h3 className="account-form-title">{t.account.name}</h3>
         <label className="auth-field">
-          <span>Display name</span>
+          <span>{t.account.displayName}</span>
           <input type="text" name="name" defaultValue={name} required />
         </label>
-        <Status state={nameState} />
+        <Status state={nameState} locale={locale} />
         <button className="btn btn-primary" type="submit" disabled={namePending}>
-          {namePending ? 'Saving…' : 'Save name'}
+          {namePending ? t.range.saving : t.account.saveName}
         </button>
       </form>
 
       {hasPassword ? (
         <>
           <form action={emailAction} className="auth-form account-form">
-            <h3 className="account-form-title">Email</h3>
+            <h3 className="account-form-title">{t.account.email}</h3>
             <label className="auth-field">
-              <span>New email</span>
+              <span>{t.account.newEmail}</span>
               <input type="email" name="email" defaultValue={email} autoComplete="email" required />
             </label>
             <label className="auth-field">
-              <span>Current password</span>
+              <span>{t.account.currentPassword}</span>
               <input
                 type="password"
                 name="currentPassword"
@@ -59,16 +73,16 @@ export function AccountSettings({
                 required
               />
             </label>
-            <Status state={emailState} />
+            <Status state={emailState} locale={locale} />
             <button className="btn btn-primary" type="submit" disabled={emailPending}>
-              {emailPending ? 'Saving…' : 'Change email'}
+              {emailPending ? t.range.saving : t.account.changeEmail}
             </button>
           </form>
 
           <form action={pwAction} className="auth-form account-form">
-            <h3 className="account-form-title">Password</h3>
+            <h3 className="account-form-title">{t.account.password}</h3>
             <label className="auth-field">
-              <span>Current password</span>
+              <span>{t.account.currentPassword}</span>
               <input
                 type="password"
                 name="currentPassword"
@@ -77,7 +91,7 @@ export function AccountSettings({
               />
             </label>
             <label className="auth-field">
-              <span>New password</span>
+              <span>{t.account.newPassword}</span>
               <input
                 type="password"
                 name="newPassword"
@@ -87,7 +101,7 @@ export function AccountSettings({
               />
             </label>
             <label className="auth-field">
-              <span>Confirm new password</span>
+              <span>{t.account.confirmPassword}</span>
               <input
                 type="password"
                 name="confirmPassword"
@@ -96,17 +110,14 @@ export function AccountSettings({
                 required
               />
             </label>
-            <Status state={pwState} />
+            <Status state={pwState} locale={locale} />
             <button className="btn btn-primary" type="submit" disabled={pwPending}>
-              {pwPending ? 'Saving…' : 'Change password'}
+              {pwPending ? t.range.saving : t.account.changePassword}
             </button>
           </form>
         </>
       ) : (
-        <p className="settings-hint account-form">
-          You signed in with a social account, so your email ({email}) and password are managed by
-          that provider.
-        </p>
+        <p className="settings-hint account-form">{t.account.oauthHint(email)}</p>
       )}
     </div>
   );

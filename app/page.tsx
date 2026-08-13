@@ -7,6 +7,7 @@ import { ScanNowButton } from './ScanNowButton.js';
 import { DealTabs } from './DealTabs.js';
 import { toDealView } from './dealView.js';
 import { PageShell } from './PageShell.js';
+import { dictionaryFor, getLocale } from './i18n/getLocale.js';
 
 // Reads the database on each request, so it must run on the Node runtime
 // and never be statically cached. maxDuration covers the admin "Scan now".
@@ -41,16 +42,15 @@ async function HomeBody() {
   const data = await getDashboardData(session.user.id);
   if (!data.onboarded) redirect('/onboarding');
 
+  const locale = await getLocale();
+  const t = dictionaryFor(locale);
+
   const { criteria, facets, tabCounts, initialTab, initialSort, watchedModelIds, searchRange } =
     data;
 
   return (
     <>
-      <p className="subtitle">
-        Listings across {criteria.models.length} tracked model
-        {criteria.models.length === 1 ? '' : 's'}, tagged by how good the deal is (price, mileage,
-        year and city). Best deals first.
-      </p>
+      <p className="subtitle">{t.home.trackedModels(criteria.models.length)}</p>
 
       <DealTabs
         initialDeals={data.initialDeals.map(toDealView)}
@@ -61,32 +61,25 @@ async function HomeBody() {
         facets={facets}
         watchedModelIds={watchedModelIds}
         savedKeys={data.savedKeys}
+        locale={locale}
         sidebar={
           <>
-            <SearchSettings current={searchRange} />
+            <SearchSettings locale={locale} current={searchRange} />
             {isAdmin ? (
               <ScanNowButton />
             ) : (
               <div className="scan-now">
-                <button
-                  className="btn"
-                  type="button"
-                  disabled
-                  title="On-demand scans are coming soon for members."
-                >
-                  Scan now
+                <button className="btn" type="button" disabled title={t.home.scanSoonTitle}>
+                  {t.home.scanNow}
                 </button>
-                <span className="status-pill">Coming soon</span>
+                <span className="status-pill">{t.home.comingSoon}</span>
               </div>
             )}
           </>
         }
       />
 
-      <div className="footer">
-        Data scraped from Avito.ma and Biker.ma. Prices can contain seller typos — always verify on
-        the listing before acting.
-      </div>
+      <div className="footer">{t.home.footer}</div>
     </>
   );
 }

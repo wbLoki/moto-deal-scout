@@ -3,10 +3,14 @@
 import { revalidatePath } from 'next/cache';
 import { auth } from '../auth.js';
 import { changeEmail, changePassword, updateName } from '../src/auth/userService.js';
+import type { ErrorKey } from './i18n/en.js';
+import { errorKeyFromCaught } from './i18n/errorKey.js';
+
+export type AccountCode = ErrorKey | 'name_updated' | 'email_updated' | 'password_changed';
 
 export interface AccountState {
   ok?: boolean;
-  message?: string;
+  code?: AccountCode;
 }
 
 function str(formData: FormData, key: string): string {
@@ -19,13 +23,13 @@ export async function updateNameAction(
   formData: FormData,
 ): Promise<AccountState> {
   const session = await auth();
-  if (!session?.user?.id) return { message: 'Not signed in.' };
+  if (!session?.user?.id) return { code: 'not_signed_in' };
   try {
     await updateName(session.user.id, str(formData, 'name'));
     revalidatePath('/profile');
-    return { ok: true, message: 'Name updated.' };
+    return { ok: true, code: 'name_updated' };
   } catch (err) {
-    return { message: err instanceof Error ? err.message : 'Failed to update name.' };
+    return { code: errorKeyFromCaught(err, 'name_update_failed') };
   }
 }
 
@@ -34,13 +38,13 @@ export async function changeEmailAction(
   formData: FormData,
 ): Promise<AccountState> {
   const session = await auth();
-  if (!session?.user?.id) return { message: 'Not signed in.' };
+  if (!session?.user?.id) return { code: 'not_signed_in' };
   try {
     await changeEmail(session.user.id, str(formData, 'currentPassword'), str(formData, 'email'));
     revalidatePath('/profile');
-    return { ok: true, message: 'Email updated. Use it next time you sign in.' };
+    return { ok: true, code: 'email_updated' };
   } catch (err) {
-    return { message: err instanceof Error ? err.message : 'Failed to change email.' };
+    return { code: errorKeyFromCaught(err, 'email_change_failed') };
   }
 }
 
@@ -49,15 +53,15 @@ export async function changePasswordAction(
   formData: FormData,
 ): Promise<AccountState> {
   const session = await auth();
-  if (!session?.user?.id) return { message: 'Not signed in.' };
+  if (!session?.user?.id) return { code: 'not_signed_in' };
   const next = str(formData, 'newPassword');
   if (next !== str(formData, 'confirmPassword')) {
-    return { message: 'New passwords do not match.' };
+    return { code: 'passwords_mismatch' };
   }
   try {
     await changePassword(session.user.id, str(formData, 'currentPassword'), next);
-    return { ok: true, message: 'Password changed.' };
+    return { ok: true, code: 'password_changed' };
   } catch (err) {
-    return { message: err instanceof Error ? err.message : 'Failed to change password.' };
+    return { code: errorKeyFromCaught(err, 'password_change_failed') };
   }
 }

@@ -2,6 +2,8 @@
 
 import { useId, useState, type ReactNode } from 'react';
 import { ChevronDownIcon } from './icons.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { Locale } from './i18n/locales.js';
 
 /**
  * Browse column: search and sort stay visible; the rest of the filters sit
@@ -13,13 +15,16 @@ export function BrowseSidebar({
   sort,
   children,
   filterCount = 0,
+  locale,
 }: {
   search: ReactNode;
   sort: ReactNode;
   children: ReactNode;
   /** Count of active MultiSelect values, shown on the mobile toggle. */
   filterCount?: number;
+  locale: Locale;
 }) {
+  const t = useT(locale);
   const [open, setOpen] = useState(false);
   const panelId = useId();
 
@@ -36,7 +41,7 @@ export function BrowseSidebar({
             aria-controls={panelId}
             onClick={() => setOpen((v) => !v)}
           >
-            Filters
+            {t.filters.title}
             {filterCount > 0 && <span className="filters-toggle-count">{filterCount}</span>}
             <ChevronDownIcon size={16} />
           </button>

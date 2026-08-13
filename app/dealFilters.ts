@@ -34,6 +34,11 @@ export const RATING_OPTIONS: readonly FilterOption[] = [
   { value: 'calibrating', label: 'Calibrating' },
 ];
 
+/** Same options with display labels supplied by the caller (i18n). */
+export function ratingFilterOptions(labelFor: (value: string) => string): FilterOption[] {
+  return RATING_OPTIONS.map((o) => ({ value: o.value, label: labelFor(o.value) }));
+}
+
 export interface FilterOption {
   /** Lowercased key used for matching. */
   readonly value: string;
