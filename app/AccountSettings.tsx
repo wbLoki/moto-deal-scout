@@ -22,7 +22,7 @@ function Status({ state, locale }: { state: AccountState; locale: Locale }) {
         ? t.account.emailUpdated
         : state.code === 'password_changed'
           ? t.account.passwordChanged
-          : t.errors[state.code as keyof typeof t.errors];
+          : t.errors[state.code];
   return <p className={state.ok ? 'settings-status ok' : 'settings-status err'}>{text}</p>;
 }
 
