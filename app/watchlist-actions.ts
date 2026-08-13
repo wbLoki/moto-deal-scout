@@ -21,7 +21,8 @@ export async function saveWatchedModelsAction(
   const session = await auth();
   if (!session?.user?.id) return { error: 'not_signed_in' };
   const modelIds = formData.getAll('models').filter((v): v is string => typeof v === 'string');
-  const vehicleType = parseVehicleType(String(formData.get('vehicleType') ?? 'motorcycle'));
+  const rawType = formData.get('vehicleType');
+  const vehicleType = parseVehicleType(typeof rawType === 'string' ? rawType : 'motorcycle');
   try {
     await saveWatchedModels(session.user.id, modelIds, vehicleType);
     revalidatePath('/');

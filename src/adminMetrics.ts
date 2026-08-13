@@ -1,4 +1,5 @@
 import type { Client } from '@libsql/client';
+import type { VehicleType } from './domain/entities/VehicleType.js';
 import { openDatabaseFromEnv } from './infrastructure/persistence/libsql/Database.js';
 
 export interface DailyCount {
@@ -207,7 +208,7 @@ export interface ScannedListingsQuery {
   /** Rows per page. Defaults to 50, capped at 200. */
   readonly pageSize?: number;
   /** Restrict to one vehicle market. Defaults to motorcycle. */
-  readonly vehicleType?: import('./domain/entities/VehicleType.js').VehicleType;
+  readonly vehicleType?: VehicleType;
 }
 
 interface ScannedRow {

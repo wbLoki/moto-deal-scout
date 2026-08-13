@@ -1,6 +1,7 @@
 import { loadCriteria } from './config/loadCriteria.js';
 import { loadEnv } from './config/env.js';
 import type { StoredModel } from './domain/entities/Model.js';
+import type { VehicleType } from './domain/entities/VehicleType.js';
 import { openDatabaseFromEnv } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
 import { LibsqlUserProfileRepository } from './infrastructure/persistence/libsql/LibsqlUserProfileRepository.js';
@@ -84,7 +85,7 @@ export async function getProfilePageData(userId: string): Promise<ProfilePageDat
 export async function saveWatchedModels(
   userId: string,
   modelIds: readonly string[],
-  vehicleType: import('./domain/entities/VehicleType.js').VehicleType = 'motorcycle',
+  vehicleType: VehicleType = 'motorcycle',
 ): Promise<void> {
   const db = await openDatabaseFromEnv();
   try {

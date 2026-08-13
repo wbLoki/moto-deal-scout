@@ -239,10 +239,12 @@ function walkForAvitoImages(node: unknown, into: Map<string, string>): void {
   }
   const rec = node as Record<string, unknown>;
   const id = rec['listId'] ?? rec['id'];
+  const idKey =
+    typeof id === 'string' || typeof id === 'number' ? String(id) : undefined;
   const imageCandidate = listingPhotoFromRecord(rec);
-  if (id != null && imageCandidate) {
-    const existing = into.get(String(id));
-    into.set(String(id), preferListingPhoto(existing, imageCandidate) ?? imageCandidate);
+  if (idKey != null && imageCandidate) {
+    const existing = into.get(idKey);
+    into.set(idKey, preferListingPhoto(existing, imageCandidate) ?? imageCandidate);
   }
   for (const value of Object.values(rec)) walkForAvitoImages(value, into);
 }
@@ -255,11 +257,15 @@ function listingPhotoFromRecord(rec: Record<string, unknown>): string | undefine
       for (const item of value) push(item);
       return;
     }
+    const nestedUrl =
+      value && typeof value === 'object' && 'url' in value
+        ? (value as { url?: unknown }).url
+        : undefined;
     const url =
       typeof value === 'string'
         ? normalizeListingImageUrl(value)
-        : value && typeof value === 'object' && 'url' in value
-          ? normalizeListingImageUrl(String((value as { url?: unknown }).url ?? ''))
+        : typeof nestedUrl === 'string'
+          ? normalizeListingImageUrl(nestedUrl)
           : undefined;
     if (!url) return;
     if (AVITO_LISTING_PHOTO.test(url)) classifieds.push(url);

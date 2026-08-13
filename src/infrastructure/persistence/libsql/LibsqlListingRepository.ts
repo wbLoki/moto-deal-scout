@@ -466,8 +466,8 @@ export class LibsqlListingRepository implements ListingRepository {
       args: [sourceId],
     });
     return result.rows.map((row) => ({
-      externalId: String(row['external_id']),
-      url: String(row['url']),
+      externalId: typeof row['external_id'] === 'string' ? row['external_id'] : '',
+      url: typeof row['url'] === 'string' ? row['url'] : '',
     }));
   }
 
