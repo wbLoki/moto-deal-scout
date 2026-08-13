@@ -1,5 +1,8 @@
 'use client';
 
+import { useT } from './i18n/I18nProvider.js';
+import type { Locale } from './i18n/locales.js';
+
 /** Windowed page list, e.g. [1, '…', 4, 5, 6, '…', 20]. */
 function windowed(current: number, total: number): (number | '…')[] {
   const range: number[] = [];
@@ -24,22 +27,25 @@ export function Pagination({
   page,
   pageCount,
   onPage,
+  locale,
 }: {
   page: number;
   pageCount: number;
   onPage: (page: number) => void;
+  locale: Locale;
 }) {
+  const t = useT(locale);
   if (pageCount <= 1) return null;
 
   return (
-    <nav className="pagination" aria-label="Pagination">
+    <nav className="pagination" aria-label={t.common.pagination}>
       <button
         type="button"
         className="page-btn"
         disabled={page <= 1}
         onClick={() => onPage(page - 1)}
       >
-        Prev
+        {t.common.prev}
       </button>
       {windowed(page, pageCount).map((p, i) =>
         p === '…' ? (
@@ -64,7 +70,7 @@ export function Pagination({
         disabled={page >= pageCount}
         onClick={() => onPage(page + 1)}
       >
-        Next
+        {t.common.next}
       </button>
     </nav>
   );

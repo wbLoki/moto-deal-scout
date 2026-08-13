@@ -7,13 +7,17 @@ import { SortSelect } from './SortSelect.js';
 import { Pagination } from './Pagination.js';
 import { SignInModal } from './SignInModal.js';
 import { PAGE_SIZE, type SortKey } from './dealSort.js';
-import { MIN_YEAR, RATING_OPTIONS, yearOptions, type FilterOption } from './dealFilters.js';
+import { MIN_YEAR, ratingFilterOptions, yearOptions, type FilterOption } from './dealFilters.js';
 import { MultiSelect } from './MultiSelect.js';
 import { BookmarkIcon, EyeIcon } from './icons.js';
 import { fetchPublicDealsPageAction } from './deal-actions.js';
 import type { DealView } from './dealView.js';
 import type { PublicDealsInput } from '../src/readModel.js';
 import type { DealFacets } from '../src/domain/interfaces/ListingRepository.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { SignInFeature } from './i18n/en.js';
+import type { Locale } from './i18n/locales.js';
+import type { DealTierLevel } from '../src/domain/services/dealTier.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const MAX_YEAR = CURRENT_YEAR + 1;
@@ -36,24 +40,31 @@ function roundUp(value: number, step: number): number {
  * The members-only controls as they appear for anonymous visitors: clicking
  * either prompts sign-in rather than navigating away.
  */
-function PublicCardActions({ onNeedSignIn }: { onNeedSignIn: (feature: string) => void }) {
+function PublicCardActions({
+  onNeedSignIn,
+  locale,
+}: {
+  onNeedSignIn: (feature: SignInFeature) => void;
+  locale: Locale;
+}) {
+  const t = useT(locale);
   return (
     <div className="card-actions">
       <button
         type="button"
         className="watch-eye"
-        title="Follow this model"
-        aria-label="Follow this model"
-        onClick={() => onNeedSignIn('follow models')}
+        title={t.card.follow}
+        aria-label={t.card.follow}
+        onClick={() => onNeedSignIn('follow')}
       >
         <EyeIcon size={18} />
       </button>
       <button
         type="button"
         className="watch-eye"
-        title="Save this bike"
-        aria-label="Save this bike"
-        onClick={() => onNeedSignIn('save bikes')}
+        title={t.card.save}
+        aria-label={t.card.save}
+        onClick={() => onNeedSignIn('save')}
       >
         <BookmarkIcon size={16} />
       </button>
@@ -73,12 +84,15 @@ export function PublicFeed({
   initialTotal,
   initialSort,
   facets,
+  locale,
 }: {
   initialDeals: readonly DealView[];
   initialTotal: number;
   initialSort: SortKey;
   facets: DealFacets;
+  locale: Locale;
 }) {
+  const t = useT(locale);
   const priceCap = useMemo(
     () => roundUp(Math.max(50000, facets.maxPrice), 5000),
     [facets.maxPrice],
@@ -87,7 +101,10 @@ export function PublicFeed({
     () => (facets.maxMileage > 0 ? roundUp(facets.maxMileage, 5000) : 200000),
     [facets.maxMileage],
   );
-  const ccCap = useMemo(() => (facets.maxCc > 0 ? roundUp(facets.maxCc, 50) : 1300), [facets.maxCc]);
+  const ccCap = useMemo(
+    () => (facets.maxCc > 0 ? roundUp(facets.maxCc, 50) : 1300),
+    [facets.maxCc],
+  );
   const brandOptions = useMemo<FilterOption[]>(
     () => facets.brands.map((b) => ({ value: b.toLowerCase(), label: b })),
     [facets.brands],
@@ -101,7 +118,7 @@ export function PublicFeed({
   const [total, setTotal] = useState(initialTotal);
   const [isPending, startTransition] = useTransition();
 
-  const [signInFeature, setSignInFeature] = useState<string | null>(null);
+  const [signInFeature, setSignInFeature] = useState<SignInFeature | null>(null);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [sort, setSort] = useState<SortKey>(initialSort);
@@ -223,8 +240,9 @@ export function PublicFeed({
   return (
     <div className="browse">
       <aside className="browse-sidebar">
-        <DealSearchBar value={query} onChange={setQuery} />
+        <DealSearchBar locale={locale} value={query} onChange={setQuery} />
         <SortSelect
+          locale={locale}
           value={sort}
           onChange={(v) => {
             setSort(v);
@@ -233,17 +251,17 @@ export function PublicFeed({
         />
 
         <div className="filters-head">
-          <h3 className="filters-title">Filters</h3>
+          <h3 className="filters-title">{t.filters.title}</h3>
           <button type="button" className="filters-reset" onClick={resetFilters}>
-            Reset
+            {t.common.reset}
           </button>
         </div>
 
         <div className="sidebar-section">
-          <h3 className="sidebar-title">Budget (MAD)</h3>
+          <h3 className="sidebar-title">{t.filters.budget}</h3>
           <div className="sidebar-row">
             <label>
-              <span>Min</span>
+              <span>{t.common.min}</span>
               <input
                 type="number"
                 min={0}
@@ -253,7 +271,7 @@ export function PublicFeed({
               />
             </label>
             <label>
-              <span>Max</span>
+              <span>{t.common.max}</span>
               <input
                 type="number"
                 min={0}
@@ -266,10 +284,10 @@ export function PublicFeed({
         </div>
 
         <div className="sidebar-section">
-          <h3 className="sidebar-title">Model year</h3>
+          <h3 className="sidebar-title">{t.filters.year}</h3>
           <div className="sidebar-row">
             <label>
-              <span>From</span>
+              <span>{t.common.from}</span>
               <select
                 value={yearMin}
                 onChange={(e) => {
@@ -285,7 +303,7 @@ export function PublicFeed({
               </select>
             </label>
             <label>
-              <span>To</span>
+              <span>{t.common.to}</span>
               <select
                 value={yearMax}
                 onChange={(e) => {
@@ -304,10 +322,10 @@ export function PublicFeed({
         </div>
 
         <div className="sidebar-section">
-          <h3 className="sidebar-title">Mileage (km)</h3>
+          <h3 className="sidebar-title">{t.filters.mileage}</h3>
           <div className="sidebar-row">
             <label>
-              <span>Min</span>
+              <span>{t.common.min}</span>
               <input
                 type="number"
                 min={0}
@@ -317,7 +335,7 @@ export function PublicFeed({
               />
             </label>
             <label>
-              <span>Max</span>
+              <span>{t.common.max}</span>
               <input
                 type="number"
                 min={0}
@@ -330,10 +348,10 @@ export function PublicFeed({
         </div>
 
         <div className="sidebar-section">
-          <h3 className="sidebar-title">Displacement (cc)</h3>
+          <h3 className="sidebar-title">{t.filters.displacement}</h3>
           <div className="sidebar-row">
             <label>
-              <span>Min</span>
+              <span>{t.common.min}</span>
               <input
                 type="number"
                 min={0}
@@ -343,7 +361,7 @@ export function PublicFeed({
               />
             </label>
             <label>
-              <span>Max</span>
+              <span>{t.common.max}</span>
               <input
                 type="number"
                 min={0}
@@ -356,66 +374,75 @@ export function PublicFeed({
         </div>
 
         <MultiSelect
-          label="Deal rating"
-          options={RATING_OPTIONS}
+          locale={locale}
+          label={t.filters.dealRating}
+          options={ratingFilterOptions((v) => t.tiers[v as DealTierLevel])}
           selected={ratings}
           onChange={(v) => {
             setRatings(v);
             resetPage();
           }}
-          allLabel="All ratings"
+          allLabel={t.filters.allRatings}
         />
 
         <MultiSelect
-          label="Brand"
+          locale={locale}
+          label={t.filters.brand}
           options={brandOptions}
           selected={brandsSel}
           onChange={(v) => {
             setBrandsSel(v);
             resetPage();
           }}
-          allLabel="All brands"
+          allLabel={t.filters.allBrands}
         />
 
         <MultiSelect
-          label="City"
+          locale={locale}
+          label={t.filters.city}
           options={cityOptions}
           selected={cities}
           onChange={(v) => {
             setCities(v);
             resetPage();
           }}
-          allLabel="All cities"
+          allLabel={t.filters.allCities}
         />
 
-        {invalid && <p className="settings-error">Max must be greater than or equal to min.</p>}
+        {invalid && <p className="settings-error">{t.filters.rangeInvalid}</p>}
       </aside>
 
       <div className="browse-main">
-        <div className="browse-count">
-          {total} {total === 1 ? 'listing' : 'listings'}
-        </div>
+        <div className="browse-count">{t.filters.listingCount(total)}</div>
 
         <div className="grid" aria-busy={isPending}>
           {deals.map((deal) => (
             <DealCardShell
               key={deal.key}
               data={deal}
-              topRight={<PublicCardActions onNeedSignIn={setSignInFeature} />}
+              locale={locale}
+              topRight={<PublicCardActions locale={locale} onNeedSignIn={setSignInFeature} />}
             />
           ))}
         </div>
 
         {deals.length === 0 && (
-          <div className="empty">
-            {invalid ? 'Check your filter values.' : 'No deals match your filters.'}
-          </div>
+          <div className="empty">{invalid ? t.filters.checkFilters : t.filters.noMatch}</div>
         )}
 
-        <Pagination page={Math.min(page, pageCount)} pageCount={pageCount} onPage={setPage} />
+        <Pagination
+          locale={locale}
+          page={Math.min(page, pageCount)}
+          pageCount={pageCount}
+          onPage={setPage}
+        />
       </div>
 
-      <SignInModal feature={signInFeature} onClose={() => setSignInFeature(null)} />
+      <SignInModal
+        locale={locale}
+        feature={signInFeature}
+        onClose={() => setSignInFeature(null)}
+      />
     </div>
   );
 }

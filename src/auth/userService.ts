@@ -7,9 +7,21 @@ import { LibsqlUserRepository } from '../infrastructure/persistence/libsql/Libsq
 
 const BCRYPT_ROUNDS = 10;
 
+export type UserErrorCode = 'email_taken' | 'no_password' | 'wrong_password' | 'email_in_use';
+
+/** Thrown for account errors the UI maps through the i18n dictionary. */
+export class UserFacingError extends Error {
+  readonly code: UserErrorCode;
+  constructor(code: UserErrorCode) {
+    super(code);
+    this.name = 'UserFacingError';
+    this.code = code;
+  }
+}
+
 export const credentialsSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string().min(8),
   name: z.string().trim().min(1).max(80).optional(),
 });
 
@@ -32,7 +44,7 @@ export async function registerUser(input: Credentials): Promise<User> {
   try {
     const users = new LibsqlUserRepository(db);
     if (await users.findByEmail(email)) {
-      throw new Error('An account with this email already exists.');
+      throw new UserFacingError('email_taken');
     }
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     return await users.create({ email, name, passwordHash, role: roleForEmail(email) });
@@ -79,9 +91,9 @@ export async function upsertOAuthUser(
   }
 }
 
-export const nameSchema = z.string().trim().min(1, 'Name is required').max(80);
+export const nameSchema = z.string().trim().min(1).max(80);
 export const newEmailSchema = z.string().email();
-export const newPasswordSchema = z.string().min(8, 'Password must be at least 8 characters');
+export const newPasswordSchema = z.string().min(8);
 
 /** Updates the display name. */
 export async function updateName(userId: string, name: string): Promise<void> {
@@ -109,13 +121,13 @@ export async function changeEmail(
   try {
     const users = new LibsqlUserRepository(db);
     const user = await users.findById(userId);
-    if (!user?.passwordHash) throw new Error('This account has no password set.');
+    if (!user?.passwordHash) throw new UserFacingError('no_password');
     if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
-      throw new Error('Current password is incorrect.');
+      throw new UserFacingError('wrong_password');
     }
     const existing = await users.findByEmail(email);
     if (existing && existing.id !== userId) {
-      throw new Error('That email is already in use.');
+      throw new UserFacingError('email_in_use');
     }
     await users.setEmail(userId, email);
   } finally {
@@ -134,9 +146,9 @@ export async function changePassword(
   try {
     const users = new LibsqlUserRepository(db);
     const user = await users.findById(userId);
-    if (!user?.passwordHash) throw new Error('This account has no password set.');
+    if (!user?.passwordHash) throw new UserFacingError('no_password');
     if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
-      throw new Error('Current password is incorrect.');
+      throw new UserFacingError('wrong_password');
     }
     await users.setPasswordHash(userId, await bcrypt.hash(next, BCRYPT_ROUNDS));
   } finally {

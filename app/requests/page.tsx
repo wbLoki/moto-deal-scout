@@ -3,6 +3,7 @@ import { auth } from '../../auth.js';
 import { listUserRequests } from '../../src/requestService.js';
 import { PageShell } from '../PageShell.js';
 import { RequestForm } from './RequestForm.js';
+import { dictionaryFor, getLocale } from '../i18n/getLocale.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,23 +21,22 @@ async function RequestsBody() {
   if (!session?.user?.id) redirect('/login');
 
   const requests = await listUserRequests(session.user.id);
+  const locale = await getLocale();
+  const t = dictionaryFor(locale);
 
   return (
     <>
-      <h1 className="title">Request a model</h1>
-      <p className="subtitle">
-        Suggest a motorcycle model for the scanner to track. An admin reviews and approves it before
-        it&apos;s added to the daily scan.
-      </p>
+      <h1 className="title">{t.requests.title}</h1>
+      <p className="subtitle">{t.requests.subtitle}</p>
 
       <section className="admin-section">
-        <RequestForm />
+        <RequestForm locale={locale} />
       </section>
 
       <section className="admin-section">
-        <h2 className="settings-title">Your requests ({requests.length})</h2>
+        <h2 className="settings-title">{t.requests.yourRequests(requests.length)}</h2>
         {requests.length === 0 ? (
-          <div className="empty">You haven&apos;t requested any models yet.</div>
+          <div className="empty">{t.requests.none}</div>
         ) : (
           requests.map((r) => (
             <div key={r.id} className="request-card">
@@ -44,7 +44,7 @@ async function RequestsBody() {
                 {r.brand} {r.model}
               </strong>
               {r.note && <span className="req-meta">{r.note}</span>}
-              <span className={`status-pill ${r.status}`}>{r.status}</span>
+              <span className={`status-pill ${r.status}`}>{t.requests.status[r.status]}</span>
             </div>
           ))
         )}

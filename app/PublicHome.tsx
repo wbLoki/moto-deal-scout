@@ -3,6 +3,7 @@ import { PublicFeed } from './PublicFeed.js';
 import type { DealView } from './dealView.js';
 import type { SortKey } from './dealSort.js';
 import type { DealFacets } from '../src/domain/interfaces/ListingRepository.js';
+import { dictionaryFor, getLocale } from './i18n/getLocale.js';
 
 /**
  * The public homepage shown to anyone not logged in. It mirrors the member
@@ -12,7 +13,7 @@ import type { DealFacets } from '../src/domain/interfaces/ListingRepository.js';
  *
  * Header chrome lives in {@link PageShell}; this is body-only.
  */
-export function PublicHome({
+export async function PublicHome({
   initialDeals,
   initialTotal,
   initialSort,
@@ -23,19 +24,22 @@ export function PublicHome({
   initialSort: SortKey;
   facets: DealFacets;
 }) {
+  const locale = await getLocale();
+  const t = dictionaryFor(locale);
   return (
     <>
       <div className="signup-banner">
         <span>
-          Browse every deal free. <strong>Create an account</strong> to follow models, save bikes
-          and get alerted the moment a matching deal appears.
+          {t.home.bannerBefore}
+          <strong>{t.home.bannerStrong}</strong>
+          {t.home.bannerAfter}
         </span>
         <div className="signup-banner-actions">
           <Link href="/signup" className="btn btn-primary btn-small">
-            Create account
+            {t.nav.createAccount}
           </Link>
           <Link href="/login" className="btn btn-small">
-            Sign in
+            {t.nav.signIn}
           </Link>
         </div>
       </div>
@@ -45,12 +49,10 @@ export function PublicHome({
         initialTotal={initialTotal}
         initialSort={initialSort}
         facets={facets}
+        locale={locale}
       />
 
-      <div className="footer">
-        Data scraped from Avito.ma and Biker.ma. Prices can contain seller typos — always verify on
-        the listing before acting.
-      </div>
+      <div className="footer">{t.home.footer}</div>
     </>
   );
 }

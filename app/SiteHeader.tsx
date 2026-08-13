@@ -8,12 +8,16 @@ import { NavLink } from './NavLink.js';
 import { UserMenu } from './UserMenu.js';
 import { BrandLogo } from './BrandLogo.js';
 import { BellIcon, MotoIcon, ShieldIcon, UserIcon } from './icons.js';
+import { dictionaryFor, getLocale } from './i18n/getLocale.js';
+import { LocaleSwitcher } from './i18n/LocaleSwitcher.js';
 
 /** Top bar: brand, nav (Admin link for admins), the signed-in email, and logout. */
 export async function SiteHeader() {
   const session = await auth();
   const user = session?.user;
   const unread = user?.id ? await countUnreadNotifications(user.id) : 0;
+  const locale = await getLocale();
+  const t = dictionaryFor(locale);
 
   return (
     <header className="site-header">
@@ -21,11 +25,11 @@ export async function SiteHeader() {
         <BrandLogo variant="mark" />
         <span className="brand-name">Moto Deal Scout</span>
       </Link>
-      <HeaderNav>
+      <HeaderNav locale={locale}>
         <li>
           <NavLink href="/compare">
             <MotoIcon size={18} />
-            Compare a bike
+            {t.nav.compare}
           </NavLink>
         </li>
         {user ? (
@@ -34,47 +38,49 @@ export async function SiteHeader() {
               <NavLink
                 href="/notifications"
                 className="notif-bell"
-                aria-label={unread > 0 ? `Notifications (${unread} unread)` : 'Notifications'}
-                title="Notifications"
+                aria-label={unread > 0 ? t.nav.notificationsUnread(unread) : t.nav.notifications}
+                title={t.nav.notifications}
               >
                 <span className="notif-bell-icon">
                   <BellIcon size={18} />
                   {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
                 </span>
-                <span className="nav-text">Notifications</span>
+                <span className="nav-text">{t.nav.notifications}</span>
               </NavLink>
             </li>
             <li className="nav-desktop-only">
               <UserMenu
                 email={user.email ?? ''}
                 isAdmin={user.role === 'admin'}
+                locale={locale}
                 signOutAction={signOutAction}
               />
             </li>
             <li className="nav-mobile-only">
               <NavLink href="/profile">
                 <UserIcon size={18} />
-                Profile
+                {t.nav.profile}
               </NavLink>
             </li>
             <li className="nav-mobile-only">
-              <NavLink href="/requests">Model requests</NavLink>
+              <NavLink href="/requests">{t.nav.requests}</NavLink>
             </li>
             {user.role === 'admin' && (
               <li className="nav-mobile-only">
                 <NavLink href="/admin">
                   <ShieldIcon size={18} />
-                  Admin
+                  {t.nav.admin}
                 </NavLink>
               </li>
             )}
             <li className="nav-theme">
-              <ThemeToggle />
+              <LocaleSwitcher locale={locale} />
+              <ThemeToggle locale={locale} />
             </li>
             <li className="nav-mobile-only nav-signout-item">
               <form action={signOutAction}>
                 <button type="submit" className="nav-signout">
-                  Log out
+                  {t.nav.logOut}
                 </button>
               </form>
             </li>
@@ -83,16 +89,17 @@ export async function SiteHeader() {
           <>
             <li>
               <Link href="/login" className="btn btn-small">
-                Sign in
+                {t.nav.signIn}
               </Link>
             </li>
             <li>
               <Link href="/signup" className="btn btn-primary btn-small">
-                Create account
+                {t.nav.createAccount}
               </Link>
             </li>
             <li className="nav-theme">
-              <ThemeToggle />
+              <LocaleSwitcher locale={locale} />
+              <ThemeToggle locale={locale} />
             </li>
           </>
         )}

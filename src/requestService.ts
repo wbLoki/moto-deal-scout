@@ -14,7 +14,12 @@ export const modelRequestSchema = z.object({
 
 export type SubmitRequestResult =
   | { readonly status: 'created'; readonly request: ModelRequest }
-  | { readonly status: 'duplicate'; readonly message: string };
+  | {
+      readonly status: 'duplicate';
+      readonly code: 'already_tracked' | 'in_catalog';
+      readonly brand: string;
+      readonly model: string;
+    };
 
 /**
  * Files a request for a model we don't track yet.
@@ -31,7 +36,11 @@ export async function submitModelRequest(
   const { brand, model, note } = modelRequestSchema.parse(input);
   const db = await openDatabaseFromEnv();
   try {
-    const key = (s: string): string => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const key = (s: string): string =>
+      s
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
     const wantedId = modelId(brand, model);
     const existing = await new LibsqlModelRepository(db).listAll();
 
@@ -41,14 +50,18 @@ export async function submitModelRequest(
     if (tracked) {
       return {
         status: 'duplicate',
-        message: `${tracked.brand} ${tracked.model} is already tracked — you can follow it from your profile.`,
+        code: 'already_tracked',
+        brand: tracked.brand,
+        model: tracked.model,
       };
     }
 
     if (catalogContains(brand, model)) {
       return {
         status: 'duplicate',
-        message: `${brand.trim()} ${model.trim()} is already in our catalog — it will appear automatically once one comes up for sale.`,
+        code: 'in_catalog',
+        brand: brand.trim(),
+        model: model.trim(),
       };
     }
 

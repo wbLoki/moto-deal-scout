@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { CloseIcon, MenuIcon } from './icons.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { Locale } from './i18n/locales.js';
 
 /** Must match the `@media (max-width: 768px)` hamburger breakpoint in globals.css. */
 const MOBILE_NAV_MAX = 768;
@@ -25,7 +27,8 @@ function focusables(root: HTMLElement): HTMLElement[] {
  * toggles it. Escape restores focus to the button; a backdrop tap, a link,
  * or growing to desktop also close it.
  */
-export function HeaderNav({ children }: { children: ReactNode }) {
+export function HeaderNav({ children, locale }: { children: ReactNode; locale: Locale }) {
+  const t = useT(locale);
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -89,7 +92,7 @@ export function HeaderNav({ children }: { children: ReactNode }) {
         ref={btnRef}
         type="button"
         className="nav-burger"
-        aria-label="Menu"
+        aria-label={t.common.menu}
         aria-expanded={open}
         aria-controls={navId}
         onClick={() => (open ? close() : setOpen(true))}
@@ -105,7 +108,7 @@ export function HeaderNav({ children }: { children: ReactNode }) {
       <nav
         id={navId}
         className="site-nav"
-        aria-label="Main"
+        aria-label={t.common.mainNav}
         data-open={open || undefined}
         onClick={(e) => {
           const t = e.target as HTMLElement;

@@ -420,9 +420,12 @@ textarea:focus-visible,
   display: none;
 }
 
-/* Desktop: theme sits just before the account control. */
+/* Desktop: language + theme sit just before the account control. */
 .nav-theme {
   order: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 .nav-desktop-only {
@@ -441,7 +444,8 @@ body.nav-open {
 @media (max-width: 768px) {
   .site-header {
     gap: 0.75rem;
-    padding: 0.6rem max(1.25rem, env(safe-area-inset-right)) 0.6rem max(1.25rem, env(safe-area-inset-left));
+    padding: 0.6rem max(1.25rem, env(safe-area-inset-right)) 0.6rem
+      max(1.25rem, env(safe-area-inset-left));
     margin-bottom: 1.25rem;
   }
 
@@ -545,6 +549,10 @@ body.nav-open {
 
   .nav-theme {
     order: 10;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 0.25rem;
   }
 
   .nav-signout-item {
@@ -1619,6 +1627,7 @@ body.nav-open {
 
 /* --- Auth pages --- */
 .auth-container {
+  position: relative;
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -1975,6 +1984,76 @@ body.nav-open {
     font-weight: 500;
     color: var(--text);
   }
+}
+
+.locale-switch-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.locale-switch-text {
+  display: none;
+}
+
+.locale-switch {
+  display: inline-flex;
+  align-items: stretch;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--pill);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.locale-switch-btn {
+  min-width: 2.1rem;
+  padding: 0 0.55rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.locale-switch-btn[aria-pressed='true'] {
+  background: var(--accent-dim);
+  color: var(--text);
+}
+
+.locale-switch-btn:disabled {
+  cursor: default;
+}
+
+.locale-switch-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+@media (max-width: 768px) {
+  .site-nav .locale-switch-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.35rem 0.35rem;
+    gap: 0.75rem;
+  }
+
+  .site-nav .locale-switch-text {
+    display: inline;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+}
+
+.auth-locale {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
 }
 
 /* --- Chips / watched-model picker --- */

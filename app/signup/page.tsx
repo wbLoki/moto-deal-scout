@@ -2,24 +2,28 @@ import Link from 'next/link';
 import { SignupForm } from './SignupForm.js';
 import { OAuthButtons } from '../OAuthButtons.js';
 import { BrandLogo } from '../BrandLogo.js';
+import { AuthShell } from '../AuthShell.js';
+import { dictionaryFor, getLocale } from '../i18n/getLocale.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export default function SignupPage() {
+export default async function SignupPage() {
+  const locale = await getLocale();
+  const t = dictionaryFor(locale);
   return (
-    <main className="auth-container">
+    <AuthShell>
       <div className="auth-card">
         <h1 className="auth-title">
           <BrandLogo variant="wordmark" />
         </h1>
-        <p className="auth-subtitle">Create an account to track deals in your budget.</p>
-        <SignupForm />
+        <p className="auth-subtitle">{t.auth.signupSubtitle}</p>
+        <SignupForm locale={locale} />
         <OAuthButtons />
         <p className="auth-alt">
-          Already have an account? <Link href="/login">Sign in</Link>
+          {t.auth.haveAccount} <Link href="/login">{t.nav.signIn}</Link>
         </p>
       </div>
-    </main>
+    </AuthShell>
   );
 }

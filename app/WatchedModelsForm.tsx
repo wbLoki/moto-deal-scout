@@ -9,6 +9,8 @@ import {
   type WatchlistState,
 } from './watchlist-actions.js';
 import { CloseIcon } from './icons.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { Locale } from './i18n/locales.js';
 
 export interface PickableModel {
   id: string;
@@ -28,11 +30,14 @@ export function WatchedModelsForm({
   models,
   watchedIds,
   mode,
+  locale,
 }: {
   models: readonly PickableModel[];
   watchedIds: readonly string[];
   mode: 'onboarding' | 'profile';
+  locale: Locale;
 }) {
+  const t = useT(locale);
   const [state, action, pending] = useActionState(saveWatchedModelsAction, initial);
   const router = useRouter();
 
@@ -66,9 +71,7 @@ export function WatchedModelsForm({
       ))}
 
       {models.length === 0 ? (
-        <p className="settings-hint">
-          No models are being tracked yet. Check back after the admin adds some.
-        </p>
+        <p className="settings-hint">{t.watchlist.noModels}</p>
       ) : (
         <div className="watch-picker">
           {selected.length > 0 && (
@@ -78,7 +81,7 @@ export function WatchedModelsForm({
                 return (
                   <span key={id} className="chip">
                     {m ? `${m.brand} ${m.model}` : id}
-                    <button type="button" onClick={() => remove(id)} aria-label="Remove">
+                    <button type="button" onClick={() => remove(id)} aria-label={t.common.remove}>
                       <CloseIcon size={14} />
                     </button>
                   </span>
@@ -92,7 +95,7 @@ export function WatchedModelsForm({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search models to follow…"
+              placeholder={t.watchlist.search}
               autoComplete="off"
             />
             {results.length > 0 && (
@@ -107,18 +110,22 @@ export function WatchedModelsForm({
               </ul>
             )}
             {query.trim() && results.length === 0 && (
-              <p className="settings-hint">No matching models.</p>
+              <p className="settings-hint">{t.watchlist.noMatch}</p>
             )}
           </div>
         </div>
       )}
 
-      {state.error && <p className="settings-error">{state.error}</p>}
-      {state.ok && mode === 'profile' && <p className="settings-status ok">Saved.</p>}
+      {state.error && <p className="settings-error">{t.errors[state.error]}</p>}
+      {state.ok && mode === 'profile' && <p className="settings-status ok">{t.watchlist.saved}</p>}
 
       <div className="settings-actions">
         <button className="btn btn-primary" type="submit" disabled={pending}>
-          {pending ? 'Saving…' : mode === 'onboarding' ? 'Save & continue' : 'Save changes'}
+          {pending
+            ? t.watchlist.saving
+            : mode === 'onboarding'
+              ? t.watchlist.saveContinue
+              : t.watchlist.saveChanges}
         </button>
         {mode === 'onboarding' && (
           <button
@@ -127,7 +134,7 @@ export function WatchedModelsForm({
             formAction={skipOnboardingAction}
             disabled={pending}
           >
-            Skip for now
+            {t.watchlist.skip}
           </button>
         )}
       </div>

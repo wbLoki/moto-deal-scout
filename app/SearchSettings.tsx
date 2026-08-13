@@ -4,10 +4,13 @@ import { useState, useTransition } from 'react';
 import type { SearchRange } from '../src/domain/entities/SearchCriteria.js';
 import { saveSearchRangeAction, type ActionResult } from './actions.js';
 import { yearOptions } from './dealFilters.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { Locale } from './i18n/locales.js';
 
 const YEARS = yearOptions();
 
-export function SearchSettings({ current }: { current: SearchRange }) {
+export function SearchSettings({ locale, current }: { locale: Locale; current: SearchRange }) {
+  const t = useT(locale);
   const [budgetMin, setBudgetMin] = useState(current.budgetMin);
   const [budgetMax, setBudgetMax] = useState(current.budgetMax);
   const [yearMin, setYearMin] = useState(current.yearMin);
@@ -28,17 +31,15 @@ export function SearchSettings({ current }: { current: SearchRange }) {
   return (
     <section className="settings">
       <div className="settings-head">
-        <h2 className="settings-title">Your range</h2>
-        <span className="settings-hint">
-          Your dashboard shows only deals within this budget and year window.
-        </span>
+        <h2 className="settings-title">{t.range.title}</h2>
+        <span className="settings-hint">{t.range.hint}</span>
       </div>
 
       <div className="settings-grid">
         <fieldset className="field-group">
-          <legend>Budget (MAD)</legend>
+          <legend>{t.filters.budget}</legend>
           <label>
-            <span>Min</span>
+            <span>{t.common.min}</span>
             <input
               type="number"
               min={0}
@@ -48,7 +49,7 @@ export function SearchSettings({ current }: { current: SearchRange }) {
             />
           </label>
           <label>
-            <span>Max</span>
+            <span>{t.common.max}</span>
             <input
               type="number"
               min={0}
@@ -60,9 +61,9 @@ export function SearchSettings({ current }: { current: SearchRange }) {
         </fieldset>
 
         <fieldset className="field-group">
-          <legend>Model year</legend>
+          <legend>{t.filters.year}</legend>
           <label>
-            <span>From</span>
+            <span>{t.common.from}</span>
             <select value={yearMin} onChange={(e) => setYearMin(Number(e.target.value))}>
               {YEARS.map((y) => (
                 <option key={y} value={y}>
@@ -72,7 +73,7 @@ export function SearchSettings({ current }: { current: SearchRange }) {
             </select>
           </label>
           <label>
-            <span>To</span>
+            <span>{t.common.to}</span>
             <select value={yearMax} onChange={(e) => setYearMax(Number(e.target.value))}>
               {YEARS.map((y) => (
                 <option key={y} value={y}>
@@ -84,7 +85,7 @@ export function SearchSettings({ current }: { current: SearchRange }) {
         </fieldset>
       </div>
 
-      {invalid && <p className="settings-error">Max must be greater than or equal to min.</p>}
+      {invalid && <p className="settings-error">{t.filters.rangeInvalid}</p>}
 
       <div className="settings-actions">
         <button
@@ -93,11 +94,11 @@ export function SearchSettings({ current }: { current: SearchRange }) {
           disabled={saving || invalid}
           type="button"
         >
-          {saving ? 'Saving…' : 'Save range'}
+          {saving ? t.range.saving : t.range.save}
         </button>
         {status && (
           <span className={status.ok ? 'settings-status ok' : 'settings-status err'}>
-            {status.message}
+            {status.ok ? t.range.saved : t.errors[status.code ?? 'save_failed']}
           </span>
         )}
       </div>

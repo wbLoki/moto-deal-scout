@@ -28,9 +28,8 @@ function makeEnv(over: Partial<Env> = {}): Env {
 }
 
 function okFetch() {
-  return vi.fn(
-    (_url: string | URL | Request, _init?: RequestInit): Promise<Response> =>
-      Promise.resolve(new Response('{}', { status: 200 })),
+  return vi.fn((_url: string | URL | Request, _init?: RequestInit): Promise<Response> =>
+    Promise.resolve(new Response('{}', { status: 200 })),
   );
 }
 
@@ -61,7 +60,7 @@ describe('EmailAlertProvider', () => {
     const body = JSON.parse(init?.body as string) as Array<{ to: string; html: string }>;
     expect(body).toHaveLength(2);
     expect(body[0]?.to).toBe('u1@x.co');
-    expect(body[1]?.html).toContain('Price drop');
+    expect(body[1]?.html).toContain('Baisse de prix');
   });
 
   it('skips the request entirely when there is nothing to send', async () => {

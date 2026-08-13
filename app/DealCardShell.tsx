@@ -1,30 +1,23 @@
+'use client';
+
 import type { ReactNode } from 'react';
 import { CalendarIcon, ExternalLinkIcon } from './icons.js';
 import { ListingImage } from './ListingImage.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { Locale } from './i18n/locales.js';
+import type { DealTierLevel } from '../src/domain/services/dealTier.js';
 
 const madFmt = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
-const dateFmt = new Intl.DateTimeFormat('fr-MA', { day: 'numeric', month: 'short', year: 'numeric' });
+const dateFmt = new Intl.DateTimeFormat('fr-MA', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** Local calendar midnight, so "days ago" counts dates, not 24h windows. */
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
-/**
- * Human-friendly publish date: "Today" / "Yesterday" / "N days ago" for the
- * last month, an absolute date beyond that. Returns null for a missing/invalid
- * date so the caller can omit the line.
- */
-function formatPostDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  const days = Math.round((startOfDay(new Date()) - startOfDay(date)) / MS_PER_DAY);
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 30) return `${days} days ago`;
-  return dateFmt.format(date);
 }
 
 /** The visual fields a deal card renders — shared by the public and member feeds. */
@@ -49,6 +42,17 @@ export interface DealCardData {
   readonly postedAt: string | null;
 }
 
+function isTierLevel(level: string): level is DealTierLevel {
+  return (
+    level === 'hot' ||
+    level === 'great' ||
+    level === 'good' ||
+    level === 'okay' ||
+    level === 'bad' ||
+    level === 'calibrating'
+  );
+}
+
 /**
  * Presentational deal card used by both the anonymous public feed and the
  * logged-in dashboard, so the two look identical. Interactive/affordance
@@ -60,14 +64,17 @@ export function DealCardShell({
   topRight,
   scoreTitle,
   matchPct,
+  locale,
 }: {
   data: DealCardData;
   topRight?: ReactNode;
   scoreTitle?: string;
   matchPct?: number;
+  locale: Locale;
 }) {
-  // Prefer the marketplace publish date; fall back to first-seen when absent.
-  const postedLabel = formatPostDate(data.postedAt ?? data.createdAt);
+  const t = useT(locale);
+  const postedLabel = formatPostDate(data.postedAt ?? data.createdAt, t);
+  const tierLabel = isTierLevel(data.tierLevel) ? t.tiers[data.tierLevel] : data.tierLabel;
   return (
     <article className="card">
       {topRight}
@@ -75,7 +82,7 @@ export function DealCardShell({
         className={`tag tag-${data.tierLevel} card-tag`}
         {...(scoreTitle ? { title: scoreTitle } : {})}
       >
-        {data.tierLabel}
+        {tierLabel}
       </span>
       {data.imageUrl ? (
         <div className="card-media-wrap">
@@ -88,7 +95,7 @@ export function DealCardShell({
           />
         </div>
       ) : (
-        <div className="card-media-empty">No image</div>
+        <div className="card-media-empty">{t.card.noImage}</div>
       )}
       <div className="card-body">
         <div className="card-top">
@@ -98,23 +105,23 @@ export function DealCardShell({
         </div>
         <div className="price">{madFmt.format(data.priceMAD)} MAD</div>
         <div className="meta">
-          <span>{data.year ?? 'Year n/a'}</span>
-          <span>{data.mileageKm !== null ? `${data.mileageKm} km` : 'km n/a'}</span>
+          <span>{data.year ?? t.card.yearNa}</span>
+          <span>{data.mileageKm !== null ? `${data.mileageKm} km` : t.card.kmNa}</span>
           <span>{data.city}</span>
         </div>
         {matchPct !== undefined && (
           <div className="badges">
-            <span className="badge">match {matchPct}%</span>
+            <span className="badge">{t.card.match(matchPct)}</span>
           </div>
         )}
         <div className="card-footer">
           <a className="card-link" href={data.url} target="_blank" rel="noopener noreferrer">
-            View listing
+            {t.card.viewListing}
             <ExternalLinkIcon className="icon-trail" size={15} />
           </a>
           {postedLabel && (
             <span className="card-date">
-              <CalendarIcon size={13} aria-label="Posted" />
+              <CalendarIcon size={13} aria-label={t.card.posted} />
               <span>{postedLabel}</span>
             </span>
           )}
@@ -122,4 +129,15 @@ export function DealCardShell({
       </div>
     </article>
   );
+}
+
+function formatPostDate(iso: string | null, t: ReturnType<typeof useT>): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const days = Math.round((startOfDay(new Date()) - startOfDay(date)) / MS_PER_DAY);
+  if (days <= 0) return t.card.today;
+  if (days === 1) return t.card.yesterday;
+  if (days < 30) return t.card.daysAgo(days);
+  return dateFmt.format(date);
 }

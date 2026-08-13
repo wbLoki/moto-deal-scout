@@ -3,9 +3,11 @@
 import { AuthError } from 'next-auth';
 import { signIn, signOut } from '../auth.js';
 import { registerUser } from '../src/auth/userService.js';
+import type { ErrorKey } from './i18n/en.js';
+import { errorKeyFromCaught } from './i18n/errorKey.js';
 
 export interface AuthFormState {
-  error?: string;
+  error?: ErrorKey;
 }
 
 function field(formData: FormData, key: string): string {
@@ -25,16 +27,16 @@ export async function signupAction(
   try {
     await registerUser({ email, password, name });
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Sign-up failed.' };
+    return { error: errorKeyFromCaught(err, 'signup_failed') };
   }
 
   try {
     await signIn('credentials', { email, password, redirectTo: '/' });
   } catch (err) {
     if (err instanceof AuthError) {
-      return { error: 'Account created — please log in.' };
+      return { error: 'account_created_login' };
     }
-    throw err; // NEXT_REDIRECT on success
+    throw err;
   }
   return {};
 }
@@ -51,9 +53,9 @@ export async function loginAction(
     await signIn('credentials', { email, password, redirectTo: '/' });
   } catch (err) {
     if (err instanceof AuthError) {
-      return { error: 'Invalid email or password.' };
+      return { error: 'invalid_credentials' };
     }
-    throw err; // NEXT_REDIRECT on success
+    throw err;
   }
   return {};
 }

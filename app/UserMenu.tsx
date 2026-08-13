@@ -3,10 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronDownIcon, LogOutIcon, ShieldIcon, UserIcon } from './icons.js';
+import { useT } from './i18n/I18nProvider.js';
+import type { Locale } from './i18n/locales.js';
 
 type UserMenuProps = {
   email: string;
   isAdmin: boolean;
+  locale: Locale;
   /** Server action that signs the user out. */
   signOutAction: () => void | Promise<void>;
 };
@@ -15,7 +18,8 @@ type UserMenuProps = {
  * Account dropdown for signed-in users: collapses the email, Profile, Model
  * requests, Admin, and Log out into one trigger so the header stays uncluttered.
  */
-export function UserMenu({ email, isAdmin, signOutAction }: UserMenuProps) {
+export function UserMenu({ email, isAdmin, locale, signOutAction }: UserMenuProps) {
+  const t = useT(locale);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const initial = email.trim().charAt(0).toUpperCase() || '?';
@@ -44,7 +48,7 @@ export function UserMenu({ email, isAdmin, signOutAction }: UserMenuProps) {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Account: ${email}`}
+        aria-label={t.nav.accountAria(email)}
         title={email}
       >
         <span className="user-avatar" aria-hidden="true">
@@ -69,7 +73,7 @@ export function UserMenu({ email, isAdmin, signOutAction }: UserMenuProps) {
             onClick={() => setOpen(false)}
           >
             <UserIcon size={16} />
-            <span>Profile</span>
+            <span>{t.nav.profile}</span>
           </Link>
           <Link
             href="/requests"
@@ -77,7 +81,7 @@ export function UserMenu({ email, isAdmin, signOutAction }: UserMenuProps) {
             className="user-menu-item"
             onClick={() => setOpen(false)}
           >
-            <span>Model requests</span>
+            <span>{t.nav.requests}</span>
           </Link>
           {isAdmin && (
             <Link
@@ -87,14 +91,14 @@ export function UserMenu({ email, isAdmin, signOutAction }: UserMenuProps) {
               onClick={() => setOpen(false)}
             >
               <ShieldIcon size={16} />
-              <span>Admin</span>
+              <span>{t.nav.admin}</span>
             </Link>
           )}
           <div className="user-menu-sep" />
           <form action={signOutAction}>
             <button type="submit" role="menuitem" className="user-menu-item user-menu-signout">
               <LogOutIcon size={16} />
-              <span>Log out</span>
+              <span>{t.nav.logOut}</span>
             </button>
           </form>
         </div>
