@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { BrowseSidebar } from './BrowseSidebar.js';
 import { DealCardShell } from './DealCardShell.js';
 import { DealSearchBar } from './DealSearchBar.js';
 import { SortSelect } from './SortSelect.js';
@@ -73,8 +74,8 @@ function PublicCardActions({
 }
 
 /**
- * The public deal feed: a sticky left sidebar (search, sort, budget/year/mileage
- * filters) and a paginated grid. Filtering, sorting and pagination all run in
+ * The public deal feed: search, sort, filters (collapsed behind a toggle on
+ * small screens) and a paginated grid. Filtering, sorting and pagination all run in
  * SQL on the server — the browser only holds the page it shows — so anonymous
  * visitors can browse the entire catalog, not just a capped teaser. Signing in
  * is what unlocks a persisted range, following, saving and alerts.
@@ -237,19 +238,25 @@ export function PublicFeed({
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const filterCount = ratings.length + brandsSel.length + cities.length;
+
   return (
     <div className="browse">
-      <aside className="browse-sidebar">
-        <DealSearchBar locale={locale} value={query} onChange={setQuery} />
-        <SortSelect
-          locale={locale}
-          value={sort}
-          onChange={(v) => {
-            setSort(v);
-            resetPage();
-          }}
-        />
-
+      <BrowseSidebar
+        locale={locale}
+        filterCount={filterCount}
+        search={<DealSearchBar locale={locale} value={query} onChange={setQuery} />}
+        sort={
+          <SortSelect
+            locale={locale}
+            value={sort}
+            onChange={(v) => {
+              setSort(v);
+              resetPage();
+            }}
+          />
+        }
+      >
         <div className="filters-head">
           <h3 className="filters-title">{t.filters.title}</h3>
           <button type="button" className="filters-reset" onClick={resetFilters}>
@@ -410,7 +417,7 @@ export function PublicFeed({
         />
 
         {invalid && <p className="settings-error">{t.filters.rangeInvalid}</p>}
-      </aside>
+      </BrowseSidebar>
 
       <div className="browse-main">
         <div className="browse-count">{t.filters.listingCount(total)}</div>

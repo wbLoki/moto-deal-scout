@@ -114,6 +114,12 @@ export const fr: Dictionary = {
     saved: 'Enregistrées',
     all: 'Toutes les affaires',
   },
+  tabsShort: {
+    daily: 'Jour',
+    watched: 'Suivis',
+    saved: 'Enregistrées',
+    all: 'Toutes',
+  },
   empty: {
     daily: 'Pas encore de nouvelles annonces aujourd’hui — le scan quotidien tourne chaque matin.',
     saved: 'Aucune moto enregistrée — touchez le signet d’une carte pour l’ajouter ici.',

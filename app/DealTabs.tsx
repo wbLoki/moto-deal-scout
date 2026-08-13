@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { setWatchedModelAction } from './watchlist-actions.js';
 import { setSavedListingAction } from './saved-actions.js';
 import { fetchDealsPageAction } from './deal-actions.js';
+import { BrowseSidebar } from './BrowseSidebar.js';
 import { DealCardShell } from './DealCardShell.js';
 import { DealSearchBar } from './DealSearchBar.js';
 import { SortSelect } from './SortSelect.js';
@@ -166,7 +167,7 @@ export function DealTabs({
   watchedModelIds: readonly string[];
   savedKeys: readonly string[];
   locale: Locale;
-  /** Injected sidebar content (saved range + scan control) shown above search/sort. */
+  /** Injected sidebar content (saved range + scan control) shown with the filters. */
   sidebar?: ReactNode;
 }) {
   const t = useT(locale);
@@ -348,19 +349,26 @@ export function DealTabs({
     return t.empty.all;
   };
 
+  const filterCount = ratings.length + brandsSel.length + cities.length;
+
   return (
     <div className="browse">
-      <aside className="browse-sidebar">
+      <BrowseSidebar
+        locale={locale}
+        filterCount={filterCount}
+        search={<DealSearchBar locale={locale} value={query} onChange={setQuery} />}
+        sort={
+          <SortSelect
+            locale={locale}
+            value={sort}
+            onChange={(v) => {
+              setSort(v);
+              resetPage();
+            }}
+          />
+        }
+      >
         {sidebar}
-        <DealSearchBar locale={locale} value={query} onChange={setQuery} />
-        <SortSelect
-          locale={locale}
-          value={sort}
-          onChange={(v) => {
-            setSort(v);
-            resetPage();
-          }}
-        />
 
         <div className="filters-head">
           <h3 className="filters-title">{t.filters.title}</h3>
@@ -458,7 +466,7 @@ export function DealTabs({
         />
 
         {rangeInvalid && <p className="settings-error">{t.filters.rangeInvalid}</p>}
-      </aside>
+      </BrowseSidebar>
 
       <div className="browse-main">
         <div className="tabs" role="tablist">
@@ -471,7 +479,9 @@ export function DealTabs({
               onClick={() => selectTab(id)}
               type="button"
             >
-              {t.tabs[id]} <span className="tab-count">{counts[id]}</span>
+              <span className="tab-label-full">{t.tabs[id]}</span>
+              <span className="tab-label-short">{t.tabsShort[id]}</span>
+              <span className="tab-count">{counts[id]}</span>
             </button>
           ))}
         </div>

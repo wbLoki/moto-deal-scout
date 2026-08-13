@@ -149,6 +149,12 @@ export const en = {
     saved: 'Saved',
     all: 'All deals',
   } satisfies Record<DealTab, string>,
+  tabsShort: {
+    daily: 'Daily',
+    watched: 'Watched',
+    saved: 'Saved',
+    all: 'All',
+  } satisfies Record<DealTab, string>,
   empty: {
     daily: 'No new listings today yet — the daily scan runs each morning.',
     saved: 'No saved bikes yet — tap the bookmark on any card to save it here.',

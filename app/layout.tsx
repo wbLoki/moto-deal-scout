@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
@@ -19,6 +19,12 @@ export async function generateMetadata(): Promise<Metadata> {
     description: t.meta.description,
   };
 }
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
 
 // Runs before first paint: applies a saved light/dark choice so there's no
 // flash of the wrong theme. "system" (or unset) leaves the CSS media query in
