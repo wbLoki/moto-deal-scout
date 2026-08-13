@@ -172,6 +172,45 @@ export function ExternalLinkIcon(props: IconProps) {
   );
 }
 
+/** Hamburger — the mobile nav toggle. */
+export function MenuIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3 6h18M3 12h18M3 18h18" />
+    </Icon>
+  );
+}
+
+/** User — the account menu trigger. */
+export function UserIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c0-4 3.5-6 8-6s8 2 8 6" />
+    </Icon>
+  );
+}
+
+/** Log out — leave the session. */
+export function LogOutIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="M16 17l5-5-5-5" />
+      <path d="M21 12H9" />
+    </Icon>
+  );
+}
+
+/** Shield — admin. */
+export function ShieldIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3 4 6v6c0 5 3.4 8.4 8 9.5 4.6-1.1 8-4.5 8-9.5V6z" />
+    </Icon>
+  );
+}
+
 /** Close / remove. */
 export function CloseIcon(props: IconProps) {
   return (

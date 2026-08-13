@@ -3,8 +3,11 @@ import { auth } from '../auth.js';
 import { countUnreadNotifications } from '../src/notificationsModel.js';
 import { signOutAction } from './auth-actions.js';
 import { ThemeToggle } from './ThemeToggle.js';
+import { HeaderNav } from './HeaderNav.js';
+import { NavLink } from './NavLink.js';
+import { UserMenu } from './UserMenu.js';
 import { BrandLogo } from './BrandLogo.js';
-import { BellIcon } from './icons.js';
+import { BellIcon, MotoIcon, ShieldIcon, UserIcon } from './icons.js';
 
 /** Top bar: brand, nav (Admin link for admins), the signed-in email, and logout. */
 export async function SiteHeader() {
@@ -18,41 +21,82 @@ export async function SiteHeader() {
         <BrandLogo variant="mark" />
         <span className="brand-name">Moto Deal Scout</span>
       </Link>
-      <nav className="site-nav">
-        <ThemeToggle />
-        <Link href="/compare">Compare a bike</Link>
+      <HeaderNav>
+        <li>
+          <NavLink href="/compare">
+            <MotoIcon size={18} />
+            Compare a bike
+          </NavLink>
+        </li>
         {user ? (
           <>
-            <Link
-              href="/notifications"
-              className="notif-bell"
-              aria-label={unread > 0 ? `Notifications (${unread} unread)` : 'Notifications'}
-              title="Notifications"
-            >
-              <BellIcon size={18} />
-              {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
-            </Link>
-            <Link href="/profile">Profile</Link>
-            <Link href="/requests">Model requests</Link>
-            {user.role === 'admin' && <Link href="/admin">Admin</Link>}
-            <span className="site-user">{user.email}</span>
-            <form action={signOutAction}>
-              <button className="btn btn-small" type="submit">
-                Log out
-              </button>
-            </form>
+            <li>
+              <NavLink
+                href="/notifications"
+                className="notif-bell"
+                aria-label={unread > 0 ? `Notifications (${unread} unread)` : 'Notifications'}
+                title="Notifications"
+              >
+                <span className="notif-bell-icon">
+                  <BellIcon size={18} />
+                  {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
+                </span>
+                <span className="nav-text">Notifications</span>
+              </NavLink>
+            </li>
+            <li className="nav-desktop-only">
+              <UserMenu
+                email={user.email ?? ''}
+                isAdmin={user.role === 'admin'}
+                signOutAction={signOutAction}
+              />
+            </li>
+            <li className="nav-mobile-only">
+              <NavLink href="/profile">
+                <UserIcon size={18} />
+                Profile
+              </NavLink>
+            </li>
+            <li className="nav-mobile-only">
+              <NavLink href="/requests">Model requests</NavLink>
+            </li>
+            {user.role === 'admin' && (
+              <li className="nav-mobile-only">
+                <NavLink href="/admin">
+                  <ShieldIcon size={18} />
+                  Admin
+                </NavLink>
+              </li>
+            )}
+            <li className="nav-theme">
+              <ThemeToggle />
+            </li>
+            <li className="nav-mobile-only nav-signout-item">
+              <form action={signOutAction}>
+                <button type="submit" className="nav-signout">
+                  Log out
+                </button>
+              </form>
+            </li>
           </>
         ) : (
           <>
-            <Link href="/login" className="btn btn-small">
-              Sign in
-            </Link>
-            <Link href="/signup" className="btn btn-primary btn-small">
-              Create account
-            </Link>
+            <li>
+              <Link href="/login" className="btn btn-small">
+                Sign in
+              </Link>
+            </li>
+            <li>
+              <Link href="/signup" className="btn btn-primary btn-small">
+                Create account
+              </Link>
+            </li>
+            <li className="nav-theme">
+              <ThemeToggle />
+            </li>
           </>
         )}
-      </nav>
+      </HeaderNav>
     </header>
   );
 }

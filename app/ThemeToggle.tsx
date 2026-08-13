@@ -1,41 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactElement } from 'react';
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  MonitorIcon,
-  MoonIcon,
-  SunIcon,
-  type IconProps,
-} from './icons.js';
+import { useEffect, useState } from 'react';
+import { MoonIcon, SunIcon } from './icons.js';
 
-type Theme = 'system' | 'light' | 'dark';
+type StoredTheme = 'system' | 'light' | 'dark';
 
-const OPTIONS: { value: Theme; label: string; Icon: (p: IconProps) => ReactElement }[] = [
-  { value: 'system', label: 'System', Icon: MonitorIcon },
-  { value: 'light', label: 'Light', Icon: SunIcon },
-  { value: 'dark', label: 'Dark', Icon: MoonIcon },
-];
-
-/**
- * Applies a theme choice: "system" removes the override so the CSS
- * prefers-color-scheme media query takes over; "light"/"dark" force it via a
- * `data-theme` attribute on <html>. Persisted in localStorage and re-applied
- * before paint by the inline script in the root layout (no flash).
- */
-function applyTheme(theme: Theme): void {
-  const root = document.documentElement;
-  if (theme === 'system') root.removeAttribute('data-theme');
-  else root.setAttribute('data-theme', theme);
-  try {
-    localStorage.setItem('theme', theme);
-  } catch {
-    /* storage may be unavailable (private mode) — the choice just won't persist */
-  }
+function systemPrefersDark(): boolean {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-function readTheme(): Theme {
+function readStored(): StoredTheme {
   try {
     const t = localStorage.getItem('theme');
     if (t === 'light' || t === 'dark' || t === 'system') return t;
@@ -45,78 +19,75 @@ function readTheme(): Theme {
   return 'system';
 }
 
-/** Header dropdown to choose System / Light / Dark. Default is System. */
+function applyTheme(theme: StoredTheme): void {
+  const root = document.documentElement;
+  if (theme === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', theme);
+  try {
+    if (theme === 'system') localStorage.removeItem('theme');
+    else localStorage.setItem('theme', theme);
+  } catch {
+    /* storage may be unavailable (private mode) — the choice just won't persist */
+  }
+}
+
+function effectiveDark(stored: StoredTheme): boolean {
+  if (stored === 'light') return false;
+  if (stored === 'dark') return true;
+  return systemPrefersDark();
+}
+
+/**
+ * Light/dark switch. Default follows the OS (`prefers-color-scheme`); flipping
+ * it stores an explicit choice. Flipping back to match the OS returns to
+ * following system. The inline script in the root layout reapplies a stored
+ * light/dark choice before paint so there's no flash.
+ */
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>('system');
+  const [dark, setDark] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setDark(effectiveDark(readStored()));
     setMounted(true);
-    setTheme(readTheme());
   }, []);
 
   useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => {
+      if (readStored() === 'system') setDark(mq.matches);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
-  const select = (value: Theme) => {
-    setTheme(value);
-    applyTheme(value);
-    setOpen(false);
+  const toggle = () => {
+    const nextDark = !dark;
+    const followSystem = nextDark === systemPrefersDark();
+    applyTheme(followSystem ? 'system' : nextDark ? 'dark' : 'light');
+    setDark(nextDark);
   };
 
-  // Stable icon/label until mounted so server and first client render match.
-  const current = OPTIONS.find((o) => o.value === theme) ?? OPTIONS[0]!;
-  const CurrentIcon = mounted ? current.Icon : MonitorIcon;
-  const currentLabel = mounted ? current.label : 'System';
-
   return (
-    <div className="theme-menu-wrap" ref={wrapRef}>
+    <div className="theme-switch-wrap">
+      <span className="theme-switch-text" aria-hidden="true">
+        Theme
+      </span>
       <button
         type="button"
-        className="theme-toggle"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`Theme: ${currentLabel}`}
-        title={`Theme: ${currentLabel}`}
+        role="switch"
+        className="theme-switch"
+        aria-checked={mounted ? dark : undefined}
+        aria-label="Dark mode"
+        title={dark ? 'Dark mode' : 'Light mode'}
+        onClick={toggle}
       >
-        <CurrentIcon size={18} />
-        <ChevronDownIcon size={14} />
+        <SunIcon size={16} className="theme-switch-sun" />
+        <span className="theme-switch-track" aria-hidden="true">
+          <span className="theme-switch-thumb" />
+        </span>
+        <MoonIcon size={16} className="theme-switch-moon" />
       </button>
-
-      {open && (
-        <div className="theme-menu" role="menu">
-          {OPTIONS.map(({ value, label, Icon }) => (
-            <button
-              key={value}
-              type="button"
-              role="menuitemradio"
-              aria-checked={theme === value}
-              className="theme-menu-item"
-              onClick={() => select(value)}
-            >
-              <Icon size={16} />
-              <span>{label}</span>
-              {theme === value && <CheckIcon size={15} className="check" />}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
