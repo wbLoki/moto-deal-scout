@@ -4,6 +4,7 @@ import type { ScoredListing } from '../../../domain/entities/ScoredListing.js';
 import type { ModelCriteria } from '../../../domain/entities/SearchCriteria.js';
 import type { FuelType, GearboxType } from '../../../domain/entities/VehicleType.js';
 import { parseVehicleType } from '../../../domain/entities/VehicleType.js';
+import { uniqueListingImages } from '../../../domain/listingImages.js';
 
 /**
  * Idempotent DDL (CREATE ... IF NOT EXISTS), which is all a single-table
@@ -255,6 +256,7 @@ export const ADDITIVE_COLUMNS: ReadonlyArray<{
   { table: 'listings', column: 'ww', definition: 'INTEGER' },
   { table: 'listings', column: 'accidented', definition: 'INTEGER' },
   { table: 'listings', column: 'customs_cleared', definition: 'INTEGER' },
+  { table: 'listings', column: 'image_urls', definition: 'TEXT' },
   { table: 'users', column: 'phone', definition: 'TEXT' },
   { table: 'users', column: 'whatsapp_opt_in', definition: 'INTEGER NOT NULL DEFAULT 0' },
   { table: 'notifications', column: 'whatsapped_at', definition: 'TEXT' },
@@ -304,6 +306,7 @@ const INSERT_COLUMNS = [
   'ww',
   'accidented',
   'customs_cleared',
+  'image_urls',
 ] as const;
 
 function boolFlag(value: boolean | undefined): number | null {
@@ -315,8 +318,26 @@ function readBoolFlag(value: number | null | undefined): boolean | undefined {
   return Number(value) === 1;
 }
 
-const UPDATE_ON_CONFLICT = INSERT_COLUMNS.filter((c) => c !== 'source_id' && c !== 'external_id')
+const UPDATE_ON_CONFLICT = INSERT_COLUMNS.filter(
+  (c) => c !== 'source_id' && c !== 'external_id' && c !== 'image_url' && c !== 'image_urls',
+)
   .map((c) => `${c} = excluded.${c}`)
+  .concat([
+    `image_urls = CASE
+      WHEN excluded.image_urls IS NULL THEN listings.image_urls
+      WHEN listings.image_urls IS NULL THEN excluded.image_urls
+      WHEN json_array_length(excluded.image_urls) >= json_array_length(listings.image_urls)
+        THEN excluded.image_urls
+      ELSE listings.image_urls
+    END`,
+    `image_url = CASE
+      WHEN excluded.image_urls IS NOT NULL
+       AND listings.image_urls IS NOT NULL
+       AND json_array_length(excluded.image_urls) < json_array_length(listings.image_urls)
+      THEN listings.image_url
+      ELSE excluded.image_url
+    END`,
+  ])
   .join(',\n    ');
 
 export const UPSERT_SQL = `
@@ -362,7 +383,29 @@ export function toInsertArgs(scored: ScoredListing): SqlValue[] {
     boolFlag(listing.ww),
     boolFlag(listing.accidented),
     boolFlag(listing.customsCleared),
+    serializeImageUrls(listing),
   ];
+}
+
+function serializeImageUrls(listing: Listing): string | null {
+  const urls = uniqueListingImages(listing.imageUrls, listing.imageUrl ? [listing.imageUrl] : undefined);
+  return urls.length > 0 ? JSON.stringify(urls) : null;
+}
+
+function parseImageUrls(raw: string | null | undefined, fallback?: string | null): string[] | undefined {
+  let parsed: unknown;
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = undefined;
+    }
+  }
+  const fromJson = Array.isArray(parsed)
+    ? parsed.filter((item): item is string => typeof item === 'string')
+    : undefined;
+  const urls = uniqueListingImages(fromJson, fallback ? [fallback] : undefined);
+  return urls.length > 0 ? urls : undefined;
 }
 
 /** One row from the `listings` table, as returned by the libsql client. */
@@ -397,6 +440,7 @@ export interface ListingRow {
   ww: number | null;
   accidented: number | null;
   customs_cleared: number | null;
+  image_urls: string | null;
 }
 
 /**
@@ -419,6 +463,7 @@ export function mapRowToScoredListing(
     return undefined;
   }
 
+  const imageUrls = parseImageUrls(row.image_urls, row.image_url);
   const listing: Listing = {
     sourceId: row.source_id as MarketplaceId,
     externalId: row.external_id,
@@ -437,7 +482,8 @@ export function mapRowToScoredListing(
     accidented: readBoolFlag(row.accidented),
     customsCleared: readBoolFlag(row.customs_cleared),
     city: row.city,
-    imageUrl: row.image_url ?? undefined,
+    imageUrl: row.image_url ?? imageUrls?.[0],
+    ...(imageUrls ? { imageUrls } : {}),
     postedAt: row.posted_at ? new Date(row.posted_at) : undefined,
     scrapedAt: new Date(row.scraped_at),
     firstSeenAt: row.created_at,

@@ -61,6 +61,8 @@ export interface Listing {
   readonly customsCleared: boolean | undefined;
   readonly city: string;
   readonly imageUrl: string | undefined;
+  /** Gallery photos in display order. When set, `imageUrl` is the first. */
+  readonly imageUrls?: readonly string[];
   /** Publish date reported by the marketplace, when available. */
   readonly postedAt: Date | undefined;
   readonly scrapedAt: Date;

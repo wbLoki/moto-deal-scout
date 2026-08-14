@@ -1,6 +1,7 @@
 import { parseHTML } from 'linkedom';
 import type { Listing, MarketplaceId } from '../../../domain/entities/Listing.js';
 import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
+import { uniqueListingImages } from '../../../domain/listingImages.js';
 import type { FuelType, GearboxType, VehicleType } from '../../../domain/entities/VehicleType.js';
 import { parseFuelType, parseGearbox } from '../../../domain/entities/VehicleType.js';
 import {
@@ -29,6 +30,7 @@ export interface AvitoRawCard {
   readonly year: string;
   readonly mileage: string;
   readonly image: string;
+  readonly images: readonly string[];
   readonly price: string;
   readonly city: string;
   readonly relativeDate: string;
@@ -72,7 +74,8 @@ export function parseAvitoSearchCards(
       card.querySelector('span[title="Boîte de vitesses"]')?.textContent?.trim() ??
       card.querySelector('span[title="Boite de vitesse"]')?.textContent?.trim() ??
       '';
-    const image = pickAvitoCardImage(card);
+    const images = pickAvitoCardImages(card);
+    const image = images[0] ?? '';
 
     const spans = Array.from(card.querySelectorAll('span'));
     let price = '';
@@ -89,7 +92,7 @@ export function parseAvitoSearchCards(
     const city = dateIndex > 0 ? (spanTexts[dateIndex - 1] ?? '') : '';
     const relativeDate = dateIndex >= 0 ? (spanTexts[dateIndex] ?? '') : '';
 
-    return { href, title, year, mileage, image, price, city, relativeDate, fuel, gearbox };
+    return { href, title, year, mileage, image, images, price, city, relativeDate, fuel, gearbox };
   });
 
   return raw
@@ -100,13 +103,19 @@ export function parseAvitoSearchCards(
 export function rawCardToListing(
   raw: AvitoRawCard,
   scrapedAt: Date = new Date(),
-  nextImages: ReadonlyMap<string, string> = new Map(),
+  nextImages: ReadonlyMap<string, readonly string[]> = new Map(),
   context: AvitoCardContext = DEFAULT_CARD_CONTEXT,
 ): Listing {
   const href = raw.href.startsWith('http') ? raw.href : `${AVITO_ORIGIN}${raw.href}`;
   const externalId = /_(\d+)\.htm/.exec(href)?.[1] ?? href;
   const fuelType: FuelType | undefined = parseFuelType(raw.fuel);
   const gearbox: GearboxType | undefined = parseGearbox(raw.gearbox);
+  const images = uniqueListingImages(
+    raw.images.filter((u) => AVITO_LISTING_PHOTO.test(u)),
+    (nextImages.get(externalId) ?? []).filter((u) => AVITO_LISTING_PHOTO.test(u)),
+    raw.images,
+    nextImages.get(externalId),
+  );
   return {
     sourceId: context.sourceId,
     externalId,
@@ -122,7 +131,8 @@ export function rawCardToListing(
     gearbox,
     ...parseListingCondition(raw.title, undefined),
     city: raw.city || 'Maroc',
-    imageUrl: preferListingPhoto(normalizeListingImageUrl(raw.image), nextImages.get(externalId)),
+    imageUrl: images[0] ?? preferListingPhoto(normalizeListingImageUrl(raw.image)),
+    ...(images.length > 0 ? { imageUrls: images } : {}),
     postedAt: parseRelativeFrenchDate(raw.relativeDate),
     scrapedAt,
   };
@@ -198,7 +208,7 @@ function urlsFromImg(img: Element): string[] {
   return out;
 }
 
-function pickAvitoCardImage(card: Element): string {
+function pickAvitoCardImages(card: Element): string[] {
   const classifieds: string[] = [];
   const other: string[] = [];
   const consider = (raw: string): void => {
@@ -214,10 +224,10 @@ function pickAvitoCardImage(card: Element): string {
     const srcset = source.getAttribute('srcset') ?? source.getAttribute('data-srcset') ?? '';
     consider(firstSrcsetUrl(srcset));
   }
-  return classifieds[0] ?? other[0] ?? '';
+  return uniqueListingImages(classifieds, other);
 }
 
-function avitoImagesFromNextData(html: string): ReadonlyMap<string, string> {
+function avitoImagesFromNextData(html: string): ReadonlyMap<string, readonly string[]> {
   const match = html.match(
     /<script id="__NEXT_DATA__" type="application\/json">(\{[\s\S]*?\})<\/script>/,
   );
@@ -228,12 +238,12 @@ function avitoImagesFromNextData(html: string): ReadonlyMap<string, string> {
   } catch {
     return new Map();
   }
-  const map = new Map<string, string>();
+  const map = new Map<string, string[]>();
   walkForAvitoImages(json, map);
   return map;
 }
 
-function walkForAvitoImages(node: unknown, into: Map<string, string>): void {
+function walkForAvitoImages(node: unknown, into: Map<string, string[]>): void {
   if (node == null || typeof node !== 'object') return;
   if (Array.isArray(node)) {
     for (const item of node) walkForAvitoImages(item, into);
@@ -243,15 +253,14 @@ function walkForAvitoImages(node: unknown, into: Map<string, string>): void {
   const id = rec['listId'] ?? rec['id'];
   const idKey =
     typeof id === 'string' || typeof id === 'number' ? String(id) : undefined;
-  const imageCandidate = listingPhotoFromRecord(rec);
-  if (idKey != null && imageCandidate) {
-    const existing = into.get(idKey);
-    into.set(idKey, preferListingPhoto(existing, imageCandidate) ?? imageCandidate);
+  const photos = listingPhotosFromRecord(rec);
+  if (idKey != null && photos.length > 0) {
+    into.set(idKey, uniqueListingImages(into.get(idKey), photos));
   }
   for (const value of Object.values(rec)) walkForAvitoImages(value, into);
 }
 
-function listingPhotoFromRecord(rec: Record<string, unknown>): string | undefined {
+function listingPhotosFromRecord(rec: Record<string, unknown>): string[] {
   const classifieds: string[] = [];
   const other: string[] = [];
   const push = (value: unknown): void => {
@@ -277,5 +286,5 @@ function listingPhotoFromRecord(rec: Record<string, unknown>): string | undefine
   push(rec['images']);
   push(rec['photos']);
   push(rec['imageUrl']);
-  return classifieds[0] ?? other[0];
+  return uniqueListingImages(classifieds, other);
 }

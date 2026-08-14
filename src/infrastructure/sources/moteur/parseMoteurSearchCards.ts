@@ -1,6 +1,7 @@
 import { parseHTML } from 'linkedom';
 import type { Listing } from '../../../domain/entities/Listing.js';
 import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
+import { uniqueListingImages } from '../../../domain/listingImages.js';
 import { parseFuelType, parseGearbox } from '../../../domain/entities/VehicleType.js';
 import { parseNumber, parseYear } from '../shared/textParsing.js';
 
@@ -53,7 +54,12 @@ function listingFromCard(card: Element, scrapedAt: Date): Listing | undefined {
 
   const postedRaw = card.querySelector('.timeago')?.getAttribute('data-time')?.trim();
   const posted = parsePostedAt(postedRaw);
-  const imgSrc = card.querySelector('.ads-index-media-img')?.getAttribute('src')?.trim();
+  const photos = uniqueListingImages(
+    Array.from(card.querySelectorAll('.ads-index-media img, .ads-index-media-img')).map((img) => {
+      const src = img.getAttribute('src')?.trim();
+      return src ? absoluteUrl(src) : undefined;
+    }),
+  );
   const description = collapse(card.querySelector('.ad-desc')?.textContent) || undefined;
 
   return {
@@ -71,7 +77,8 @@ function listingFromCard(card: Element, scrapedAt: Date): Listing | undefined {
     gearbox,
     ...parseListingCondition(title, description),
     city: city || 'Maroc',
-    imageUrl: imgSrc ? absoluteUrl(imgSrc) : undefined,
+    imageUrl: photos[0],
+    ...(photos.length > 0 ? { imageUrls: photos } : {}),
     postedAt: posted,
     scrapedAt,
   };

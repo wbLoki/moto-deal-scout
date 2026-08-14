@@ -2,6 +2,7 @@ import type { Listing, MarketplaceId } from '../../../domain/entities/Listing.js
 import { vehicleTypeForMarketplace } from '../../../domain/entities/Listing.js';
 import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
 import { parseFuelType, parseGearbox } from '../../../domain/entities/VehicleType.js';
+import { uniqueListingImages } from '../../../domain/listingImages.js';
 import { parseNumber, parseYear } from '../shared/textParsing.js';
 import { parseListingUrl } from '../../../application/services/parseListingUrl.js';
 import { normalizeListingImageUrl } from './parseAvitoSearchCards.js';
@@ -103,6 +104,7 @@ export function listingFromAvitoAd(
     typeof mileageRaw === 'number' ? mileageRaw : parseNumber(paramText(mileageRaw));
   const displacementCc =
     typeof ccRaw === 'number' ? ccRaw : parseNumber(paramText(ccRaw));
+  const images = extractAdImages(ad);
 
   return {
     sourceId,
@@ -125,7 +127,8 @@ export function listingFromAvitoAd(
       ad.description?.trim() || undefined,
     ),
     city: ad.location?.city?.name?.trim() || 'Maroc',
-    imageUrl: extractAdImage(ad),
+    imageUrl: images[0],
+    ...(images.length > 0 ? { imageUrls: images } : {}),
     postedAt: undefined,
     scrapedAt,
   };
@@ -140,7 +143,7 @@ function imageCandidateUrl(value: unknown): string | undefined {
   return undefined;
 }
 
-function extractAdImage(ad: AvitoAd): string | undefined {
+function extractAdImages(ad: AvitoAd): string[] {
   const classifieds: string[] = [];
   const other: string[] = [];
   const push = (url: string | undefined): void => {
@@ -151,32 +154,39 @@ function extractAdImage(ad: AvitoAd): string | undefined {
   push(imageCandidateUrl(ad.defaultImage));
   push(imageCandidateUrl(ad.imageUrl));
   for (const collection of [ad.images, ad.photos]) {
-    for (const item of collection ?? []) push(imageCandidateUrl(item));
+    for (const item of collection ?? []) {
+      push(imageCandidateUrl(item));
+      if (item && typeof item === 'object') {
+        const rec = item as Record<string, unknown>;
+        push(imageCandidateUrl(rec['full']));
+        push(imageCandidateUrl(rec['large']));
+        push(imageCandidateUrl(rec['src']));
+      }
+    }
   }
-  push(findAvitoCdnUrl(ad));
-  return classifieds[0] ?? other[0];
+  if (classifieds.length === 0) {
+    for (const url of collectAvitoCdnUrls(ad)) push(url);
+  }
+  return uniqueListingImages(classifieds, other);
 }
 
-function findAvitoCdnUrl(node: unknown, depth = 0): string | undefined {
-  if (depth > 6 || node == null) return undefined;
+function collectAvitoCdnUrls(node: unknown, depth = 0, into: string[] = []): string[] {
+  if (depth > 6 || node == null || into.length >= 40) return into;
   if (typeof node === 'string') {
     const url = normalizeListingImageUrl(node);
-    return url && /classifieds\/images/i.test(url) ? url : undefined;
+    if (url && /classifieds\/images/i.test(url)) into.push(url);
+    return into;
   }
   if (Array.isArray(node)) {
-    for (const item of node) {
-      const url = findAvitoCdnUrl(item, depth + 1);
-      if (url) return url;
-    }
-    return undefined;
+    for (const item of node) collectAvitoCdnUrls(item, depth + 1, into);
+    return into;
   }
   if (typeof node === 'object') {
     for (const value of Object.values(node as Record<string, unknown>)) {
-      const url = findAvitoCdnUrl(value, depth + 1);
-      if (url) return url;
+      collectAvitoCdnUrls(value, depth + 1, into);
     }
   }
-  return undefined;
+  return into;
 }
 
 /** Pulls the ad object from Avito's Next.js page props. */

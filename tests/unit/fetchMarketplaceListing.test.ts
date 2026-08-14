@@ -59,6 +59,28 @@ describe('listingFromAvitoAd', () => {
     expect(listing.imageUrl).toBe('https://content.avito.ma/classifieds/images/99?t=images');
   });
 
+  it('keeps every classifieds photo for the listing gallery', () => {
+    const listing = listingFromAvitoAd(
+      {
+        listId: '58415881',
+        subject: 'BMW GT 400',
+        price: { value: 108000 },
+        defaultImage: 'https://content.avito.ma/classifieds/images/101?t=images',
+        images: [
+          'https://content.avito.ma/classifieds/images/101?t=thumb',
+          'https://content.avito.ma/classifieds/images/102?t=images',
+          'https://content.avito.ma/classifieds/images/103?t=images',
+        ],
+      },
+      url,
+    );
+    expect(listing.imageUrls).toEqual([
+      'https://content.avito.ma/classifieds/images/101?t=images',
+      'https://content.avito.ma/classifieds/images/102?t=images',
+      'https://content.avito.ma/classifieds/images/103?t=images',
+    ]);
+  });
+
   it('rejects ads with no asking price', () => {
     expect(() =>
       listingFromAvitoAd({ listId: '1', subject: 'x', price: null }, url),
@@ -217,6 +239,39 @@ describe('parseAvitoSearchCards', () => {
     const listings = parseAvitoSearchCards(html, new Date('2026-01-01T00:00:00Z'));
     expect(listings[0]?.imageUrl).toBe('https://content.avito.ma/classifieds/images/101?t=images');
   });
+
+  it('collects every classifieds photo from __NEXT_DATA__ for the gallery', () => {
+    const next = {
+      props: {
+        pageProps: {
+          ads: [
+            {
+              listId: '111',
+              images: [
+                'https://content.avito.ma/classifieds/images/101?t=images',
+                'https://content.avito.ma/classifieds/images/102?t=images',
+              ],
+            },
+          ],
+        },
+      },
+    };
+    const html = `
+      <a data-testid="ad-card-v2-1" href="/fr/casa/motos/Yamaha_MT-07_111.htm">
+        <h3>Yamaha MT-07</h3>
+        <img src="https://content.avito.ma/classifieds/images/101?t=images" />
+        <span>65 000</span><span>DH</span>
+        <span>Casablanca</span>
+        <span>il y a 2 jours</span>
+      </a>
+      <script id="__NEXT_DATA__" type="application/json">${JSON.stringify(next)}</script>
+    `;
+    const listings = parseAvitoSearchCards(html, new Date('2026-01-01T00:00:00Z'));
+    expect(listings[0]?.imageUrls).toEqual([
+      'https://content.avito.ma/classifieds/images/101?t=images',
+      'https://content.avito.ma/classifieds/images/102?t=images',
+    ]);
+  });
 });
 
 describe('listingImageFromHtml', () => {
@@ -244,6 +299,8 @@ describe('listingFromBikerDetail', () => {
         kilometrage: 12300,
         cylindre: '500',
         ville: 'CASABLANCA',
+        photo1: 'trk-front.jpg',
+        photo2: 'trk-side.jpg',
       },
       'https://www.biker.ma/annonce/detail-moto/BENELLI-TRK-502/4157',
     );
@@ -258,6 +315,11 @@ describe('listingFromBikerDetail', () => {
       mileageKm: 12300,
       displacementCc: 500,
       city: 'CASABLANCA',
+      imageUrl: 'https://www.biker.ma/uploads/trk-front.jpg',
+      imageUrls: [
+        'https://www.biker.ma/uploads/trk-front.jpg',
+        'https://www.biker.ma/uploads/trk-side.jpg',
+      ],
     });
   });
 });

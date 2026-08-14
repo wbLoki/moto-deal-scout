@@ -1,6 +1,7 @@
 import type { ScoredListing } from '../src/domain/entities/ScoredListing.js';
 import { isCalibrated } from '../src/domain/services/calibrationState.js';
 import { dealTierFor } from '../src/domain/services/dealTier.js';
+import { uniqueListingImages } from '../src/domain/listingImages.js';
 import type { DealCardData } from './DealCardShell.js';
 
 /** Flat, fully-serializable view of a scored listing for the client. */
@@ -38,6 +39,9 @@ function displayableListingImage(url: string | undefined): string | null {
 export function toDealView(scored: ScoredListing): DealView {
   const { listing, score, match } = scored;
   const tier = dealTierFor(score.total, isCalibrated(match.criteria));
+  const imageUrls = uniqueListingImages(listing.imageUrls, listing.imageUrl ? [listing.imageUrl] : undefined)
+    .map(displayableListingImage)
+    .filter((url): url is string => url != null);
   return {
     key: `${listing.sourceId}:${listing.externalId}`,
     modelId: match.criteria.id,
@@ -50,7 +54,8 @@ export function toDealView(scored: ScoredListing): DealView {
     sourceId: listing.sourceId,
     externalId: listing.externalId,
     url: listing.url,
-    imageUrl: displayableListingImage(listing.imageUrl),
+    imageUrl: imageUrls[0] ?? null,
+    imageUrls,
     matchConfidence: match.confidence,
     score: score.total,
     createdAt: listing.firstSeenAt ?? toIso(listing.scrapedAt) ?? '',

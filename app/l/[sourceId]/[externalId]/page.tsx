@@ -1,11 +1,10 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { parseMarketplaceId } from '../../../../src/domain/entities/Listing.js';
 import { getScoredListing } from '../../../../src/readModel.js';
-import { DealListingBody } from '../../../DealCardShell.js';
+import { ListingDetail } from '../../../ListingDetail.js';
 import { toDealView } from '../../../dealView.js';
-import { dictionaryFor, getLocale } from '../../../i18n/getLocale.js';
+import { getLocale } from '../../../i18n/getLocale.js';
 import { PageShell } from '../../../PageShell.js';
 
 export const runtime = 'nodejs';
@@ -37,24 +36,11 @@ export default async function ListingPage({ params }: ListingPageProps) {
 
   const deal = toDealView(scored);
   const locale = await getLocale();
-  const t = dictionaryFor(locale);
   const feedHref = deal.vehicleType === 'car' ? '/cars' : '/';
 
   return (
     <PageShell>
-      <article className="listing-page deal-modal">
-        <DealListingBody
-          data={deal}
-          locale={locale}
-          headingId="listing-title"
-          headingAs="h1"
-          extraActions={
-            <Link className="btn" href={feedHref}>
-              {t.card.backToFeed}
-            </Link>
-          }
-        />
-      </article>
+      <ListingDetail data={deal} locale={locale} feedHref={feedHref} />
     </PageShell>
   );
 }

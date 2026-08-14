@@ -93,6 +93,38 @@ describe('LibsqlListingRepository', () => {
     );
   });
 
+  it('persists a photo gallery and does not shrink it on a later one-thumb scrape', async () => {
+    const gallery = [
+      'https://content.avito.ma/classifieds/images/1?t=images',
+      'https://content.avito.ma/classifieds/images/2?t=images',
+      'https://content.avito.ma/classifieds/images/3?t=images',
+    ];
+    await repo.save(
+      buildScored({
+        listing: makeListing({
+          externalId: 'gal',
+          imageUrl: gallery[0],
+          imageUrls: gallery,
+        }),
+      }),
+    );
+    const stored = await repo.findBySourceExternalId('avito', 'gal');
+    expect(stored?.listing.imageUrls).toEqual(gallery);
+
+    await repo.save(
+      buildScored({
+        listing: makeListing({
+          externalId: 'gal',
+          imageUrl: gallery[0],
+          imageUrls: [gallery[0]!],
+        }),
+      }),
+    );
+    const kept = await repo.findBySourceExternalId('avito', 'gal');
+    expect(kept?.listing.imageUrls).toEqual(gallery);
+    expect(kept?.listing.imageUrl).toBe(gallery[0]);
+  });
+
   it('excludes good deals from before the given date', async () => {
     await repo.save(buildScored({ listing: makeListing({ externalId: 'c' }), isGoodDeal: true }));
 
