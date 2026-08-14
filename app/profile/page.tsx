@@ -45,8 +45,6 @@ async function ProfileBody() {
             email={account.email}
             name={account.name ?? ''}
             hasPassword={account.hasPassword}
-            phone={account.phone ?? ''}
-            whatsappOptIn={account.whatsappOptIn}
           />
         )}
       </section>

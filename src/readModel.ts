@@ -431,3 +431,21 @@ export async function getModelYearMarket(input: {
     db.close();
   }
 }
+
+/** One scored listing for the public `/l/[sourceId]/[externalId]` page. */
+export async function getScoredListing(
+  sourceId: MarketplaceId,
+  externalId: string,
+): Promise<ScoredListing | undefined> {
+  const env = loadEnv();
+  const db = await openDatabase(resolveDatabaseConfig(env));
+  try {
+    const allModels = await new LibsqlModelRepository(db).listAll();
+    return await new LibsqlListingRepository(db, allModels).findBySourceExternalId(
+      sourceId,
+      externalId,
+    );
+  } finally {
+    db.close();
+  }
+}

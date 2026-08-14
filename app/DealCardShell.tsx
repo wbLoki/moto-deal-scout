@@ -88,29 +88,10 @@ export function DealCardShell({
   const postedLabel = formatPostDate(data.postedAt ?? data.createdAt, t);
   const tierLabel = isTierLevel(data.tierLevel) ? t.tiers[data.tierLevel] : data.tierLabel;
   const [open, setOpen] = useState(false);
-  const [market, setMarket] = useState<ModelYearMarket | null>(null);
-  const [marketStatus, setMarketStatus] = useState<'idle' | 'loading' | 'done'>('idle');
-
-  const loadMarket = () => {
-    if (marketStatus !== 'idle') return;
-    setMarketStatus('loading');
-    void fetchModelYearMarketAction({
-      modelId: data.modelId,
-      year: data.year,
-      vehicleType: data.vehicleType,
-      sourceId: data.sourceId,
-      externalId: data.externalId,
-      listingPrice: data.priceMAD,
-    }).then((res) => {
-      setMarket(res.market);
-      setMarketStatus('done');
-    });
-  };
 
   const openPopup = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('a, button')) return;
     setOpen(true);
-    loadMarket();
   };
 
   const closePopup = () => setOpen(false);
@@ -129,7 +110,6 @@ export function DealCardShell({
     };
   }, [open]);
 
-  const showPowertrain = Boolean(data.fuelType || data.gearbox);
   const title = `${data.brand} ${data.model}`;
 
   return (
@@ -202,60 +182,113 @@ export function DealCardShell({
               >
                 <CloseIcon size={18} />
               </button>
-              {data.imageUrl ? (
-                <div className="deal-modal-media">
-                  <ListingImage
-                    className="deal-modal-img"
-                    src={data.imageUrl}
-                    alt={title}
-                    fill
-                    sizes="(max-width: 640px) 100vw, 480px"
-                  />
-                </div>
-              ) : (
-                <div className="deal-modal-media empty">{t.card.noImage}</div>
-              )}
-              <span className={`tag tag-${data.tierLevel}`}>{tierLabel}</span>
-              <h2 id={`deal-${data.key}`} className="modal-title">
-                {title}
-              </h2>
-              <div className="price">{madFmt.format(data.priceMAD)} MAD</div>
-              <div className="meta">
-                <span>{data.year ?? t.card.yearNa}</span>
-                <span>{data.mileageKm !== null ? `${data.mileageKm} km` : t.card.kmNa}</span>
-                <span>{data.city}</span>
-              </div>
-              {postedLabel && (
-                <p className="card-details-row muted">
-                  {t.card.posted}: {postedLabel}
-                </p>
-              )}
-              <div className="card-details">
-                {showPowertrain && (
-                  <p className="card-details-row">
-                    {data.fuelType ? t.filters[data.fuelType] : null}
-                    {data.fuelType && data.gearbox ? ' · ' : null}
-                    {data.gearbox ? t.filters[data.gearbox] : null}
-                  </p>
-                )}
-                <ConditionFlags data={data} locale={locale} />
-                <MarketBlock
-                  data={data}
-                  market={market}
-                  loading={marketStatus === 'loading'}
-                  locale={locale}
-                />
-              </div>
-              <div className="modal-actions">
-                <a className="btn btn-primary" href={data.url} target="_blank" rel="noopener noreferrer">
-                  {t.card.viewListing}
-                  <ExternalLinkIcon className="icon-trail" size={15} />
-                </a>
-              </div>
+              <DealListingBody data={data} locale={locale} headingId={`deal-${data.key}`} />
             </div>
           </div>,
           document.body,
         )}
+    </>
+  );
+}
+
+/** Shared listing body used by the card popup and the `/l/...` page. */
+export function DealListingBody({
+  data,
+  locale,
+  headingId,
+  headingAs = 'h2',
+  extraActions,
+}: {
+  data: DealCardData;
+  locale: Locale;
+  headingId: string;
+  headingAs?: 'h1' | 'h2';
+  extraActions?: ReactNode;
+}) {
+  const t = useT(locale);
+  const postedLabel = formatPostDate(data.postedAt ?? data.createdAt, t);
+  const tierLabel = isTierLevel(data.tierLevel) ? t.tiers[data.tierLevel] : data.tierLabel;
+  const title = `${data.brand} ${data.model}`;
+  const showPowertrain = Boolean(data.fuelType || data.gearbox);
+  const Heading = headingAs;
+  const [market, setMarket] = useState<ModelYearMarket | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void fetchModelYearMarketAction({
+      modelId: data.modelId,
+      year: data.year,
+      vehicleType: data.vehicleType,
+      sourceId: data.sourceId,
+      externalId: data.externalId,
+      listingPrice: data.priceMAD,
+    }).then((res) => {
+      if (cancelled) return;
+      setMarket(res.market);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    data.modelId,
+    data.year,
+    data.vehicleType,
+    data.sourceId,
+    data.externalId,
+    data.priceMAD,
+  ]);
+
+  return (
+    <>
+      {data.imageUrl ? (
+        <div className="deal-modal-media">
+          <ListingImage
+            className="deal-modal-img"
+            src={data.imageUrl}
+            alt={title}
+            fill
+            sizes="(max-width: 640px) 100vw, 480px"
+          />
+        </div>
+      ) : (
+        <div className="deal-modal-media empty">{t.card.noImage}</div>
+      )}
+      <span className={`tag tag-${data.tierLevel}`}>{tierLabel}</span>
+      <Heading id={headingId} className="modal-title">
+        {title}
+      </Heading>
+      <div className="price">{madFmt.format(data.priceMAD)} MAD</div>
+      <div className="meta">
+        <span>{data.year ?? t.card.yearNa}</span>
+        <span>{data.mileageKm !== null ? `${data.mileageKm} km` : t.card.kmNa}</span>
+        <span>{data.city}</span>
+      </div>
+      {postedLabel && (
+        <p className="card-details-row muted">
+          {t.card.posted}: {postedLabel}
+        </p>
+      )}
+      <div className="card-details">
+        {showPowertrain && (
+          <p className="card-details-row">
+            {data.fuelType ? t.filters[data.fuelType] : null}
+            {data.fuelType && data.gearbox ? ' · ' : null}
+            {data.gearbox ? t.filters[data.gearbox] : null}
+          </p>
+        )}
+        <ConditionFlags data={data} locale={locale} />
+        <MarketBlock data={data} market={market} loading={loading} locale={locale} />
+      </div>
+      <div className="modal-actions">
+        {extraActions}
+        <a className="btn btn-primary" href={data.url} target="_blank" rel="noopener noreferrer">
+          {t.card.viewListing}
+          <ExternalLinkIcon className="icon-trail" size={15} />
+        </a>
+      </div>
     </>
   );
 }

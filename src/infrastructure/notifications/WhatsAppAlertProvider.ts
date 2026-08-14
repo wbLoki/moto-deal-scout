@@ -1,5 +1,6 @@
 import type { Env } from '../../config/env.js';
 import type { StoredNotification } from '../../domain/entities/Notification.js';
+import { listingPageButtonSuffix } from './listingPagePath.js';
 
 const GRAPH_VERSION = 'v21.0';
 const madFmt = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
@@ -13,8 +14,10 @@ type FetchLike = typeof fetch;
 
 /**
  * Sends per-user alert digests via the WhatsApp Cloud API using a pre-approved
- * utility template. Business-initiated messages cannot be freeform. Constructed
- * only when token + phone-number id + template name are set.
+ * utility template with named body params `model_vehicle` and `price`, plus a
+ * dynamic URL button whose suffix is `/l/{sourceId}/{externalId}`.
+ * Business-initiated messages cannot be freeform. Constructed only when token +
+ * phone-number id + template name are set.
  */
 export class WhatsAppAlertProvider {
   constructor(
@@ -71,9 +74,19 @@ export class WhatsAppAlertProvider {
             {
               type: 'body',
               parameters: [
-                { type: 'text', text: clip(title) },
-                { type: 'text', text: clip(price || '—') },
-                { type: 'text', text: clip(first.url) },
+                { type: 'text', parameter_name: 'model_vehicle', text: clip(title) },
+                { type: 'text', parameter_name: 'price', text: clip(price || '—') },
+              ],
+            },
+            {
+              type: 'button',
+              sub_type: 'url',
+              index: '0',
+              parameters: [
+                {
+                  type: 'text',
+                  text: clip(listingPageButtonSuffix(first.sourceId, first.externalId), 2000),
+                },
               ],
             },
           ],
@@ -87,6 +100,6 @@ export class WhatsAppAlertProvider {
   }
 }
 
-function clip(s: string): string {
-  return s.slice(0, 1024) || '—';
+function clip(s: string, max = 1024): string {
+  return s.slice(0, max) || '—';
 }

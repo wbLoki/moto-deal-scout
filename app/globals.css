@@ -2037,6 +2037,39 @@ body.nav-open {
   border-radius: var(--pill);
 }
 
+.listing-page {
+  max-width: 480px;
+  max-height: none;
+  margin: 0 auto 2rem;
+  padding: 0 0 1.5rem;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.listing-page .deal-modal-media {
+  width: 100%;
+  margin: 0 0 1rem;
+}
+
+.listing-page .tag,
+.listing-page .modal-title,
+.listing-page .price,
+.listing-page .meta,
+.listing-page .card-details,
+.listing-page .card-details-row,
+.listing-page .modal-actions {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.listing-page .modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
 .modal-close {
   position: absolute;
   top: 0.85rem;

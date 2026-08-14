@@ -187,6 +187,7 @@ export const en = {
     kmNa: 'km n/a',
     match: (pct: number) => `match ${pct}%`,
     viewListing: 'View listing',
+    backToFeed: 'Back to deals',
     posted: 'Posted',
     today: 'Today',
     yesterday: 'Yesterday',
@@ -223,7 +224,7 @@ export const en = {
   },
   profile: {
     title: 'Profile',
-    subtitle: 'Manage your account, saved searches, and WhatsApp alerts.',
+    subtitle: 'Manage your account and saved searches.',
     loading: 'Loading profile…',
     account: 'Account',
     savedSearches: 'Saved searches',
@@ -231,7 +232,7 @@ export const en = {
       'The dashboard’s “Your searches” tab and alerts use these filters. Bookmarks stay separate.',
     whatsapp: 'WhatsApp alerts',
     whatsappHint:
-      'Opt in to receive deal alerts on WhatsApp. Phone must be E.164 (e.g. +2126…). Requires a Meta-approved template.',
+      'Free accounts get one WhatsApp a week when we find a matching deal. Coming soon.',
     phone: 'Phone (E.164)',
     whatsappOptIn: 'Send alerts on WhatsApp',
     saveWhatsApp: 'Save WhatsApp settings',

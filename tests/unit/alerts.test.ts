@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newDealNotifications, priceDropNotifications } from '../../src/alerts.js';
+import { newDealNotifications, priceDropNotifications, shouldSendFreeWeeklyWhatsApp } from '../../src/alerts.js';
 import type { ScoredListing } from '../../src/domain/entities/ScoredListing.js';
 import type { PriceDrop } from '../../src/domain/entities/DailyReport.js';
 import type { Listing } from '../../src/domain/entities/Listing.js';
@@ -123,5 +123,19 @@ describe('priceDropNotifications', () => {
     const rows = priceDropNotifications([d], [tight], savers);
 
     expect(rows.map((r) => r.userId)).toEqual(['s1']);
+  });
+});
+
+describe('shouldSendFreeWeeklyWhatsApp', () => {
+  const now = new Date('2026-08-14T08:00:00.000Z');
+
+  it('sends when the user has never been WhatsApp’d', () => {
+    expect(shouldSendFreeWeeklyWhatsApp(undefined, now)).toBe(true);
+    expect(shouldSendFreeWeeklyWhatsApp(null, now)).toBe(true);
+  });
+
+  it('waits a week after the last send', () => {
+    expect(shouldSendFreeWeeklyWhatsApp('2026-08-10T08:00:00.000Z', now)).toBe(false);
+    expect(shouldSendFreeWeeklyWhatsApp('2026-08-07T08:00:00.000Z', now)).toBe(true);
   });
 });

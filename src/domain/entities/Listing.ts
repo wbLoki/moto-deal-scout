@@ -10,6 +10,18 @@ import type { FuelType, GearboxType, VehicleType } from './VehicleType.js';
  */
 export type MarketplaceId = 'avito' | 'biker' | 'moteur' | 'avito-cars' | 'wandaloo';
 
+const MARKETPLACE_IDS: ReadonlySet<string> = new Set([
+  'avito',
+  'biker',
+  'moteur',
+  'avito-cars',
+  'wandaloo',
+]);
+
+export function parseMarketplaceId(id: string): MarketplaceId | undefined {
+  return MARKETPLACE_IDS.has(id) ? (id as MarketplaceId) : undefined;
+}
+
 /** True for the car-market source ids (never mixed into the moto feed). */
 export function isCarMarketplace(id: string): boolean {
   return id === 'avito-cars' || id === 'wandaloo' || id === 'moteur';

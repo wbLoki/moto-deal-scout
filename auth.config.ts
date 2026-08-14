@@ -26,6 +26,7 @@ const PROTECTED_PREFIXES = [
   '/notifications',
   '/saved',
   '/admin',
+  '/dev',
 ];
 
 // Auth.js auto-reads AUTH_SECRET from the environment, but we also wire it in

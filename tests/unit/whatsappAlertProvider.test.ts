@@ -41,22 +41,40 @@ describe('WhatsAppAlertProvider', () => {
   });
 
   it('posts a template message to Graph API', async () => {
-    const fetchImpl = vi.fn((_url: string, _init?: RequestInit) =>
+    const fetchImpl = vi.fn((_url: RequestInfo | URL, _init?: RequestInit) =>
       Promise.resolve(new Response('{}', { status: 200 })),
     );
-    const provider = WhatsAppAlertProvider.fromEnv(makeEnv(), fetchImpl);
+    const provider = WhatsAppAlertProvider.fromEnv(makeEnv(), (input, init) =>
+      fetchImpl(input, init),
+    );
     await provider!.sendDigests([{ phone: '+212612345678', notifications: [note()] }]);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const call = fetchImpl.mock.calls[0];
     expect(call).toBeDefined();
     const url = call![0];
+    const href = typeof url === 'string' ? url : url instanceof URL ? url.href : '';
     const bodyRaw = call![1]?.body;
-    expect(url).toContain('/123/messages');
+    expect(href).toContain('/123/messages');
     const body = JSON.parse(typeof bodyRaw === 'string' ? bodyRaw : '') as {
       to: string;
-      template: { name: string };
+      template: {
+        name: string;
+        components: {
+          type: string;
+          sub_type?: string;
+          parameters: { parameter_name?: string; text: string }[];
+        }[];
+      };
     };
     expect(body.to).toBe('212612345678');
     expect(body.template.name).toBe('deal_alert');
+    const bodyParams = body.template.components[0]?.parameters ?? [];
+    expect(bodyParams.map((p) => p.parameter_name)).toEqual(['model_vehicle', 'price']);
+    expect(bodyParams[0]?.text).toBe('Yamaha MT-07 — 68 000 MAD');
+    expect(bodyParams[1]?.text).toMatch(/000 MAD$/);
+    const button = body.template.components[1];
+    expect(button?.type).toBe('button');
+    expect(button?.sub_type).toBe('url');
+    expect(button?.parameters[0]?.text).toBe('avito/1');
   });
 });

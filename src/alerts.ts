@@ -126,6 +126,22 @@ export function priceDropNotifications(
   return rows;
 }
 
+const FREE_WHATSAPP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Free accounts get at most one WhatsApp per week, and only when a matching
+ * deal is waiting. No prior send → eligible (the pending-deal check is the caller).
+ */
+export function shouldSendFreeWeeklyWhatsApp(
+  lastSentAt: string | null | undefined,
+  now: Date,
+): boolean {
+  if (!lastSentAt) return true;
+  const t = Date.parse(lastSentAt);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= FREE_WHATSAPP_INTERVAL_MS;
+}
+
 export interface AlertOutcome {
   /** Notification rows built and offered to the store (dedup may drop some). */
   readonly candidates: number;
@@ -209,16 +225,23 @@ async function sendWhatsAppDigests(
   env: Env,
   notifications: LibsqlNotificationRepository,
 ): Promise<void> {
+  const live: boolean = false;
+  if (!live) return;
+
   const provider = WhatsAppAlertProvider.fromEnv(env);
   if (!provider) return;
 
   const grouped = await notifications.listUnwhatsappedGroupedByUser();
   if (grouped.size === 0) return;
 
-  const prefs = await whatsappPrefsFor(db, [...grouped.keys()]);
+  const userIds = [...grouped.keys()];
+  const prefs = await whatsappPrefsFor(db, userIds);
+  const lastSent = await lastWhatsappedAtByUser(db, userIds);
+  const now = new Date();
   for (const [userId, list] of grouped) {
     const pref = prefs.get(userId);
     if (!pref?.optIn || !pref.phone) continue;
+    if (!shouldSendFreeWeeklyWhatsApp(lastSent.get(userId), now)) continue;
     try {
       await provider.sendDigests([{ phone: pref.phone, notifications: list }]);
       await notifications.markWhatsapped(list.map((n) => n.id));
@@ -263,6 +286,26 @@ async function whatsappPrefsFor(
       phone: (row.phone ?? '').trim(),
       optIn: Number(row.whatsapp_opt_in) === 1,
     });
+  }
+  return map;
+}
+
+async function lastWhatsappedAtByUser(
+  db: Client,
+  userIds: readonly string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (userIds.length === 0) return map;
+  const placeholders = userIds.map(() => '?').join(', ');
+  const result = await db.execute({
+    sql: `SELECT user_id, MAX(whatsapped_at) AS last_sent
+          FROM notifications
+          WHERE user_id IN (${placeholders}) AND whatsapped_at IS NOT NULL
+          GROUP BY user_id`,
+    args: [...userIds],
+  });
+  for (const row of result.rows as unknown as { user_id: string; last_sent: string | null }[]) {
+    if (row.last_sent) map.set(row.user_id, row.last_sent);
   }
   return map;
 }

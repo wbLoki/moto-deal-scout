@@ -150,6 +150,7 @@ export const fr: Dictionary = {
     kmNa: 'km n/d',
     match: (pct: number) => `correspondance ${pct} %`,
     viewListing: 'Voir l’annonce',
+    backToFeed: 'Retour aux affaires',
     posted: 'Publiée',
     today: 'Aujourd’hui',
     yesterday: 'Hier',
@@ -186,7 +187,7 @@ export const fr: Dictionary = {
   },
   profile: {
     title: 'Profil',
-    subtitle: 'Gérez votre compte, vos recherches et les alertes WhatsApp.',
+    subtitle: 'Gérez votre compte et vos recherches.',
     loading: 'Chargement du profil…',
     account: 'Compte',
     savedSearches: 'Recherches enregistrées',
@@ -194,7 +195,7 @@ export const fr: Dictionary = {
       'L’onglet « Vos recherches » et les alertes utilisent ces filtres. Les signets restent séparés.',
     whatsapp: 'Alertes WhatsApp',
     whatsappHint:
-      'Optez pour recevoir les alertes sur WhatsApp. Le numéro doit être en E.164 (ex. +2126…). Un modèle Meta approuvé est requis.',
+      'Les comptes gratuits reçoivent un WhatsApp par semaine si nous trouvons une affaire. Bientôt.',
     phone: 'Téléphone (E.164)',
     whatsappOptIn: 'Envoyer les alertes sur WhatsApp',
     saveWhatsApp: 'Enregistrer WhatsApp',

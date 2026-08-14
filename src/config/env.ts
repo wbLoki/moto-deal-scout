@@ -96,7 +96,9 @@ const envSchema = z.object({
   /**
    * WhatsApp Cloud API. When any of token / phone-number id / template name
    * is unset, WhatsApp delivery is skipped (in-app and email still work).
-   * The template must be a pre-approved utility template in Meta Business Manager.
+   * The template must be a pre-approved utility template in Meta Business Manager
+   * with named body params `model_vehicle` and `price`, plus a Visit website
+   * button whose URL is `https://motosnipe.com/l/{{1}}` (suffix `sourceId/externalId`).
    */
   WHATSAPP_TOKEN: z.string().min(1).optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
