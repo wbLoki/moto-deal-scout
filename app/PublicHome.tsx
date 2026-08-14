@@ -3,6 +3,7 @@ import { PublicFeed } from './PublicFeed.js';
 import type { DealView } from './dealView.js';
 import type { SortKey } from './dealSort.js';
 import type { DealFacets } from '../src/domain/interfaces/ListingRepository.js';
+import type { VehicleType } from '../src/domain/entities/VehicleType.js';
 import { dictionaryFor, getLocale } from './i18n/getLocale.js';
 
 /**
@@ -18,11 +19,13 @@ export async function PublicHome({
   initialTotal,
   initialSort,
   facets,
+  vehicleType = 'motorcycle',
 }: {
   initialDeals: readonly DealView[];
   initialTotal: number;
   initialSort: SortKey;
   facets: DealFacets;
+  vehicleType?: VehicleType;
 }) {
   const locale = await getLocale();
   const t = dictionaryFor(locale);
@@ -50,6 +53,7 @@ export async function PublicHome({
         initialSort={initialSort}
         facets={facets}
         locale={locale}
+        vehicleType={vehicleType}
       />
 
       <div className="footer">{t.home.footer}</div>

@@ -3,7 +3,10 @@ import { ListingScorer } from './application/services/ListingScorer.js';
 import { loadEnv } from './config/env.js';
 import { loadCriteria } from './config/loadCriteria.js';
 import type { Listing } from './domain/entities/Listing.js';
+import { parseListingCondition } from './domain/entities/ListingCondition.js';
 import type { StoredModel } from './domain/entities/Model.js';
+import type { VehicleType } from './domain/entities/VehicleType.js';
+import { parseFuelType, parseGearbox, parseVehicleType } from './domain/entities/VehicleType.js';
 import { isCalibrated } from './domain/services/calibrationState.js';
 import { modelId, provisionalModel } from './domain/services/provisionalModel.js';
 import { openDatabaseFromEnv } from './infrastructure/persistence/libsql/Database.js';
@@ -34,14 +37,17 @@ export async function saveForReview(
   await client.execute({
     sql: `INSERT INTO review_listings
             (source_id, external_id, url, title, price_mad, year, mileage_km,
-             displacement_cc, city, image_url, posted_at, detected_brand)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             displacement_cc, city, image_url, posted_at, detected_brand,
+             vehicle_type, fuel_type, gearbox)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (source_id, external_id) DO UPDATE SET
             url = excluded.url, title = excluded.title, price_mad = excluded.price_mad,
             year = excluded.year, mileage_km = excluded.mileage_km,
             displacement_cc = excluded.displacement_cc, city = excluded.city,
             image_url = excluded.image_url, posted_at = excluded.posted_at,
             detected_brand = excluded.detected_brand,
+            vehicle_type = excluded.vehicle_type, fuel_type = excluded.fuel_type,
+            gearbox = excluded.gearbox,
             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
     args: [
       listing.sourceId,
@@ -56,6 +62,9 @@ export async function saveForReview(
       listing.imageUrl ?? null,
       listing.postedAt?.toISOString() ?? null,
       detectedBrand,
+      listing.vehicleType,
+      listing.fuelType ?? null,
+      listing.gearbox ?? null,
     ],
   });
 }
@@ -104,6 +113,7 @@ export interface Paged<T> {
 interface PageParams {
   readonly page?: number;
   readonly pageSize?: number;
+  readonly vehicleType?: VehicleType;
 }
 
 function pageBounds(total: number, params: PageParams, defaultSize: number) {
@@ -120,21 +130,23 @@ async function count(client: Client, sql: string, args: unknown[] = []): Promise
 
 /** Pending review queue: known-brand listings with no catalog model, newest first. */
 export async function listReviewQueue(params: PageParams = {}): Promise<Paged<ReviewListing>> {
+  const vehicleType = params.vehicleType ?? 'motorcycle';
   const db = await openDatabaseFromEnv();
   try {
     const total = await count(
       db,
-      "SELECT COUNT(*) AS n FROM review_listings WHERE status = 'pending'",
+      "SELECT COUNT(*) AS n FROM review_listings WHERE status = 'pending' AND COALESCE(vehicle_type, 'motorcycle') = ?",
+      [vehicleType],
     );
     const { pageSize, totalPages, page, offset } = pageBounds(total, params, 50);
     const res = await db.execute({
       sql: `SELECT source_id, external_id, url, title, price_mad, year, mileage_km,
                    displacement_cc, city, detected_brand, posted_at, created_at
               FROM review_listings
-             WHERE status = 'pending'
+             WHERE status = 'pending' AND COALESCE(vehicle_type, 'motorcycle') = ?
              ORDER BY created_at DESC
              LIMIT ? OFFSET ?`,
-      args: [pageSize, offset],
+      args: [vehicleType, pageSize, offset],
     });
     const rows = (res.rows as unknown as ReviewRow[]).map(toReviewListing);
     return { rows, total, page, pageSize, totalPages };
@@ -143,14 +155,19 @@ export async function listReviewQueue(params: PageParams = {}): Promise<Paged<Re
   }
 }
 
-/** Stored listings missing a year, mileage, or displacement — waiting to be completed. */
+/** Stored listings missing a year, mileage, or (motos only) displacement. */
 export async function listIncompleteListings(
   params: PageParams = {},
 ): Promise<Paged<IncompleteListing>> {
-  const where = 'year IS NULL OR mileage_km IS NULL OR displacement_cc IS NULL';
+  const vehicleType = params.vehicleType ?? 'motorcycle';
+  const missing =
+    vehicleType === 'car'
+      ? '(year IS NULL OR mileage_km IS NULL)'
+      : '(year IS NULL OR mileage_km IS NULL OR displacement_cc IS NULL)';
+  const where = `${missing} AND COALESCE(vehicle_type, 'motorcycle') = ?`;
   const db = await openDatabaseFromEnv();
   try {
-    const total = await count(db, `SELECT COUNT(*) AS n FROM listings WHERE ${where}`);
+    const total = await count(db, `SELECT COUNT(*) AS n FROM listings WHERE ${where}`, [vehicleType]);
     const { pageSize, totalPages, page, offset } = pageBounds(total, params, 50);
     const res = await db.execute({
       sql: `SELECT source_id, external_id, url, title, matched_model_id, price_mad,
@@ -159,7 +176,7 @@ export async function listIncompleteListings(
              WHERE ${where}
              ORDER BY scraped_at DESC
              LIMIT ? OFFSET ?`,
-      args: [pageSize, offset],
+      args: [vehicleType, pageSize, offset],
     });
     const rows = (res.rows as unknown as IncompleteRow[]).map((r) => ({
       sourceId: r.source_id,
@@ -211,6 +228,7 @@ export interface PromoteInput {
   readonly year?: number;
   readonly mileageKm?: number;
   readonly displacementCc?: number;
+  readonly vehicleType?: string;
 }
 
 /**
@@ -227,7 +245,8 @@ export async function promoteReview(input: PromoteInput): Promise<void> {
 
     const res = await db.execute({
       sql: `SELECT source_id, external_id, url, title, price_mad, year, mileage_km,
-                   displacement_cc, city, image_url, posted_at
+                   displacement_cc, city, image_url, posted_at,
+                   vehicle_type, fuel_type, gearbox
               FROM review_listings WHERE source_id = ? AND external_id = ?`,
       args: [input.sourceId, input.externalId],
     });
@@ -244,6 +263,10 @@ export async function promoteReview(input: PromoteInput): Promise<void> {
       year: input.year ?? row.year ?? undefined,
       mileageKm: input.mileageKm ?? row.mileage_km ?? undefined,
       displacementCc: input.displacementCc ?? row.displacement_cc ?? undefined,
+      vehicleType: parseVehicleType(row.vehicle_type),
+      fuelType: parseFuelType(row.fuel_type) ?? undefined,
+      gearbox: parseGearbox(row.gearbox) ?? undefined,
+      ...parseListingCondition(row.title, undefined),
       city: row.city,
       imageUrl: row.image_url ?? undefined,
       postedAt: row.posted_at ? new Date(row.posted_at) : undefined,
@@ -302,11 +325,14 @@ export async function updateListingData(
 }
 
 /** Catalog models the promote form offers in its "assign existing" dropdown. */
-export async function listModelOptions(): Promise<{ id: string; label: string }[]> {
+export async function listModelOptions(
+  vehicleType: VehicleType = 'motorcycle',
+): Promise<{ id: string; label: string }[]> {
   const db = await openDatabaseFromEnv();
   try {
     const models = await new LibsqlModelRepository(db).listAll();
     return models
+      .filter((m) => m.vehicleType === vehicleType)
       .map((m) => ({ id: m.id, label: `${m.brand} ${m.model}` }))
       .sort((a, b) => a.label.localeCompare(b.label));
   } finally {
@@ -332,7 +358,12 @@ async function resolveOrCreateModel(
   const id = modelId(brand, model);
   const existing = all.find((m) => m.id === id);
   if (existing) return existing;
-  const created = provisionalModel({ id, brand, model });
+  const created = provisionalModel({
+    id,
+    brand,
+    model,
+    vehicleType: parseVehicleType(input.vehicleType),
+  });
   await modelRepo.upsert(created);
   return created;
 }
@@ -395,4 +426,7 @@ interface PromoteRow {
   city: string;
   image_url: string | null;
   posted_at: string | null;
+  vehicle_type: string | null;
+  fuel_type: string | null;
+  gearbox: string | null;
 }

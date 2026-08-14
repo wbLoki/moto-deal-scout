@@ -4,7 +4,8 @@ Scans Moroccan motorcycle marketplaces daily, scores listings against models you
 actually shopping for, and surfaces only the good deals — on a web dashboard and via
 notifications — not every listing that exists.
 
-Sources: [Avito.ma](https://www.avito.ma), [Biker.ma](https://www.biker.ma).
+Sources: [Avito.ma](https://www.avito.ma) (motos and cars), [Biker.ma](https://www.biker.ma),
+[Moteur.ma](https://moteur.ma/fr/voiture/achat-voiture-occasion/).
 
 It runs two ways from one codebase:
 
@@ -111,14 +112,16 @@ Rendering). Scrape Avito from a residential connection with Playwright:
 # Optional: Turso URL/token so results land in the same DB as production
 
 npm run playwright:install
-npm run scan                          # Avito + Biker, since last scrape
-npm run scan -- --source avito        # Avito only
+npm run scan                          # Avito motos/cars + Biker + Moteur, since last scrape
+npm run scan -- --source avito        # Avito motos only
+npm run scan -- --source avito-cars,moteur  # cars only (same residential box)
 npm run schedule                      # daily always-on (Pi / VPS / systemd / pm2)
 ```
 
 A future Raspberry Pi uses the same path: 64-bit OS, Node 22, Playwright
 Chromium, ≥2–4 GB RAM, headless. GitHub Actions still runs **Biker only**
-(JSON API, `SCRAPE_SOURCES=biker`); admin “Scan now” triggers that workflow.
+(JSON API, `SCRAPE_SOURCES=biker`); Avito motos, Avito cars, and Moteur run
+locally. Admin “Scan now” triggers the Biker workflow.
 
 `schedule` is the always-on mode for a VPS / systemd / pm2 / container / Pi: it
 keeps the process alive and runs a scan every day at the configured time.

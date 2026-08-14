@@ -33,6 +33,8 @@ export type ErrorKey =
   | 'read_listing_failed'
   | 'request_failed'
   | 'watchlist_save_failed'
+  | 'invalid_phone'
+  | 'whatsapp_update_failed'
   | 'generic';
 
 export const en = {
@@ -68,6 +70,9 @@ export const en = {
   },
   nav: {
     compare: 'Compare a bike',
+    compareCar: 'Compare a car',
+    motos: 'Motos',
+    cars: 'Cars',
     notifications: 'Notifications',
     notificationsUnread: (n: number) => `Notifications (${n} unread)`,
     profile: 'Profile',
@@ -92,13 +97,13 @@ export const en = {
     orContinueWith: 'or continue with',
     welcome: 'Welcome',
     onboardingSubtitle:
-      'Pick the motorcycles you want to follow. You’ll get a focused feed for these, and you can change them anytime on your profile.',
+      'Create your first search (budget and year, optional brands). You’ll get a feed and alerts for matching deals, and you can add more searches anytime on your profile.',
   },
   home: {
     bannerBefore: 'Browse every deal free. ',
     bannerStrong: 'Create an account',
     bannerAfter:
-      ' to follow models, save bikes and get alerted the moment a matching deal appears.',
+      ' to save searches, bookmark listings and get alerted the moment a matching deal appears.',
     footer:
       'Data scraped from Avito.ma and Biker.ma. Prices can contain seller typos — always verify on the listing before acting.',
     trackedModels: (n: number) =>
@@ -113,6 +118,17 @@ export const en = {
     year: 'Model year',
     mileage: 'Mileage (km)',
     displacement: 'Displacement (cc)',
+    fuel: 'Fuel',
+    gearbox: 'Gearbox',
+    allFuels: 'All fuels',
+    allGearboxes: 'All gearboxes',
+    essence: 'Petrol',
+    diesel: 'Diesel',
+    hybrid: 'Hybrid',
+    electric: 'Electric',
+    lpg: 'LPG',
+    manual: 'Manual',
+    automatic: 'Automatic',
     dealRating: 'Deal rating',
     brand: 'Brand',
     city: 'City',
@@ -145,22 +161,22 @@ export const en = {
   } satisfies Record<DealTierLevel, string>,
   tabs: {
     daily: 'Daily deals',
-    watched: 'Your watched models',
+    watched: 'Your searches',
     saved: 'Saved',
     all: 'All deals',
   } satisfies Record<DealTab, string>,
   tabsShort: {
     daily: 'Daily',
-    watched: 'Watched',
+    watched: 'Searches',
     saved: 'Saved',
     all: 'All',
   } satisfies Record<DealTab, string>,
   empty: {
     daily: 'No new listings today yet — the daily scan runs each morning.',
     saved: 'No saved bikes yet — tap the bookmark on any card to save it here.',
-    watchedNoListings: 'No listings for your followed models in range right now.',
-    watchedLead:
-      "You're not following any models yet — tap the eye on a card, or pick some on your ",
+    savedCar: 'No saved cars yet — tap the bookmark on any card to save it here.',
+    watchedNoListings: 'No listings match your saved searches right now.',
+    watchedLead: "You haven't saved a search yet — create one on your ",
     watchedTail: '.',
     all: 'No listings in your range yet. Widen your budget/year, or wait for the next daily scan.',
     noSearch: (q: string) => `No deals match “${q}”.`,
@@ -171,6 +187,7 @@ export const en = {
     kmNa: 'km n/a',
     match: (pct: number) => `match ${pct}%`,
     viewListing: 'View listing',
+    backToFeed: 'Back to deals',
     posted: 'Posted',
     today: 'Today',
     yesterday: 'Yesterday',
@@ -182,21 +199,68 @@ export const en = {
     unsave: (label: string) => `Unsave ${label}`,
     saveNamed: (label: string) => `Save ${label}`,
     score: (n: number) => `Score ${n}/100`,
+    firstOwner: 'First owner',
+    ww: 'WW',
+    customsCleared: 'Customs cleared',
+    accidented: 'Accidented',
+    neverAccidented: 'Never accidented',
+    marketLoading: 'Loading market prices…',
+    marketEmpty: 'Not enough ads for this model and year yet.',
+    marketTitle: (model: string, year: string | number) => `${model} ${year}`,
+    marketBand: (low: string, high: string, n: number) =>
+      `${low}–${high} MAD (${n} ad${n === 1 ? '' : 's'})`,
+    marketSamples: (n: number) => `${n} ad${n === 1 ? '' : 's'}`,
+    marketThisListing: (price: string, median: string) =>
+      `This listing: ${price} MAD · median ${median} MAD`,
+    saveThisSearch: 'Save this search',
+    searchSaved: 'Search saved.',
+  },
+  listing: {
+    details: 'Details',
+    market: 'Market prices',
+    year: 'Year',
+    mileage: 'Mileage',
+    city: 'City',
+    fuel: 'Fuel',
+    gearbox: 'Gearbox',
+    condition: 'Condition',
+    viewOn: (source: string) => `View on ${source}`,
+    belowMarket: 'Below typical prices',
+    inMarket: 'In the typical range',
+    aboveMarket: 'Above typical prices',
+    photoOf: (i: number, n: number) => `${i} / ${n}`,
+    prevPhoto: 'Previous photo',
+    nextPhoto: 'Next photo',
   },
   range: {
     title: 'Your range',
-    hint: 'Your dashboard shows only deals within this budget and year window.',
+    hint: 'Used as the default window when you save a new search, and to filter All / Daily.',
     save: 'Save range',
     saving: 'Saving…',
     saved: 'Range saved — your deals are filtered to it.',
   },
   profile: {
     title: 'Profile',
-    subtitle: 'Manage your account and the models you follow.',
+    subtitle: 'Manage your account and saved searches.',
     loading: 'Loading profile…',
     account: 'Account',
-    watchedModels: 'Watched models',
-    watchedHint: 'Your dashboard’s “Watched” tab shows deals for these models.',
+    savedSearches: 'Saved searches',
+    savedSearchesHint:
+      'The dashboard’s “Your searches” tab and alerts use these filters. Bookmarks stay separate.',
+    whatsapp: 'WhatsApp alerts',
+    whatsappHint:
+      'Free accounts get one WhatsApp a week when we find a matching deal. Coming soon.',
+    phone: 'Phone (E.164)',
+    whatsappOptIn: 'Send alerts on WhatsApp',
+    saveWhatsApp: 'Save WhatsApp settings',
+    whatsappUpdated: 'WhatsApp settings saved.',
+    invalidPhone: 'Enter a phone number in E.164 format, like +212612345678.',
+    searchName: 'Name',
+    newSearch: 'New search',
+    createSearch: 'Save search',
+    deleteSearch: 'Delete',
+    noSearches: 'No saved searches yet.',
+    searchSummary: (budget: string, years: string) => `${budget} MAD · ${years}`,
   },
   account: {
     name: 'Name',
@@ -218,13 +282,13 @@ export const en = {
   },
   notifications: {
     title: 'Notifications',
-    subtitleLead: 'Alerts for the models you follow. Follow more on your ',
+    subtitleLead: 'Alerts for deals that match your saved searches. Manage searches on your ',
     subtitleTail: '.',
     empty:
-      "No notifications yet — follow some models and we'll alert you when a matching deal appears.",
+      "No notifications yet — save a search and we'll alert you when a matching deal appears.",
     priceDrop: 'Price drop',
     priceDropFrom: (oldPrice: string) => `Price drop from ${oldPrice} MAD`,
-    newDeal: 'New deal for a model you follow',
+    newDeal: 'New deal matching a saved search',
     justNow: 'just now',
     minutesAgo: (n: number) => `${n}m ago`,
     hoursAgo: (n: number) => `${n}h ago`,
@@ -234,6 +298,8 @@ export const en = {
     title: 'Request a model',
     subtitle:
       "Suggest a motorcycle model for the scanner to track. An admin reviews and approves it before it's added to the daily scan.",
+    subtitleCar:
+      "Suggest a car model for the scanner to track. An admin reviews and approves it before it's added to the daily scan.",
     yourRequests: (n: number) => `Your requests (${n})`,
     none: "You haven't requested any models yet.",
     brand: 'Brand',
@@ -257,8 +323,11 @@ export const en = {
   },
   compare: {
     title: 'Compare your bike',
+    titleCar: 'Compare your car',
     subtitle:
       "Enter a bike's details to see how good the deal is — the same rating we put on every listing — and get a suggested fair price. No account needed; sign in to unlock AI estimates for un-tracked bikes and pasted ads.",
+    subtitleCar:
+      "Enter a car's details to see how good the deal is — the same rating we put on every listing — and get a suggested fair price. No account needed; sign in to unlock AI estimates for un-tracked cars and pasted ads.",
     brand: 'Brand',
     model: 'Model',
     year: 'Year',
@@ -307,7 +376,7 @@ export const en = {
   signInModal: {
     follow: {
       title: 'Sign in to follow models',
-      body: 'Create a free account to follow models, and get alerted the moment a matching deal appears.',
+      body: 'Create a free account to save searches, and get alerted the moment a matching deal appears.',
     },
     save: {
       title: 'Sign in to save bikes',
@@ -360,6 +429,8 @@ export const en = {
     read_listing_failed: "Couldn't read that listing. Try again.",
     request_failed: 'Failed to submit request.',
     watchlist_save_failed: 'Failed to save.',
+    invalid_phone: 'Enter a phone number in E.164 format, like +212612345678.',
+    whatsapp_update_failed: 'Failed to save WhatsApp settings.',
     generic: 'Something went wrong. Try again.',
   } satisfies Record<ErrorKey, string>,
 };

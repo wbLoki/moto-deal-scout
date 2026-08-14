@@ -1,4 +1,5 @@
 import type { StoredModel } from '../entities/Model.js';
+import type { VehicleType } from '../entities/VehicleType.js';
 
 /**
  * The id for a brand/model pair. Every path that can create a model — the
@@ -31,6 +32,9 @@ export const PROVISIONAL_PRICE_RANGE = { min: 0, max: 300_000 } as const;
 /** Mileage/year defaults for a model nobody has tuned yet. Deliberately wide. */
 export const PROVISIONAL_MAX_MILEAGE_KM = 60_000;
 export const PROVISIONAL_MIN_YEAR = 2010;
+export const PROVISIONAL_CAR_MAX_MILEAGE_KM = 200_000;
+export const PROVISIONAL_CAR_MIN_YEAR = 2008;
+export const PROVISIONAL_CAR_PRICE_RANGE = { min: 0, max: 800_000 } as const;
 
 /**
  * Builds the row for a model we've just learned exists — whether the scanner
@@ -42,15 +46,19 @@ export function provisionalModel(input: {
   readonly brand: string;
   readonly model: string;
   readonly aliases?: readonly string[];
+  readonly vehicleType?: VehicleType;
 }): StoredModel {
+  const vehicleType = input.vehicleType ?? 'motorcycle';
+  const isCar = vehicleType === 'car';
   return {
     id: input.id,
     brand: input.brand,
     model: input.model,
     aliases: [...(input.aliases ?? [])],
-    priceRangeMAD: { ...PROVISIONAL_PRICE_RANGE },
-    maxMileageKm: PROVISIONAL_MAX_MILEAGE_KM,
-    minYear: PROVISIONAL_MIN_YEAR,
+    priceRangeMAD: { ...(isCar ? PROVISIONAL_CAR_PRICE_RANGE : PROVISIONAL_PRICE_RANGE) },
+    maxMileageKm: isCar ? PROVISIONAL_CAR_MAX_MILEAGE_KM : PROVISIONAL_MAX_MILEAGE_KM,
+    minYear: isCar ? PROVISIONAL_CAR_MIN_YEAR : PROVISIONAL_MIN_YEAR,
+    vehicleType,
     enabled: true,
     autoCalibrate: true,
   };

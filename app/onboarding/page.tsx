@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../../auth.js';
 import { getProfilePageData } from '../../src/watchlist.js';
-import { WatchedModelsForm } from '../WatchedModelsForm.js';
+import { OnboardingSearchForm } from '../OnboardingSearchForm.js';
 import { SparklesIcon } from '../icons.js';
 import { AuthShell } from '../AuthShell.js';
 import { dictionaryFor, getLocale } from '../i18n/getLocale.js';
@@ -14,8 +14,12 @@ export default async function OnboardingPage() {
   if (!session?.user?.id) redirect('/login');
 
   const { models, profile } = await getProfilePageData(session.user.id);
+  if (profile.onboarded) redirect('/');
   const locale = await getLocale();
   const t = dictionaryFor(locale);
+  const brands = [
+    ...new Set(models.filter((m) => m.vehicleType === 'motorcycle').map((m) => m.brand)),
+  ].sort();
 
   return (
     <AuthShell>
@@ -25,12 +29,7 @@ export default async function OnboardingPage() {
           <SparklesIcon className="icon-trail" />
         </h1>
         <p className="auth-subtitle">{t.auth.onboardingSubtitle}</p>
-        <WatchedModelsForm
-          models={models.map((m) => ({ id: m.id, brand: m.brand, model: m.model }))}
-          watchedIds={profile.watchedModelIds}
-          mode="onboarding"
-          locale={locale}
-        />
+        <OnboardingSearchForm locale={locale} brands={brands} />
       </div>
     </AuthShell>
   );

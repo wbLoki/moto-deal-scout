@@ -1,9 +1,36 @@
+import type { FuelType, GearboxType, VehicleType } from './VehicleType.js';
+
 /**
  * Marketplace identifiers. Add new sources here as they're implemented.
- * `moteur` is no longer scraped but is retained so historical rows stored
- * under that source still read back cleanly.
+ * `avito` is motorcycles; `avito-cars` is Avito's car category so crawl
+ * watermarks stay separate. `moteur` is the second car marketplace.
+ * `wandaloo` is no longer scraped but is retained so historical rows still
+ * read back. Historical `moteur` moto rows (if any) keep their stored
+ * `vehicleType` and stay on the moto feed.
  */
-export type MarketplaceId = 'avito' | 'biker' | 'moteur';
+export type MarketplaceId = 'avito' | 'biker' | 'moteur' | 'avito-cars' | 'wandaloo';
+
+const MARKETPLACE_IDS: ReadonlySet<string> = new Set([
+  'avito',
+  'biker',
+  'moteur',
+  'avito-cars',
+  'wandaloo',
+]);
+
+export function parseMarketplaceId(id: string): MarketplaceId | undefined {
+  return MARKETPLACE_IDS.has(id) ? (id as MarketplaceId) : undefined;
+}
+
+/** True for the car-market source ids (never mixed into the moto feed). */
+export function isCarMarketplace(id: string): boolean {
+  return id === 'avito-cars' || id === 'wandaloo' || id === 'moteur';
+}
+
+/** Which vehicle market a marketplace source scrapes. */
+export function vehicleTypeForMarketplace(id: MarketplaceId): VehicleType {
+  return isCarMarketplace(id) ? 'car' : 'motorcycle';
+}
 
 /**
  * A normalized listing as scraped from a marketplace, before any scoring
@@ -21,8 +48,21 @@ export interface Listing {
   readonly mileageKm: number | undefined;
   /** Engine displacement in cc, when the source reports it. */
   readonly displacementCc: number | undefined;
+  /** Motorcycle vs car. Set by the source that scraped this ad. */
+  readonly vehicleType: VehicleType;
+  /** Fuel, when the source reports it (cars). */
+  readonly fuelType: FuelType | undefined;
+  /** Gearbox, when the source reports it (cars). */
+  readonly gearbox: GearboxType | undefined;
+  /** Parsed from title/description; undefined = the ad didn't mention it. */
+  readonly firstOwner: boolean | undefined;
+  readonly ww: boolean | undefined;
+  readonly accidented: boolean | undefined;
+  readonly customsCleared: boolean | undefined;
   readonly city: string;
   readonly imageUrl: string | undefined;
+  /** Gallery photos in display order. When set, `imageUrl` is the first. */
+  readonly imageUrls?: readonly string[];
   /** Publish date reported by the marketplace, when available. */
   readonly postedAt: Date | undefined;
   readonly scrapedAt: Date;

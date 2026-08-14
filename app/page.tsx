@@ -45,7 +45,7 @@ async function HomeBody() {
   const locale = await getLocale();
   const t = dictionaryFor(locale);
 
-  const { criteria, facets, tabCounts, initialTab, initialSort, watchedModelIds, searchRange } =
+  const { criteria, facets, tabCounts, initialTab, initialSort, savedSearchCount, searchRange } =
     data;
 
   return (
@@ -59,12 +59,13 @@ async function HomeBody() {
         initialSort={initialSort}
         tabCounts={tabCounts}
         facets={facets}
-        watchedModelIds={watchedModelIds}
+        savedSearchCount={savedSearchCount}
         savedKeys={data.savedKeys}
+        searchRange={searchRange}
         locale={locale}
         sidebar={
           <>
-            <SearchSettings locale={locale} current={searchRange} />
+            <SearchSettings locale={locale} current={searchRange} vehicleType="motorcycle" />
             {isAdmin ? (
               <ScanNowButton />
             ) : (

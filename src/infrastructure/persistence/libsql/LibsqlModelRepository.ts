@@ -1,6 +1,8 @@
 import type { Client } from '@libsql/client';
 import type { StoredModel } from '../../../domain/entities/Model.js';
 import type { ModelCriteria } from '../../../domain/entities/SearchCriteria.js';
+import type { VehicleType } from '../../../domain/entities/VehicleType.js';
+import { parseVehicleType } from '../../../domain/entities/VehicleType.js';
 import type { ModelRepository } from '../../../domain/interfaces/ModelRepository.js';
 
 interface ModelRow {
@@ -17,6 +19,7 @@ interface ModelRow {
   calibrated_at: string | null;
   calibrated_samples: number | null;
   discovered_at: string | null;
+  vehicle_type: string | null;
 }
 
 function mapRow(row: ModelRow): StoredModel {
@@ -28,6 +31,7 @@ function mapRow(row: ModelRow): StoredModel {
     priceRangeMAD: { min: row.price_min, max: row.price_max },
     maxMileageKm: row.max_mileage_km,
     minYear: row.min_year,
+    vehicleType: parseVehicleType(row.vehicle_type),
     enabled: row.enabled === 1,
     autoCalibrate: row.auto_calibrate === 1,
     calibratedAt: row.calibrated_at ?? undefined,
@@ -39,8 +43,8 @@ function mapRow(row: ModelRow): StoredModel {
 // Admin fields only. calibrated_at/calibrated_samples are owned by
 // applyCalibration and deliberately preserved across an admin edit.
 const UPSERT_SQL = `
-  INSERT INTO models (id, brand, model, aliases, price_min, price_max, max_mileage_km, min_year, enabled, auto_calibrate)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO models (id, brand, model, aliases, price_min, price_max, max_mileage_km, min_year, enabled, auto_calibrate, vehicle_type)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT (id) DO UPDATE SET
     brand = excluded.brand,
     model = excluded.model,
@@ -50,7 +54,8 @@ const UPSERT_SQL = `
     max_mileage_km = excluded.max_mileage_km,
     min_year = excluded.min_year,
     enabled = excluded.enabled,
-    auto_calibrate = excluded.auto_calibrate
+    auto_calibrate = excluded.auto_calibrate,
+    vehicle_type = excluded.vehicle_type
 `;
 
 export class LibsqlModelRepository implements ModelRepository {
@@ -90,6 +95,7 @@ export class LibsqlModelRepository implements ModelRepository {
         model.minYear,
         model.enabled ? 1 : 0,
         model.autoCalibrate ? 1 : 0,
+        model.vehicleType,
       ],
     });
   }
@@ -98,8 +104,8 @@ export class LibsqlModelRepository implements ModelRepository {
     const result = await this.client.execute({
       sql: `INSERT INTO models
               (id, brand, model, aliases, price_min, price_max, max_mileage_km, min_year,
-               enabled, auto_calibrate, discovered_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+               enabled, auto_calibrate, vehicle_type, discovered_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
             ON CONFLICT (id) DO NOTHING`,
       args: [
         model.id,
@@ -112,6 +118,7 @@ export class LibsqlModelRepository implements ModelRepository {
         model.minYear,
         model.enabled ? 1 : 0,
         model.autoCalibrate ? 1 : 0,
+        model.vehicleType,
       ],
     });
     return result.rowsAffected > 0;
@@ -144,6 +151,22 @@ export class LibsqlModelRepository implements ModelRepository {
     if (count > 0) return;
     for (const m of models) {
       await this.upsert({ ...m, enabled: true, autoCalibrate: true });
+    }
+  }
+
+  /** Seeds the given models only when this vehicle type has no rows yet. */
+  async seedIfEmptyForType(
+    models: readonly ModelCriteria[],
+    vehicleType: VehicleType,
+  ): Promise<void> {
+    const existing = await this.client.execute({
+      sql: `SELECT COUNT(*) AS n FROM models WHERE vehicle_type = ?`,
+      args: [vehicleType],
+    });
+    const count = Number((existing.rows[0] as unknown as { n: number }).n);
+    if (count > 0) return;
+    for (const m of models) {
+      await this.upsert({ ...m, vehicleType, enabled: true, autoCalibrate: true });
     }
   }
 }

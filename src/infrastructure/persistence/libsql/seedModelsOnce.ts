@@ -1,4 +1,5 @@
 import type { Client } from '@libsql/client';
+import { defaultCarModels } from '../../../config/defaultCarCriteria.js';
 import type { ModelCriteria } from '../../../domain/entities/SearchCriteria.js';
 import { LibsqlModelRepository } from './LibsqlModelRepository.js';
 
@@ -15,6 +16,8 @@ export async function seedModelsOnce(
   models: readonly ModelCriteria[],
 ): Promise<void> {
   if (seededThisProcess) return;
-  await new LibsqlModelRepository(db).seedIfEmpty(models);
+  const repo = new LibsqlModelRepository(db);
+  await repo.seedIfEmptyForType(models, 'motorcycle');
+  await repo.seedIfEmptyForType(defaultCarModels, 'car');
   seededThisProcess = true;
 }

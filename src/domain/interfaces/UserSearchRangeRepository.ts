@@ -1,7 +1,8 @@
 import type { SearchRange } from '../entities/SearchCriteria.js';
+import type { VehicleType } from '../entities/VehicleType.js';
 
 /** Per-user budget/year window used to filter that user's dashboard feed. */
 export interface UserSearchRangeRepository {
-  get(userId: string): Promise<SearchRange | null>;
-  save(userId: string, range: SearchRange): Promise<void>;
+  get(userId: string, vehicleType?: VehicleType): Promise<SearchRange | null>;
+  save(userId: string, range: SearchRange, vehicleType?: VehicleType): Promise<void>;
 }

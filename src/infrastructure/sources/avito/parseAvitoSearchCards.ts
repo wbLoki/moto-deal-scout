@@ -1,5 +1,9 @@
 import { parseHTML } from 'linkedom';
-import type { Listing } from '../../../domain/entities/Listing.js';
+import type { Listing, MarketplaceId } from '../../../domain/entities/Listing.js';
+import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
+import { uniqueListingImages } from '../../../domain/listingImages.js';
+import type { FuelType, GearboxType, VehicleType } from '../../../domain/entities/VehicleType.js';
+import { parseFuelType, parseGearbox } from '../../../domain/entities/VehicleType.js';
 import {
   parseNumber,
   parseRelativeFrenchDate,
@@ -10,9 +14,15 @@ import {
 export const AVITO_CARD_SELECTOR = 'a[data-testid^="ad-card-v2-"]';
 
 const AVITO_ORIGIN = 'https://www.avito.ma';
-/** Seller avatars and lazy-load stubs — not listing photos. */
+/** Avito listing photos live on this CDN path; seller portraits do not. */
+const AVITO_LISTING_PHOTO = /classifieds\/images/i;
+/**
+ * Seller portraits, default avatars, and lazy-load stubs — not the ad photo.
+ * Uploaded profile pics are real `content.avito.ma` URLs, so we cannot treat
+ * "any https image" as a listing thumb.
+ */
 const NOT_LISTING_IMAGE =
-  /phoenix-assets|\/profile\/avatar|avatar\.svg|^data:|placeholder|spacer|1x1/i;
+  /phoenix-assets|\/profile\/|avatar\.svg|\/avatars\/|\/users\/|\/user\/|\/u\/(?:avatar|profile)|t=avatar|^data:|placeholder|spacer|1x1|no-photo|no_photo/i;
 
 export interface AvitoRawCard {
   readonly href: string;
@@ -20,16 +30,33 @@ export interface AvitoRawCard {
   readonly year: string;
   readonly mileage: string;
   readonly image: string;
+  readonly images: readonly string[];
   readonly price: string;
   readonly city: string;
   readonly relativeDate: string;
+  readonly fuel: string;
+  readonly gearbox: string;
 }
+
+export interface AvitoCardContext {
+  readonly sourceId: MarketplaceId;
+  readonly vehicleType: VehicleType;
+}
+
+const DEFAULT_CARD_CONTEXT: AvitoCardContext = {
+  sourceId: 'avito',
+  vehicleType: 'motorcycle',
+};
 
 /**
  * Parses rendered Avito search/category HTML into listing cards.
  * Same field extraction as the former Playwright `page.$$eval` path.
  */
-export function parseAvitoSearchCards(html: string, scrapedAt: Date = new Date()): Listing[] {
+export function parseAvitoSearchCards(
+  html: string,
+  scrapedAt: Date = new Date(),
+  context: AvitoCardContext = DEFAULT_CARD_CONTEXT,
+): Listing[] {
   const { document } = parseHTML(html);
   const cards = Array.from(document.querySelectorAll(AVITO_CARD_SELECTOR));
   const nextImages = avitoImagesFromNextData(html);
@@ -38,7 +65,17 @@ export function parseAvitoSearchCards(html: string, scrapedAt: Date = new Date()
     const title = card.querySelector('h3')?.textContent?.trim() ?? '';
     const year = card.querySelector('span[title="Année-Modèle"]')?.textContent?.trim() ?? '';
     const mileage = card.querySelector('span[title="Kilométrage"]')?.textContent?.trim() ?? '';
-    const image = pickAvitoCardImage(card);
+    const fuel =
+      card.querySelector('span[title="Carburant"]')?.textContent?.trim() ??
+      card.querySelector('span[title="Type de carburant"]')?.textContent?.trim() ??
+      '';
+    const gearbox =
+      card.querySelector('span[title="Boite de vitesses"]')?.textContent?.trim() ??
+      card.querySelector('span[title="Boîte de vitesses"]')?.textContent?.trim() ??
+      card.querySelector('span[title="Boite de vitesse"]')?.textContent?.trim() ??
+      '';
+    const images = pickAvitoCardImages(card);
+    const image = images[0] ?? '';
 
     const spans = Array.from(card.querySelectorAll('span'));
     let price = '';
@@ -55,23 +92,32 @@ export function parseAvitoSearchCards(html: string, scrapedAt: Date = new Date()
     const city = dateIndex > 0 ? (spanTexts[dateIndex - 1] ?? '') : '';
     const relativeDate = dateIndex >= 0 ? (spanTexts[dateIndex] ?? '') : '';
 
-    return { href, title, year, mileage, image, price, city, relativeDate };
+    return { href, title, year, mileage, image, images, price, city, relativeDate, fuel, gearbox };
   });
 
   return raw
     .filter((r) => r.href && r.title && parseNumber(r.price) !== undefined)
-    .map((r) => rawCardToListing(r, scrapedAt, nextImages));
+    .map((r) => rawCardToListing(r, scrapedAt, nextImages, context));
 }
 
 export function rawCardToListing(
   raw: AvitoRawCard,
   scrapedAt: Date = new Date(),
-  nextImages: ReadonlyMap<string, string> = new Map(),
+  nextImages: ReadonlyMap<string, readonly string[]> = new Map(),
+  context: AvitoCardContext = DEFAULT_CARD_CONTEXT,
 ): Listing {
   const href = raw.href.startsWith('http') ? raw.href : `${AVITO_ORIGIN}${raw.href}`;
   const externalId = /_(\d+)\.htm/.exec(href)?.[1] ?? href;
+  const fuelType: FuelType | undefined = parseFuelType(raw.fuel);
+  const gearbox: GearboxType | undefined = parseGearbox(raw.gearbox);
+  const images = uniqueListingImages(
+    raw.images.filter((u) => AVITO_LISTING_PHOTO.test(u)),
+    (nextImages.get(externalId) ?? []).filter((u) => AVITO_LISTING_PHOTO.test(u)),
+    raw.images,
+    nextImages.get(externalId),
+  );
   return {
-    sourceId: 'avito',
+    sourceId: context.sourceId,
     externalId,
     url: href,
     title: raw.title,
@@ -80,8 +126,13 @@ export function rawCardToListing(
     year: parseYear(raw.year),
     mileageKm: parseNumber(raw.mileage),
     displacementCc: undefined,
+    vehicleType: context.vehicleType,
+    fuelType,
+    gearbox,
+    ...parseListingCondition(raw.title, undefined),
     city: raw.city || 'Maroc',
-    imageUrl: normalizeListingImageUrl(raw.image) ?? nextImages.get(externalId),
+    imageUrl: images[0] ?? preferListingPhoto(normalizeListingImageUrl(raw.image)),
+    ...(images.length > 0 ? { imageUrls: images } : {}),
     postedAt: parseRelativeFrenchDate(raw.relativeDate),
     scrapedAt,
   };
@@ -93,6 +144,22 @@ function firstSrcsetUrl(srcset: string): string {
     .map((part) => part.trim().split(/\s+/)[0])
     .filter(Boolean);
   return urls.at(-1) ?? urls[0] ?? '';
+}
+
+/** True when `url` is a seller portrait / placeholder, not the vehicle photo. */
+export function isSellerOrPlaceholderImage(url: string): boolean {
+  return NOT_LISTING_IMAGE.test(url);
+}
+
+/**
+ * Prefers Avito `classifieds/images` (the ad photo) over any other candidate,
+ * so a seller portrait that appears first in the card DOM cannot win.
+ */
+export function preferListingPhoto(
+  ...candidates: Array<string | undefined>
+): string | undefined {
+  const urls = candidates.filter((u): u is string => Boolean(u));
+  return urls.find((u) => AVITO_LISTING_PHOTO.test(u)) ?? urls[0];
 }
 
 /** Absolute http(s) listing photo, or undefined for avatars / placeholders. */
@@ -141,22 +208,26 @@ function urlsFromImg(img: Element): string[] {
   return out;
 }
 
-function pickAvitoCardImage(card: Element): string {
+function pickAvitoCardImages(card: Element): string[] {
+  const classifieds: string[] = [];
+  const other: string[] = [];
+  const consider = (raw: string): void => {
+    const url = normalizeListingImageUrl(raw);
+    if (!url) return;
+    if (AVITO_LISTING_PHOTO.test(url)) classifieds.push(url);
+    else other.push(url);
+  };
   for (const img of Array.from(card.querySelectorAll('img'))) {
-    for (const raw of urlsFromImg(img)) {
-      const url = normalizeListingImageUrl(raw);
-      if (url) return url;
-    }
+    for (const raw of urlsFromImg(img)) consider(raw);
   }
   for (const source of Array.from(card.querySelectorAll('source'))) {
     const srcset = source.getAttribute('srcset') ?? source.getAttribute('data-srcset') ?? '';
-    const url = normalizeListingImageUrl(firstSrcsetUrl(srcset));
-    if (url) return url;
+    consider(firstSrcsetUrl(srcset));
   }
-  return '';
+  return uniqueListingImages(classifieds, other);
 }
 
-function avitoImagesFromNextData(html: string): ReadonlyMap<string, string> {
+function avitoImagesFromNextData(html: string): ReadonlyMap<string, readonly string[]> {
   const match = html.match(
     /<script id="__NEXT_DATA__" type="application\/json">(\{[\s\S]*?\})<\/script>/,
   );
@@ -167,27 +238,53 @@ function avitoImagesFromNextData(html: string): ReadonlyMap<string, string> {
   } catch {
     return new Map();
   }
-  const map = new Map<string, string>();
+  const map = new Map<string, string[]>();
   walkForAvitoImages(json, map);
   return map;
 }
 
-function walkForAvitoImages(node: unknown, into: Map<string, string>): void {
+function walkForAvitoImages(node: unknown, into: Map<string, string[]>): void {
   if (node == null || typeof node !== 'object') return;
   if (Array.isArray(node)) {
     for (const item of node) walkForAvitoImages(item, into);
     return;
   }
   const rec = node as Record<string, unknown>;
-  const id = rec.listId ?? rec.id;
-  const imageCandidate =
-    (typeof rec.defaultImage === 'string' && rec.defaultImage) ||
-    (Array.isArray(rec.images) && typeof rec.images[0] === 'string' && rec.images[0]) ||
-    (typeof rec.imageUrl === 'string' && rec.imageUrl) ||
-    '';
-  if (id != null && imageCandidate) {
-    const url = normalizeListingImageUrl(String(imageCandidate));
-    if (url) into.set(String(id), url);
+  const id = rec['listId'] ?? rec['id'];
+  const idKey =
+    typeof id === 'string' || typeof id === 'number' ? String(id) : undefined;
+  const photos = listingPhotosFromRecord(rec);
+  if (idKey != null && photos.length > 0) {
+    into.set(idKey, uniqueListingImages(into.get(idKey), photos));
   }
   for (const value of Object.values(rec)) walkForAvitoImages(value, into);
+}
+
+function listingPhotosFromRecord(rec: Record<string, unknown>): string[] {
+  const classifieds: string[] = [];
+  const other: string[] = [];
+  const push = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) push(item);
+      return;
+    }
+    const nestedUrl =
+      value && typeof value === 'object' && 'url' in value
+        ? (value as { url?: unknown }).url
+        : undefined;
+    const url =
+      typeof value === 'string'
+        ? normalizeListingImageUrl(value)
+        : typeof nestedUrl === 'string'
+          ? normalizeListingImageUrl(nestedUrl)
+          : undefined;
+    if (!url) return;
+    if (AVITO_LISTING_PHOTO.test(url)) classifieds.push(url);
+    else other.push(url);
+  };
+  push(rec['defaultImage']);
+  push(rec['images']);
+  push(rec['photos']);
+  push(rec['imageUrl']);
+  return uniqueListingImages(classifieds, other);
 }

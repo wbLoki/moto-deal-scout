@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parseFrenchAbsoluteDate,
   parseNumber,
   parseRelativeFrenchDate,
   parseYear,
@@ -64,6 +65,17 @@ describe('parseRelativeFrenchDate', () => {
   it('returns undefined for unrecognized text', () => {
     expect(parseRelativeFrenchDate('Publié le 12-01-2024', now)).toBeUndefined();
     expect(parseRelativeFrenchDate(undefined, now)).toBeUndefined();
+  });
+});
+
+describe('parseFrenchAbsoluteDate', () => {
+  it('parses an absolute French date', () => {
+    expect(parseFrenchAbsoluteDate('13 août 2026')?.toISOString()).toBe('2026-08-13T00:00:00.000Z');
+    expect(parseFrenchAbsoluteDate('13 aout 2026')?.toISOString()).toBe('2026-08-13T00:00:00.000Z');
+  });
+
+  it('returns undefined for unrecognized text', () => {
+    expect(parseFrenchAbsoluteDate('il y a 3 heures')).toBeUndefined();
   });
 });
 

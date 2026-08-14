@@ -1,3 +1,4 @@
+import type { CatalogBrand } from '../../catalog/motorcycleCatalog.js';
 import { MOTORCYCLE_CATALOG, suggestAliases } from '../../catalog/motorcycleCatalog.js';
 import { modelId } from '../../domain/services/provisionalModel.js';
 
@@ -90,37 +91,33 @@ function needlesFor(model: string, aliases: readonly string[]): string[][] {
   return [...byKey.values()].sort((a, b) => b.join('').length - a.join('').length);
 }
 
-/** Built once at module load: ~400 entries, reused for every listing title. */
-const ENTRIES: readonly CatalogEntry[] = MOTORCYCLE_CATALOG.flatMap((brand) =>
-  brand.models.map((model): CatalogEntry => {
-    const aliases = suggestAliases(model);
-    const derivedId = modelId(brand.brand, model);
-    return {
-      id: LEGACY_ID_ALIASES.get(derivedId) ?? derivedId,
-      brand: brand.brand,
-      model,
-      aliases,
-      brandTokens: tokenize(brand.brand),
-      needles: needlesFor(model, aliases),
-    };
-  }),
-);
+function buildEntries(catalog: readonly CatalogBrand[]): readonly CatalogEntry[] {
+  return catalog.flatMap((brand) =>
+    brand.models.map((model): CatalogEntry => {
+      const aliases = suggestAliases(model);
+      const derivedId = modelId(brand.brand, model);
+      return {
+        id: LEGACY_ID_ALIASES.get(derivedId) ?? derivedId,
+        brand: brand.brand,
+        model,
+        aliases,
+        brandTokens: tokenize(brand.brand),
+        needles: needlesFor(model, aliases),
+      };
+    }),
+  );
+}
 
-const BY_BRAND: ReadonlyMap<string, readonly CatalogEntry[]> = (() => {
+function indexByBrand(entries: readonly CatalogEntry[]): ReadonlyMap<string, readonly CatalogEntry[]> {
   const map = new Map<string, CatalogEntry[]>();
-  for (const entry of ENTRIES) {
+  for (const entry of entries) {
     const key = entry.brandTokens.join(' ');
     const list = map.get(key) ?? [];
     list.push(entry);
     map.set(key, list);
   }
   return map;
-})();
-
-/** Every token appearing in any catalog brand name, for the unknown-maker check. */
-const KNOWN_BRAND_TOKENS: ReadonlySet<string> = new Set(
-  ENTRIES.flatMap((entry) => entry.brandTokens),
-);
+}
 
 /**
  * A needle is safe to match without its brand only if it's distinctive enough
@@ -160,12 +157,16 @@ function weight(needle: readonly string[]): number {
  * omit the brand ("xmax 300 premier", "MT-07 2020") lead with the model itself,
  * so they're unaffected.
  */
-function namesAnotherMaker(tokens: readonly string[], needle: readonly string[]): boolean {
+function namesAnotherMaker(
+  tokens: readonly string[],
+  needle: readonly string[],
+  knownBrandTokens: ReadonlySet<string>,
+): boolean {
   const first = tokens[0];
   if (first === undefined) return false;
   if (needle.includes(first)) return false;
   if (!/^[a-z]{3,}$/.test(first)) return false;
-  return !KNOWN_BRAND_TOKENS.has(first);
+  return !knownBrandTokens.has(first);
 }
 
 /**
@@ -182,6 +183,16 @@ function namesAnotherMaker(tokens: readonly string[], needle: readonly string[])
  * the long tail never auto-creates messy near-duplicate models.
  */
 export class CatalogModelResolver {
+  private readonly entries: readonly CatalogEntry[];
+  private readonly byBrand: ReadonlyMap<string, readonly CatalogEntry[]>;
+  private readonly knownBrandTokens: ReadonlySet<string>;
+
+  constructor(catalog: readonly CatalogBrand[] = MOTORCYCLE_CATALOG) {
+    this.entries = buildEntries(catalog);
+    this.byBrand = indexByBrand(this.entries);
+    this.knownBrandTokens = new Set(this.entries.flatMap((entry) => entry.brandTokens));
+  }
+
   /**
    * The catalog brand named in a title, or undefined if none is. Used to sort
    * dropped listings into the admin review queue: a title that names a maker we
@@ -191,7 +202,7 @@ export class CatalogModelResolver {
    */
   knownBrandIn(title: string): string | undefined {
     const tokens = tokenize(title);
-    for (const [, candidates] of BY_BRAND) {
+    for (const [, candidates] of this.byBrand) {
       const brandTokens = candidates[0]?.brandTokens;
       if (brandTokens && containsRun(tokens, brandTokens)) return candidates[0]?.brand;
     }
@@ -206,7 +217,7 @@ export class CatalogModelResolver {
     // title containing the former, whatever order the catalog lists them in.
     let branded: CatalogMatch | undefined;
     let brandedWeight = 0;
-    for (const [, candidates] of BY_BRAND) {
+    for (const [, candidates] of this.byBrand) {
       const brandTokens = candidates[0]?.brandTokens;
       if (!brandTokens || !containsRun(tokens, brandTokens)) continue;
       for (const entry of candidates) {
@@ -226,10 +237,10 @@ export class CatalogModelResolver {
     // when nothing in the title claims a *different* maker (see below).
     let best: CatalogMatch | undefined;
     let bestWeight = 0;
-    for (const entry of ENTRIES) {
+    for (const entry of this.entries) {
       for (const needle of entry.needles) {
         if (!isDistinctiveEnough(needle) || !containsRun(tokens, needle)) continue;
-        if (namesAnotherMaker(tokens, needle)) continue;
+        if (namesAnotherMaker(tokens, needle, this.knownBrandTokens)) continue;
         if (weight(needle) > bestWeight) {
           best = toMatch(entry, 0.85);
           bestWeight = weight(needle);

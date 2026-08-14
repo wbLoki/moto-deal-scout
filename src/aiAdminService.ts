@@ -2,6 +2,7 @@ import { reviewRange, type RangeReview } from './application/services/aiPriceRev
 import { isCalibrated } from './domain/services/calibrationState.js';
 import { createAiExtractor } from './infrastructure/ai/aiExtractor.js';
 import { openDatabaseFromEnv } from './infrastructure/persistence/libsql/Database.js';
+import type { VehicleType } from './domain/entities/VehicleType.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
 
 /**
@@ -54,11 +55,15 @@ async function mapWithConcurrency<T, R>(
  * `offset` (ordered by id for stable paging). Throws `AiUnavailableError` when
  * no API key is set (the action maps it to a friendly message).
  */
-export async function reviewCalibratedRanges(offset = 0): Promise<RangeReviewPage> {
+export async function reviewCalibratedRanges(
+  offset = 0,
+  vehicleType: VehicleType = 'motorcycle',
+): Promise<RangeReviewPage> {
   const ai = createAiExtractor();
   const db = await openDatabaseFromEnv();
   try {
     const calibrated = (await new LibsqlModelRepository(db).listEnabledCriteria())
+      .filter((m) => m.vehicleType === vehicleType)
       .filter(isCalibrated)
       .sort((a, b) => a.id.localeCompare(b.id));
 

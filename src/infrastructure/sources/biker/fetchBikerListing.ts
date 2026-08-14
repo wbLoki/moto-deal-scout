@@ -1,6 +1,8 @@
 import type { Listing } from '../../../domain/entities/Listing.js';
+import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
 import { parseListingUrl } from '../../../application/services/parseListingUrl.js';
 import { parseNumber, slugifyWithHyphens } from '../shared/textParsing.js';
+import { bikerPhotoUrls } from './bikerPhotos.js';
 
 interface BikerDetail {
   readonly idannonce_moto?: number;
@@ -14,6 +16,14 @@ interface BikerDetail {
   readonly cylindre?: number | string;
   readonly ville?: string;
   readonly dateajout?: string;
+  readonly photo1?: string;
+  readonly photo2?: string;
+  readonly photo3?: string;
+  readonly photo4?: string;
+  readonly photo5?: string;
+  readonly photo6?: string;
+  readonly photo7?: string;
+  readonly photo8?: string;
 }
 
 export class BikerListingFetchError extends Error {
@@ -70,6 +80,7 @@ export function listingFromBikerDetail(
     pageUrl || `https://www.biker.ma/annonce/detail-moto/${slug}/${externalId}`;
 
   const posted = data.dateajout ? new Date(data.dateajout) : undefined;
+  const photos = bikerPhotoUrls(data);
 
   return {
     brand: brand || 'Unknown',
@@ -84,8 +95,13 @@ export function listingFromBikerDetail(
       year: year != null && year >= 1950 ? year : undefined,
       mileageKm,
       displacementCc,
+      vehicleType: 'motorcycle',
+      fuelType: undefined,
+      gearbox: undefined,
+      ...parseListingCondition(title, data.description?.trim() || undefined),
       city: (data.ville ?? '').trim() || 'Maroc',
-      imageUrl: undefined,
+      imageUrl: photos[0],
+      ...(photos.length > 0 ? { imageUrls: photos } : {}),
       postedAt: posted && !Number.isNaN(posted.getTime()) ? posted : undefined,
       scrapedAt,
     },

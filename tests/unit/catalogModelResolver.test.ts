@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CAR_CATALOG } from '../../src/catalog/carCatalog.js';
 import {
   CatalogModelResolver,
   MIN_DISCOVERY_CONFIDENCE,
@@ -95,6 +96,15 @@ describe('CatalogModelResolver', () => {
     // they resolve to yamaha-nmax, while "NMAX 155" still wins on longer match.
     expect(resolver.resolve('YAMAHA NMAX')?.id).toBe('yamaha-nmax');
     expect(resolver.resolve('Yamaha NMAX 155 2022')?.id).toBe('yamaha-nmax-155');
+  });
+
+  it('does not match a Civic against the motorcycle catalog, or a CB500F against cars', () => {
+    const moto = new CatalogModelResolver();
+    const cars = new CatalogModelResolver(CAR_CATALOG);
+    expect(cars.resolve('Honda Civic 2018 diesel')?.id).toBe('honda-civic');
+    expect(moto.resolve('Honda Civic 2018 diesel')?.id).not.toBe('honda-civic');
+    expect(moto.resolve('Honda CB500F 2018')?.id).toBe('honda-cb500f');
+    expect(cars.resolve('Honda CB500F 2018')?.id).not.toBe('honda-cb500f');
   });
 
   it('returns undefined for a title unrelated to any catalog model', () => {

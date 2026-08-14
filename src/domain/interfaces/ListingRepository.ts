@@ -1,7 +1,9 @@
 import type { SortKey } from '../entities/DealSort.js';
 import type { MarketplaceId } from '../entities/Listing.js';
+import type { SavedSearch } from '../entities/SavedSearch.js';
 import type { ScoredListing } from '../entities/ScoredListing.js';
 import type { SearchRange } from '../entities/SearchCriteria.js';
+import type { FuelType, GearboxType, VehicleType } from '../entities/VehicleType.js';
 
 /** The four dashboard feeds. `saved` deliberately ignores the budget/year range. */
 export type DealTab = 'all' | 'daily' | 'watched' | 'saved';
@@ -14,12 +16,14 @@ export type DealTab = 'all' | 'daily' | 'watched' | 'saved';
 export interface DealQuery {
   readonly userId: string;
   readonly tab: DealTab;
+  /** Motorcycle vs car feed — never mix the two. */
+  readonly vehicleType: VehicleType;
   /** Budget/year window. Ignored when `tab === 'saved'`. */
   readonly range: SearchRange;
   /** Multiplier for the implausible-price floor (`price >= fairMin * factor`). */
   readonly minPriceFactor: number;
-  /** The user's followed model ids; scopes the `watched` tab. */
-  readonly watchedModelIds: readonly string[];
+  /** The user's saved searches; scopes the `watched` ("Your searches") tab. */
+  readonly savedSearches: readonly SavedSearch[];
   /** Free-text query over brand/model/city. Empty = no text filter. */
   readonly search: string;
   readonly mileageMin: number;
@@ -28,6 +32,10 @@ export interface DealQuery {
   readonly ccMin: number;
   /** Upper displacement (cc) bound; `0` means "no upper bound". */
   readonly ccMax: number;
+  /** Fuel types to include (cars). Empty = all. */
+  readonly fuelTypes: readonly FuelType[];
+  /** Gearboxes to include (cars). Empty = all. */
+  readonly gearboxes: readonly GearboxType[];
   /** Deal-tier levels to include (e.g. `['hot','great']`). Empty = all. */
   readonly ratings: readonly string[];
   /** Lowercased city keys. Empty = all. */
@@ -62,6 +70,29 @@ export interface DealFacets {
   readonly maxCc: number;
   /** Highest price seen, for the public budget slider's upper bound. */
   readonly maxPrice: number;
+  /** Distinct fuels present in the in-range set (cars). */
+  readonly fuels: readonly FuelType[];
+  /** Distinct gearboxes present in the in-range set (cars). */
+  readonly gearboxes: readonly GearboxType[];
+}
+
+/** One observed price for a listing (insert or later drop). */
+export interface ListingPriceEvent {
+  readonly observedAt: string;
+  readonly priceMAD: number;
+}
+
+/**
+ * Peer prices for the same matched model + year + vehicle type, plus this
+ * listing's own price path when we have more than one scrape.
+ */
+export interface ModelYearMarket {
+  readonly samples: number;
+  readonly p25: number | null;
+  readonly median: number | null;
+  readonly p75: number | null;
+  readonly listingPrice: number;
+  readonly events: readonly ListingPriceEvent[];
 }
 
 /**
@@ -138,6 +169,19 @@ export interface ListingRepository {
 
   /** Prices (MAD) of listings matched to a model and last seen since the date. For calibration. */
   getPricesForModel(modelId: string, seenSince: Date): Promise<number[]>;
+
+  /**
+   * Peer p25/median/p75 for this model+year+type, plus this listing's price
+   * events. Used by the expandable deal card. `year` null → empty market.
+   */
+  getModelYearMarket(input: {
+    readonly modelId: string;
+    readonly year: number | null;
+    readonly vehicleType: VehicleType;
+    readonly sourceId: MarketplaceId;
+    readonly externalId: string;
+    readonly listingPrice: number;
+  }): Promise<ModelYearMarket>;
 
   /** The stored price of a listing, or undefined if it isn't stored yet. */
   getStoredPrice(sourceId: MarketplaceId, externalId: string): Promise<number | undefined>;

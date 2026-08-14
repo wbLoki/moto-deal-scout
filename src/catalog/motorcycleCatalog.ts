@@ -359,11 +359,15 @@ export function modelsForBrand(brand: string): readonly string[] {
  * weekly crawl auto-creates any catalog model it finds, a listed model needs
  * no request — it will appear on its own once one shows up for sale.
  */
-export function catalogContains(brand: string, model: string): boolean {
+export function catalogContains(
+  brand: string,
+  model: string,
+  catalog: readonly CatalogBrand[] = MOTORCYCLE_CATALOG,
+): boolean {
   const key = (s: string): string => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
   const brandKey = key(brand);
   const modelKey = key(model);
-  return MOTORCYCLE_CATALOG.some(
+  return catalog.some(
     (b) => key(b.brand) === brandKey && b.models.some((m) => key(m) === modelKey),
   );
 }

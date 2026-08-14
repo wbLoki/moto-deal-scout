@@ -1,10 +1,12 @@
 import type { ModelRequest, ModelRequestStatus } from '../entities/ModelRequest.js';
+import type { VehicleType } from '../entities/VehicleType.js';
 
 export interface NewModelRequest {
   readonly userId: string;
   readonly brand: string;
   readonly model: string;
   readonly note: string | undefined;
+  readonly vehicleType: VehicleType;
 }
 
 /** User-submitted model suggestions and their admin approval state. */

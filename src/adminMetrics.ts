@@ -1,4 +1,5 @@
 import type { Client } from '@libsql/client';
+import type { VehicleType } from './domain/entities/VehicleType.js';
 import { openDatabaseFromEnv } from './infrastructure/persistence/libsql/Database.js';
 
 export interface DailyCount {
@@ -206,6 +207,8 @@ export interface ScannedListingsQuery {
   readonly page?: number;
   /** Rows per page. Defaults to 50, capped at 200. */
   readonly pageSize?: number;
+  /** Restrict to one vehicle market. Defaults to motorcycle. */
+  readonly vehicleType?: VehicleType;
 }
 
 interface ScannedRow {
@@ -256,6 +259,9 @@ export async function listScannedListings(
     where.push(`substr(${dateField}, 1, 10) <= ?`);
     args.push(query.to);
   }
+  const vehicleType = query.vehicleType ?? 'motorcycle';
+  where.push("COALESCE(vehicle_type, 'motorcycle') = ?");
+  args.push(vehicleType);
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const db = await openDatabaseFromEnv();
@@ -265,9 +271,12 @@ export async function listScannedListings(
     const page = Math.min(Math.max(query.page ?? 1, 1), totalPages);
     const offset = (page - 1) * pageSize;
 
-    const sourcesRes = await db.execute(
-      'SELECT DISTINCT source_id AS s FROM listings ORDER BY s',
-    );
+    const sourcesRes = await db.execute({
+      sql: `SELECT DISTINCT source_id AS s FROM listings
+             WHERE COALESCE(vehicle_type, 'motorcycle') = ?
+             ORDER BY s`,
+      args: [vehicleType],
+    });
     const sources = (sourcesRes.rows as unknown as { s: string }[]).map((r) => r.s);
 
     const result = await db.execute({
@@ -320,7 +329,7 @@ export async function listUsers(): Promise<AdminUser[]> {
     const result = await db.execute(
       `SELECT u.id, u.email, u.name, u.role, u.created_at,
               (u.password_hash IS NOT NULL) AS has_password,
-              (SELECT COUNT(*) FROM user_watched_models w WHERE w.user_id = u.id) AS watched_count,
+              (SELECT COUNT(*) FROM user_saved_searches s WHERE s.user_id = u.id) AS watched_count,
               (SELECT 1 FROM user_onboarding o WHERE o.user_id = u.id) AS onboarded,
               (SELECT 1 FROM user_search_ranges r WHERE r.user_id = u.id) AS has_range
          FROM users u

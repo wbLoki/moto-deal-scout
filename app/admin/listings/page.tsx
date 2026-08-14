@@ -6,6 +6,7 @@ import {
   toScannedDateField,
   type ScannedDateField,
 } from '../../../src/adminMetrics.js';
+import { parseVehicleType } from '../../../src/domain/entities/VehicleType.js';
 import { AdminNav } from '../../AdminNav.js';
 import { PageShell } from '../../PageShell.js';
 
@@ -35,6 +36,7 @@ interface SearchParams {
   readonly from?: string;
   readonly to?: string;
   readonly page?: string;
+  readonly type?: string;
 }
 
 export default function AdminListingsPage({
@@ -55,6 +57,7 @@ async function AdminListingsBody({ searchParams }: { searchParams: Promise<Searc
   if (session.user.role !== 'admin') redirect('/');
 
   const params = await searchParams;
+  const vehicleType = parseVehicleType(params.type);
   const source = params.source && params.source !== 'all' ? params.source : undefined;
   const search = params.q?.trim() || undefined;
   const field = toScannedDateField(params.field);
@@ -70,6 +73,7 @@ async function AdminListingsBody({ searchParams }: { searchParams: Promise<Searc
     ...(to ? { to } : {}),
     page: Number.isNaN(requestedPage) ? 1 : requestedPage,
     pageSize: 50,
+    vehicleType,
   });
 
   // Builds a URL preserving every active filter, with the given overrides.
@@ -82,6 +86,7 @@ async function AdminListingsBody({ searchParams }: { searchParams: Promise<Searc
       field: field === 'scraped_at' ? undefined : field,
       from,
       to,
+      type: vehicleType === 'car' ? 'car' : undefined,
     };
     const merged = { ...base, page: undefined, ...overrides };
     const qs = new URLSearchParams();
@@ -101,7 +106,7 @@ async function AdminListingsBody({ searchParams }: { searchParams: Promise<Searc
   return (
     <>
       <h1 className="title">Admin · Scan log</h1>
-      <AdminNav active="listings" />
+      <AdminNav active="listings" vehicleType={vehicleType} />
       <p className="subtitle">
         Every listing the crawler has stored, newest-scraped first. <strong>Posted</strong> is the
         seller&apos;s ad date on the marketplace (often years old for bikes that have sat unsold),{' '}

@@ -7,7 +7,9 @@ import { HeaderNav } from './HeaderNav.js';
 import { NavLink } from './NavLink.js';
 import { UserMenu } from './UserMenu.js';
 import { BrandLogo } from './BrandLogo.js';
-import { BellIcon, MotoIcon, ShieldIcon, UserIcon } from './icons.js';
+import { CompareNavLink } from './CompareNavLink.js';
+import { RequestsNavLink } from './RequestsNavLink.js';
+import { BellIcon, ShieldIcon, UserIcon } from './icons.js';
 import { dictionaryFor, getLocale } from './i18n/getLocale.js';
 import { LocaleSwitcher } from './i18n/LocaleSwitcher.js';
 
@@ -27,10 +29,13 @@ export async function SiteHeader() {
       </Link>
       <HeaderNav locale={locale}>
         <li>
-          <NavLink href="/compare">
-            <MotoIcon size={18} />
-            {t.nav.compare}
-          </NavLink>
+          <NavLink href="/">{t.nav.motos}</NavLink>
+        </li>
+        <li>
+          <NavLink href="/cars">{t.nav.cars}</NavLink>
+        </li>
+        <li>
+          <CompareNavLink locale={locale} />
         </li>
         {user ? (
           <>
@@ -63,7 +68,7 @@ export async function SiteHeader() {
               </NavLink>
             </li>
             <li className="nav-mobile-only">
-              <NavLink href="/requests">{t.nav.requests}</NavLink>
+              <RequestsNavLink locale={locale} />
             </li>
             {user.role === 'admin' && (
               <li className="nav-mobile-only">

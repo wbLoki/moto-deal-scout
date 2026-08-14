@@ -38,6 +38,7 @@ function EditModelCard({ model }: { model: StoredModel }) {
 
       <form action={saveModelAction} className="model-form">
         <input type="hidden" name="id" value={model.id} />
+        <input type="hidden" name="vehicleType" value={model.vehicleType} />
         <div className="model-grid">
           <label>
             <span>Brand</span>

@@ -5,7 +5,7 @@ import { CatalogModelResolver } from '../../src/application/services/CatalogMode
 import type { Listing, MarketplaceId } from '../../src/domain/entities/Listing.js';
 import type { ScoredListing } from '../../src/domain/entities/ScoredListing.js';
 import type { SearchCriteria } from '../../src/domain/entities/SearchCriteria.js';
-import type { ListingRepository } from '../../src/domain/interfaces/ListingRepository.js';
+import type { ListingRepository, DealFacets } from '../../src/domain/interfaces/ListingRepository.js';
 import type {
   MarketplaceSource,
   SourceQuery,
@@ -114,7 +114,9 @@ class InMemoryRepository implements ListingRepository {
     if (idx < 0) return Promise.resolve();
     const current = this.saved[idx]!;
     const existing = current.listing.imageUrl;
-    if (existing && !/phoenix-assets|avatar\.svg/i.test(existing)) return Promise.resolve();
+    if (existing && !/phoenix-assets|avatar\.svg|\/users\/|\/avatars\/|\/profile\//i.test(existing)) {
+      return Promise.resolve();
+    }
     this.saved[idx] = {
       ...current,
       listing: { ...current.listing, imageUrl },
@@ -130,7 +132,10 @@ class InMemoryRepository implements ListingRepository {
         .filter(
           (s) =>
             s.listing.sourceId === sourceId &&
-            (!s.listing.imageUrl || /phoenix-assets|avatar\.svg/i.test(s.listing.imageUrl)),
+            (!s.listing.imageUrl ||
+              /phoenix-assets|avatar\.svg|\/users\/|\/avatars\/|\/profile\//i.test(
+                s.listing.imageUrl,
+              )),
         )
         .map((s) => ({ externalId: s.listing.externalId, url: s.listing.url })),
     );
@@ -167,20 +172,40 @@ class InMemoryRepository implements ListingRepository {
     return Promise.resolve({ all: 0, daily: 0, watched: 0, saved: 0 });
   }
 
-  getDealFacets(): Promise<{
-    brands: string[];
-    cities: string[];
-    maxMileage: number;
-    maxCc: number;
-    maxPrice: number;
-  }> {
-    return Promise.resolve({ brands: [], cities: [], maxMileage: 0, maxCc: 0, maxPrice: 0 });
+  getDealFacets(): Promise<DealFacets> {
+    return Promise.resolve({
+      brands: [],
+      cities: [],
+      maxMileage: 0,
+      maxCc: 0,
+      maxPrice: 0,
+      fuels: [],
+      gearboxes: [],
+    });
   }
 
   getPricesForModel(modelId: string): Promise<number[]> {
     return Promise.resolve(
       this.saved.filter((s) => s.match.criteria.id === modelId).map((s) => s.listing.priceMAD),
     );
+  }
+
+  getModelYearMarket(): Promise<{
+    samples: number;
+    p25: number | null;
+    median: number | null;
+    p75: number | null;
+    listingPrice: number;
+    events: readonly { observedAt: string; priceMAD: number }[];
+  }> {
+    return Promise.resolve({
+      samples: 0,
+      p25: null,
+      median: null,
+      p75: null,
+      listingPrice: 0,
+      events: [],
+    });
   }
 
   close(): Promise<void> {

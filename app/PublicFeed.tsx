@@ -10,15 +10,17 @@ import { SignInModal } from './SignInModal.js';
 import { PAGE_SIZE, type SortKey } from './dealSort.js';
 import { MIN_YEAR, ratingFilterOptions, yearOptions, type FilterOption } from './dealFilters.js';
 import { MultiSelect } from './MultiSelect.js';
-import { BookmarkIcon, EyeIcon } from './icons.js';
+import { BookmarkIcon } from './icons.js';
 import { fetchPublicDealsPageAction } from './deal-actions.js';
 import type { DealView } from './dealView.js';
 import type { PublicDealsInput } from '../src/readModel.js';
 import type { DealFacets } from '../src/domain/interfaces/ListingRepository.js';
+import type { DealTierLevel } from '../src/domain/services/dealTier.js';
 import { useT } from './i18n/I18nProvider.js';
 import type { SignInFeature } from './i18n/en.js';
 import type { Locale } from './i18n/locales.js';
-import type { DealTierLevel } from '../src/domain/services/dealTier.js';
+import type { FuelType, GearboxType, VehicleType } from '../src/domain/entities/VehicleType.js';
+import { FUEL_TYPES, GEARBOX_TYPES } from '../src/domain/entities/VehicleType.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const MAX_YEAR = CURRENT_YEAR + 1;
@@ -54,15 +56,6 @@ function PublicCardActions({
       <button
         type="button"
         className="watch-eye"
-        title={t.card.follow}
-        aria-label={t.card.follow}
-        onClick={() => onNeedSignIn('follow')}
-      >
-        <EyeIcon size={18} />
-      </button>
-      <button
-        type="button"
-        className="watch-eye"
         title={t.card.save}
         aria-label={t.card.save}
         onClick={() => onNeedSignIn('save')}
@@ -86,12 +79,14 @@ export function PublicFeed({
   initialSort,
   facets,
   locale,
+  vehicleType = 'motorcycle',
 }: {
   initialDeals: readonly DealView[];
   initialTotal: number;
   initialSort: SortKey;
   facets: DealFacets;
   locale: Locale;
+  vehicleType?: VehicleType;
 }) {
   const t = useT(locale);
   const priceCap = useMemo(
@@ -140,7 +135,10 @@ export function PublicFeed({
   const [ratings, setRatings] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [brandsSel, setBrandsSel] = useState<string[]>([]);
+  const [fuelTypes, setFuelTypes] = useState<string[]>([]);
+  const [gearboxes, setGearboxes] = useState<string[]>([]);
   const [page, setPage] = useState(1);
+  const isCar = vehicleType === 'car';
 
   const invalid =
     debouncedBudgetMax < debouncedBudgetMin ||
@@ -201,13 +199,16 @@ export function PublicFeed({
       yearMax,
       mileageMin: debouncedKmMin,
       mileageMax: debouncedKmMax >= kmCap ? 0 : debouncedKmMax,
-      ccMin: debouncedCcMin,
-      ccMax: debouncedCcMax >= ccCap ? 0 : debouncedCcMax,
+      ccMin: isCar ? 0 : debouncedCcMin,
+      ccMax: isCar ? 0 : debouncedCcMax >= ccCap ? 0 : debouncedCcMax,
+      fuelTypes: isCar ? (fuelTypes as FuelType[]) : [],
+      gearboxes: isCar ? (gearboxes as GearboxType[]) : [],
       ratings,
       cities,
       brands: brandsSel,
       sort,
       page,
+      vehicleType,
     };
     startTransition(async () => {
       const res = await fetchPublicDealsPageAction(input);
@@ -231,9 +232,13 @@ export function PublicFeed({
     ratings,
     cities,
     brandsSel,
+    fuelTypes,
+    gearboxes,
     invalid,
     kmCap,
     ccCap,
+    vehicleType,
+    isCar,
   ]);
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -354,6 +359,7 @@ export function PublicFeed({
           </div>
         </div>
 
+        {!isCar && (
         <div className="sidebar-section">
           <h3 className="sidebar-title">{t.filters.displacement}</h3>
           <div className="sidebar-row">
@@ -379,6 +385,34 @@ export function PublicFeed({
             </label>
           </div>
         </div>
+        )}
+
+        {isCar && (
+          <>
+            <MultiSelect
+              locale={locale}
+              label={t.filters.fuel}
+              options={FUEL_TYPES.map((f) => ({ value: f, label: t.filters[f] }))}
+              selected={fuelTypes}
+              onChange={(v) => {
+                setFuelTypes(v);
+                resetPage();
+              }}
+              allLabel={t.filters.allFuels}
+            />
+            <MultiSelect
+              locale={locale}
+              label={t.filters.gearbox}
+              options={GEARBOX_TYPES.map((g) => ({ value: g, label: t.filters[g] }))}
+              selected={gearboxes}
+              onChange={(v) => {
+                setGearboxes(v);
+                resetPage();
+              }}
+              allLabel={t.filters.allGearboxes}
+            />
+          </>
+        )}
 
         <MultiSelect
           locale={locale}

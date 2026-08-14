@@ -22,9 +22,11 @@ const PROTECTED_PREFIXES = [
   '/onboarding',
   '/profile',
   '/requests',
+  '/cars/requests',
   '/notifications',
   '/saved',
   '/admin',
+  '/dev',
 ];
 
 // Auth.js auto-reads AUTH_SECRET from the environment, but we also wire it in

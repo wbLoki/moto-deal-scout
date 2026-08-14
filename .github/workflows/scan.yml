@@ -1,10 +1,11 @@
 name: Daily scan
 
-# Biker-only crawl on GitHub Actions via their public JSON list API (no browser).
+# Biker crawl on GitHub Actions (JSON API, no browser).
 # Avito sits behind Cloudflare, which serves a challenge to datacenter IPs —
-# Browser Rendering cannot clear it. Avito runs on a residential runner instead
-# (local laptop or Pi via `npm run scan` / `schedule` with Playwright).
-# Incremental: only listings newer than the last scrape watermark / crawl ledger.
+# Browser Rendering cannot clear it. Avito motos, Avito cars, and Moteur run
+# on a residential runner instead (local laptop or Pi via `npm run scan` /
+# `schedule` with Playwright). Incremental: only listings newer than the last
+# scrape watermark / crawl ledger.
 on:
   schedule:
     - cron: '0 7 * * *' # every day, 07:00 UTC

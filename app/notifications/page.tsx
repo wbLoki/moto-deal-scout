@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '../../auth.js';
+import { isCarMarketplace } from '../../src/domain/entities/Listing.js';
 import { loadNotificationsPage } from '../../src/notificationsModel.js';
 import { ListingImage } from '../ListingImage.js';
 import { PageShell } from '../PageShell.js';
@@ -76,6 +77,10 @@ async function NotificationsBody() {
                         : t.notifications.priceDrop
                       : t.notifications.newDeal}{' '}
                     · {whenLabel(n.createdAt, t)}
+                    {' · '}
+                    <Link href={isCarMarketplace(n.sourceId) ? '/cars' : '/'} className="card-link">
+                      {isCarMarketplace(n.sourceId) ? t.nav.cars : t.nav.motos}
+                    </Link>
                   </span>
                 </div>
               </a>

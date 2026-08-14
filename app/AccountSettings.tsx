@@ -22,7 +22,9 @@ function Status({ state, locale }: { state: AccountState; locale: Locale }) {
         ? t.account.emailUpdated
         : state.code === 'password_changed'
           ? t.account.passwordChanged
-          : t.errors[state.code];
+          : state.code === 'whatsapp_updated'
+            ? t.profile.whatsappUpdated
+            : t.errors[state.code];
   return <p className={state.ok ? 'settings-status ok' : 'settings-status err'}>{text}</p>;
 }
 
@@ -119,6 +121,17 @@ export function AccountSettings({
       ) : (
         <p className="settings-hint account-form">{t.account.oauthHint(email)}</p>
       )}
+
+      <div className="account-form">
+        <h3 className="account-form-title">{t.profile.whatsapp}</h3>
+        <p className="settings-hint">{t.profile.whatsappHint}</p>
+        <div className="scan-now">
+          <button className="btn" type="button" disabled>
+            {t.profile.whatsapp}
+          </button>
+          <span className="status-pill">{t.home.comingSoon}</span>
+        </div>
+      </div>
     </div>
   );
 }

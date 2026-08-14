@@ -8,6 +8,7 @@ import {
   submitModelRequest,
 } from '../src/requestService.js';
 import { PUBLIC_DASHBOARD_TAG } from '../src/readModel.js';
+import { parseVehicleType } from '../src/domain/entities/VehicleType.js';
 import type { ErrorKey } from './i18n/en.js';
 import { errorKeyFromCaught } from './i18n/errorKey.js';
 
@@ -38,6 +39,7 @@ export async function submitRequestAction(
       brand: str(formData, 'brand'),
       model: str(formData, 'model'),
       note: str(formData, 'note').trim() || undefined,
+      vehicleType: parseVehicleType(str(formData, 'vehicleType')),
     });
     if (result.status === 'duplicate') {
       return {
@@ -47,6 +49,7 @@ export async function submitRequestAction(
       };
     }
     revalidatePath('/requests');
+    revalidatePath('/cars/requests');
     return { ok: true };
   } catch (err) {
     return { error: errorKeyFromCaught(err, 'request_failed') };

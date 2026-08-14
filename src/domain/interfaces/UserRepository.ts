@@ -11,4 +11,5 @@ export interface UserRepository {
   /** Updates the login email. Rejects if the email is already taken. */
   setEmail(userId: string, email: string): Promise<void>;
   setPasswordHash(userId: string, passwordHash: string): Promise<void>;
+  setWhatsAppPrefs(userId: string, phone: string | undefined, optIn: boolean): Promise<void>;
 }

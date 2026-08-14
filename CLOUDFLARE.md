@@ -3,9 +3,9 @@
 The web app runs on **Cloudflare Workers** using the [`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare)
 adapter. Compare for Avito listing links uses **Cloudflare Browser Rendering**
 (Workers Free). Daily **Avito crawls cannot use Browser Rendering**: Avito’s
-Cloudflare challenge blocks datacenter IPs. Avito runs on a **residential**
-Playwright box (laptop or Raspberry Pi). Biker runs on GitHub Actions (and on
-the same residential box when you scrape both locally).
+Cloudflare challenge blocks datacenter IPs. Avito (motos and cars) and Moteur
+run on a **residential** Playwright box (laptop or Raspberry Pi). Biker runs
+on GitHub Actions (and on the same residential box when you scrape both locally).
 
 ## Architecture
 
@@ -15,7 +15,7 @@ the same residential box when you scrape both locally).
 | Database | Turso — `@libsql/client/web` on Workers |
 | Compare Avito listing links | Worker `BROWSER` binding → Quick Action `/content` |
 | Daily Biker scan | GitHub Actions — JSON list API (`SCRAPE_SOURCES=biker`) |
-| Daily Avito scan | Residential CLI — Playwright (`SCRAPE_USE_PLAYWRIGHT=true`) |
+| Daily Avito + car scan | Residential CLI — Playwright for Avito; Moteur HTML (`avito`, `avito-cars`, `moteur`) |
 | Admin **“Scan now”** | Triggers `scan.yml` (Biker only) via the GitHub API |
 
 ### Workers Free Browser Rendering budget

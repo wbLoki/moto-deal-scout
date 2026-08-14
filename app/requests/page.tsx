@@ -20,7 +20,9 @@ async function RequestsBody() {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
 
-  const requests = await listUserRequests(session.user.id);
+  const requests = (await listUserRequests(session.user.id)).filter(
+    (r) => r.vehicleType === 'motorcycle',
+  );
   const locale = await getLocale();
   const t = dictionaryFor(locale);
 
@@ -30,7 +32,7 @@ async function RequestsBody() {
       <p className="subtitle">{t.requests.subtitle}</p>
 
       <section className="admin-section">
-        <RequestForm locale={locale} />
+        <RequestForm locale={locale} vehicleType="motorcycle" />
       </section>
 
       <section className="admin-section">

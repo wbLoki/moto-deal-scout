@@ -2,11 +2,16 @@
 
 import { revalidatePath } from 'next/cache';
 import { auth } from '../auth.js';
-import { changeEmail, changePassword, updateName } from '../src/auth/userService.js';
+import { changeEmail, changePassword, updateName, updateWhatsAppPrefs } from '../src/auth/userService.js';
 import type { ErrorKey } from './i18n/en.js';
 import { errorKeyFromCaught } from './i18n/errorKey.js';
 
-export type AccountCode = ErrorKey | 'name_updated' | 'email_updated' | 'password_changed';
+export type AccountCode =
+  | ErrorKey
+  | 'name_updated'
+  | 'email_updated'
+  | 'password_changed'
+  | 'whatsapp_updated';
 
 export interface AccountState {
   ok?: boolean;
@@ -63,5 +68,26 @@ export async function changePasswordAction(
     return { ok: true, code: 'password_changed' };
   } catch (err) {
     return { code: errorKeyFromCaught(err, 'password_change_failed') };
+  }
+}
+
+const E164 = /^\+[1-9]\d{7,14}$/;
+
+export async function updateWhatsAppAction(
+  _prev: AccountState,
+  formData: FormData,
+): Promise<AccountState> {
+  const session = await auth();
+  if (!session?.user?.id) return { code: 'not_signed_in' };
+  const phone = str(formData, 'phone').replace(/\s+/g, '');
+  const optIn = formData.get('whatsappOptIn') === 'on';
+  if (optIn && !E164.test(phone)) return { code: 'invalid_phone' };
+  if (phone && !E164.test(phone)) return { code: 'invalid_phone' };
+  try {
+    await updateWhatsAppPrefs(session.user.id, phone || undefined, optIn);
+    revalidatePath('/profile');
+    return { ok: true, code: 'whatsapp_updated' };
+  } catch (err) {
+    return { code: errorKeyFromCaught(err, 'whatsapp_update_failed') };
   }
 }

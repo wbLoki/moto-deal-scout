@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import Link from 'next/link';
-import { setWatchedModelAction } from './watchlist-actions.js';
-import { setSavedListingAction } from './saved-actions.js';
+import { createSavedSearchAction, setSavedListingAction } from './saved-actions.js';
 import { fetchDealsPageAction } from './deal-actions.js';
 import { BrowseSidebar } from './BrowseSidebar.js';
 import { DealCardShell } from './DealCardShell.js';
@@ -17,9 +16,12 @@ import { BookmarkIcon } from './icons.js';
 import type { DealView } from './dealView.js';
 import type { DealsPageInput } from '../src/readModel.js';
 import type { DealFacets, DealTab, TabCounts } from '../src/domain/interfaces/ListingRepository.js';
+import type { DealTierLevel } from '../src/domain/services/dealTier.js';
 import { useT } from './i18n/I18nProvider.js';
 import type { Locale } from './i18n/locales.js';
-import type { DealTierLevel } from '../src/domain/services/dealTier.js';
+import type { SearchRange } from '../src/domain/entities/SearchCriteria.js';
+import type { FuelType, GearboxType, VehicleType } from '../src/domain/entities/VehicleType.js';
+import { FUEL_TYPES, GEARBOX_TYPES } from '../src/domain/entities/VehicleType.js';
 
 /** Debounce for the search box, so we don't hit the server on every keystroke. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -30,49 +32,6 @@ function titleCase(s: string): string {
     .split(/\s+/)
     .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
     .join(' ');
-}
-
-/** Eye toggle to follow/unfollow the card's model. */
-function WatchEye({
-  watching,
-  label,
-  onToggle,
-  locale,
-}: {
-  watching: boolean;
-  label: string;
-  onToggle: () => void;
-  locale: Locale;
-}) {
-  const t = useT(locale);
-  return (
-    <button
-      type="button"
-      className={watching ? 'watch-eye on' : 'watch-eye'}
-      aria-pressed={watching}
-      title={watching ? t.card.unwatch(label) : t.card.watch(label)}
-      onClick={onToggle}
-    >
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-        <path
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"
-        />
-        <circle
-          cx="12"
-          cy="12"
-          r="3"
-          fill={watching ? 'currentColor' : 'none'}
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-      </svg>
-    </button>
-  );
 }
 
 /** Bookmark toggle to save/unsave the individual listing. */
@@ -103,16 +62,12 @@ function SaveButton({
 
 function DealCard({
   deal,
-  watching,
   saved,
-  onToggleWatch,
   onToggleSave,
   locale,
 }: {
   deal: DealView;
-  watching: boolean;
   saved: boolean;
-  onToggleWatch: (modelId: string) => void;
   onToggleSave: (key: string) => void;
   locale: Locale;
 }) {
@@ -126,12 +81,6 @@ function DealCard({
       matchPct={Math.round(deal.matchConfidence * 100)}
       topRight={
         <div className="card-actions">
-          <WatchEye
-            watching={watching}
-            label={label}
-            locale={locale}
-            onToggle={() => onToggleWatch(deal.modelId)}
-          />
           <SaveButton
             saved={saved}
             label={label}
@@ -153,10 +102,12 @@ export function DealTabs({
   initialSort,
   tabCounts,
   facets,
-  watchedModelIds,
+  savedSearchCount,
   savedKeys,
+  searchRange,
   locale,
   sidebar,
+  vehicleType = 'motorcycle',
 }: {
   initialDeals: readonly DealView[];
   initialTotal: number;
@@ -164,11 +115,13 @@ export function DealTabs({
   initialSort: SortKey;
   tabCounts: TabCounts;
   facets: DealFacets;
-  watchedModelIds: readonly string[];
+  savedSearchCount: number;
   savedKeys: readonly string[];
+  searchRange: SearchRange;
   locale: Locale;
   /** Injected sidebar content (saved range + scan control) shown with the filters. */
   sidebar?: ReactNode;
+  vehicleType?: VehicleType;
 }) {
   const t = useT(locale);
   // Server-provided page + counts; refreshed on every filter/sort/page change.
@@ -176,10 +129,8 @@ export function DealTabs({
   const [total, setTotal] = useState(initialTotal);
   const [counts, setCounts] = useState<TabCounts>(tabCounts);
 
-  // Watched models and saved listings live in client state so toggles flip
-  // instantly (optimistic); a refetch then refreshes the counts and tabs.
-  const [watched, setWatched] = useState<ReadonlySet<string>>(() => new Set(watchedModelIds));
   const [savedSet, setSavedSet] = useState<ReadonlySet<string>>(() => new Set(savedKeys));
+  const [searchSaveNote, setSearchSaveNote] = useState<string | null>(null);
 
   const [active, setActive] = useState<DealTab>(initialTab);
   const [query, setQuery] = useState('');
@@ -218,6 +169,9 @@ export function DealTabs({
   const [ratings, setRatings] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [brandsSel, setBrandsSel] = useState<string[]>([]);
+  const [fuelTypes, setFuelTypes] = useState<string[]>([]);
+  const [gearboxes, setGearboxes] = useState<string[]>([]);
+  const isCar = vehicleType === 'car';
 
   const rangeInvalid = debouncedKmMax < debouncedKmMin || debouncedCcMax < debouncedCcMin;
 
@@ -232,6 +186,8 @@ export function DealTabs({
     setRatings([]);
     setCities([]);
     setBrandsSel([]);
+    setFuelTypes([]);
+    setGearboxes([]);
     resetPage();
   };
 
@@ -264,12 +220,14 @@ export function DealTabs({
     }
     const input: DealsPageInput = {
       tab: active,
+      vehicleType,
       search: debouncedQuery.trim(),
       mileageMin: debouncedKmMin,
-      // Slider pinned at the data's max means "no upper bound".
       mileageMax: debouncedKmMax >= kmCap ? 0 : debouncedKmMax,
-      ccMin: debouncedCcMin,
-      ccMax: debouncedCcMax >= ccCap ? 0 : debouncedCcMax,
+      ccMin: isCar ? 0 : debouncedCcMin,
+      ccMax: isCar ? 0 : debouncedCcMax >= ccCap ? 0 : debouncedCcMax,
+      fuelTypes: isCar ? (fuelTypes as FuelType[]) : [],
+      gearboxes: isCar ? (gearboxes as GearboxType[]) : [],
       ratings,
       cities,
       brands: brandsSel,
@@ -297,21 +255,15 @@ export function DealTabs({
     ratings,
     cities,
     brandsSel,
+    fuelTypes,
+    gearboxes,
     refreshKey,
     kmCap,
     ccCap,
     rangeInvalid,
+    vehicleType,
+    isCar,
   ]);
-
-  const toggleWatch = (modelId: string) => {
-    const willWatch = !watched.has(modelId);
-    setWatched(withToggle(watched, modelId, willWatch));
-    startTransition(async () => {
-      const res = await setWatchedModelAction(modelId, willWatch);
-      if (!res.ok) setWatched((prev) => withToggle(prev, modelId, !willWatch));
-      else setRefreshKey((k) => k + 1);
-    });
-  };
 
   const toggleSave = (key: string) => {
     const willSave = !savedSet.has(key);
@@ -332,9 +284,9 @@ export function DealTabs({
 
   const emptyNote = (id: DealTab): ReactNode => {
     if (id === 'daily') return t.empty.daily;
-    if (id === 'saved') return t.empty.saved;
+    if (id === 'saved') return isCar ? t.empty.savedCar : t.empty.saved;
     if (id === 'watched') {
-      return watched.size > 0 ? (
+      return savedSearchCount > 0 ? (
         t.empty.watchedNoListings
       ) : (
         <>
@@ -403,6 +355,7 @@ export function DealTabs({
           </div>
         </div>
 
+        {!isCar && (
         <div className="sidebar-section">
           <h3 className="sidebar-title">{t.filters.displacement}</h3>
           <div className="sidebar-row">
@@ -428,6 +381,34 @@ export function DealTabs({
             </label>
           </div>
         </div>
+        )}
+
+        {isCar && (
+          <>
+            <MultiSelect
+              locale={locale}
+              label={t.filters.fuel}
+              options={FUEL_TYPES.map((f) => ({ value: f, label: t.filters[f] }))}
+              selected={fuelTypes}
+              onChange={(v) => {
+                setFuelTypes(v);
+                resetPage();
+              }}
+              allLabel={t.filters.allFuels}
+            />
+            <MultiSelect
+              locale={locale}
+              label={t.filters.gearbox}
+              options={GEARBOX_TYPES.map((g) => ({ value: g, label: t.filters[g] }))}
+              selected={gearboxes}
+              onChange={(v) => {
+                setGearboxes(v);
+                resetPage();
+              }}
+              allLabel={t.filters.allGearboxes}
+            />
+          </>
+        )}
 
         <MultiSelect
           locale={locale}
@@ -465,6 +446,41 @@ export function DealTabs({
           allLabel={t.filters.allCities}
         />
 
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            setSearchSaveNote(null);
+            startTransition(async () => {
+              const res = await createSavedSearchAction({
+                name:
+                  brandsSel.length === 1
+                    ? titleCase(brandsSel[0]!)
+                    : vehicleType === 'car'
+                      ? 'Cars'
+                      : 'Motos',
+                vehicleType,
+                budgetMin: searchRange.budgetMin,
+                budgetMax: searchRange.budgetMax,
+                yearMin: searchRange.yearMin,
+                yearMax: searchRange.yearMax,
+                mileageMax: kmMax >= kmCap ? 0 : kmMax,
+                brands: brandsSel,
+                cities,
+                fuelTypes: isCar ? fuelTypes : [],
+                gearboxes: isCar ? gearboxes : [],
+              });
+              if (res.ok) {
+                setSearchSaveNote(t.card.searchSaved);
+                setRefreshKey((k) => k + 1);
+              }
+            });
+          }}
+        >
+          {t.card.saveThisSearch}
+        </button>
+        {searchSaveNote && <p className="settings-status ok">{searchSaveNote}</p>}
+
         {rangeInvalid && <p className="settings-error">{t.filters.rangeInvalid}</p>}
       </BrowseSidebar>
 
@@ -493,9 +509,7 @@ export function DealTabs({
             <DealCard
               key={deal.key}
               deal={deal}
-              watching={watched.has(deal.modelId)}
               saved={savedSet.has(deal.key)}
-              onToggleWatch={toggleWatch}
               onToggleSave={toggleSave}
               locale={locale}
             />

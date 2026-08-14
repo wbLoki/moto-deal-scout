@@ -2,6 +2,9 @@ import type { Logger } from 'pino';
 import type { Listing, MarketplaceId } from '../../../domain/entities/Listing.js';
 import type { ScoredListing } from '../../../domain/entities/ScoredListing.js';
 import type { ModelCriteria } from '../../../domain/entities/SearchCriteria.js';
+import type { FuelType, GearboxType } from '../../../domain/entities/VehicleType.js';
+import { parseVehicleType } from '../../../domain/entities/VehicleType.js';
+import { uniqueListingImages } from '../../../domain/listingImages.js';
 
 /**
  * Idempotent DDL (CREATE ... IF NOT EXISTS), which is all a single-table
@@ -134,6 +137,19 @@ export const MIGRATIONS: readonly string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_model_requests_status ON model_requests (status, created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_listings_model_scraped ON listings (matched_model_id, scraped_at)`,
+  // Per-user budget/year window, keyed by vehicle type so moto and car
+  // budgets stay independent. Existing `user_search_ranges` rows are copied
+  // into this table as motorcycle on migrate (see Database.applyMigrations).
+  `CREATE TABLE IF NOT EXISTS user_vehicle_search_ranges (
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    vehicle_type TEXT NOT NULL DEFAULT 'motorcycle',
+    budget_min   INTEGER NOT NULL,
+    budget_max   INTEGER NOT NULL,
+    year_min     INTEGER NOT NULL,
+    year_max     INTEGER NOT NULL,
+    updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (user_id, vehicle_type)
+  )`,
   // Models a user has chosen to follow (picked at onboarding, edited on profile).
   `CREATE TABLE IF NOT EXISTS user_watched_models (
     user_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -169,6 +185,37 @@ export const MIGRATIONS: readonly string[] = [
      ON notifications (user_id, type, source_id, external_id)`,
   `CREATE INDEX IF NOT EXISTS idx_notifications_user_created
      ON notifications (user_id, created_at)`,
+  // Price observations for a listing (insert + each later drop) so the card
+  // can show this ad's own path once more than one scrape exists.
+  `CREATE TABLE IF NOT EXISTS listing_price_events (
+    source_id   TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    observed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    price_mad   REAL NOT NULL,
+    PRIMARY KEY (source_id, external_id, observed_at)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_listing_price_events_listing
+     ON listing_price_events (source_id, external_id, observed_at)`,
+  // Named filter snapshots that drive the "Your searches" tab and alerts.
+  `CREATE TABLE IF NOT EXISTS user_saved_searches (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name         TEXT NOT NULL,
+    vehicle_type TEXT NOT NULL,
+    budget_min   INTEGER NOT NULL,
+    budget_max   INTEGER NOT NULL,
+    year_min     INTEGER NOT NULL,
+    year_max     INTEGER NOT NULL,
+    mileage_max  INTEGER NOT NULL DEFAULT 0,
+    brands       TEXT NOT NULL DEFAULT '[]',
+    cities       TEXT NOT NULL DEFAULT '[]',
+    fuel_types   TEXT NOT NULL DEFAULT '[]',
+    gearboxes    TEXT NOT NULL DEFAULT '[]',
+    model_ids    TEXT NOT NULL DEFAULT '[]',
+    created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_user_saved_searches_user
+     ON user_saved_searches (user_id, vehicle_type)`,
   // Individual listings a user bookmarked. Keyed by the listing's (source,
   // external) id so it survives re-scrapes; price-drop alerts also target these.
   `CREATE TABLE IF NOT EXISTS user_saved_listings (
@@ -197,6 +244,31 @@ export const ADDITIVE_COLUMNS: ReadonlyArray<{
   { table: 'models', column: 'discovered_at', definition: 'TEXT' },
   { table: 'listings', column: 'previous_price_mad', definition: 'REAL' },
   { table: 'listings', column: 'displacement_cc', definition: 'INTEGER' },
+  { table: 'listings', column: 'vehicle_type', definition: "TEXT NOT NULL DEFAULT 'motorcycle'" },
+  { table: 'listings', column: 'fuel_type', definition: 'TEXT' },
+  { table: 'listings', column: 'gearbox', definition: 'TEXT' },
+  { table: 'models', column: 'vehicle_type', definition: "TEXT NOT NULL DEFAULT 'motorcycle'" },
+  { table: 'model_requests', column: 'vehicle_type', definition: "TEXT NOT NULL DEFAULT 'motorcycle'" },
+  { table: 'review_listings', column: 'vehicle_type', definition: "TEXT NOT NULL DEFAULT 'motorcycle'" },
+  { table: 'review_listings', column: 'fuel_type', definition: 'TEXT' },
+  { table: 'review_listings', column: 'gearbox', definition: 'TEXT' },
+  { table: 'listings', column: 'first_owner', definition: 'INTEGER' },
+  { table: 'listings', column: 'ww', definition: 'INTEGER' },
+  { table: 'listings', column: 'accidented', definition: 'INTEGER' },
+  { table: 'listings', column: 'customs_cleared', definition: 'INTEGER' },
+  { table: 'listings', column: 'image_urls', definition: 'TEXT' },
+  { table: 'users', column: 'phone', definition: 'TEXT' },
+  { table: 'users', column: 'whatsapp_opt_in', definition: 'INTEGER NOT NULL DEFAULT 0' },
+  { table: 'notifications', column: 'whatsapped_at', definition: 'TEXT' },
+];
+
+/**
+ * Indexes that depend on additive columns. Must run after {@link ensureColumns}
+ * so a fresh database (CREATE TABLE without those columns) doesn't fail.
+ */
+export const POST_COLUMN_INDEXES: readonly string[] = [
+  `CREATE INDEX IF NOT EXISTS idx_listings_vehicle_type_scraped ON listings (vehicle_type, scraped_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_models_vehicle_type ON models (vehicle_type)`,
 ];
 
 /**
@@ -227,10 +299,45 @@ const INSERT_COLUMNS = [
   'score_total',
   'score_reasons',
   'is_good_deal',
+  'vehicle_type',
+  'fuel_type',
+  'gearbox',
+  'first_owner',
+  'ww',
+  'accidented',
+  'customs_cleared',
+  'image_urls',
 ] as const;
 
-const UPDATE_ON_CONFLICT = INSERT_COLUMNS.filter((c) => c !== 'source_id' && c !== 'external_id')
+function boolFlag(value: boolean | undefined): number | null {
+  return value === undefined ? null : value ? 1 : 0;
+}
+
+function readBoolFlag(value: number | null | undefined): boolean | undefined {
+  if (value == null) return undefined;
+  return Number(value) === 1;
+}
+
+const UPDATE_ON_CONFLICT = INSERT_COLUMNS.filter(
+  (c) => c !== 'source_id' && c !== 'external_id' && c !== 'image_url' && c !== 'image_urls',
+)
   .map((c) => `${c} = excluded.${c}`)
+  .concat([
+    `image_urls = CASE
+      WHEN excluded.image_urls IS NULL THEN listings.image_urls
+      WHEN listings.image_urls IS NULL THEN excluded.image_urls
+      WHEN json_array_length(excluded.image_urls) >= json_array_length(listings.image_urls)
+        THEN excluded.image_urls
+      ELSE listings.image_urls
+    END`,
+    `image_url = CASE
+      WHEN excluded.image_urls IS NOT NULL
+       AND listings.image_urls IS NOT NULL
+       AND json_array_length(excluded.image_urls) < json_array_length(listings.image_urls)
+      THEN listings.image_url
+      ELSE excluded.image_url
+    END`,
+  ])
   .join(',\n    ');
 
 export const UPSERT_SQL = `
@@ -269,7 +376,36 @@ export function toInsertArgs(scored: ScoredListing): SqlValue[] {
     score.total,
     JSON.stringify(score.reasons),
     scored.isGoodDeal ? 1 : 0,
+    listing.vehicleType,
+    listing.fuelType ?? null,
+    listing.gearbox ?? null,
+    boolFlag(listing.firstOwner),
+    boolFlag(listing.ww),
+    boolFlag(listing.accidented),
+    boolFlag(listing.customsCleared),
+    serializeImageUrls(listing),
   ];
+}
+
+function serializeImageUrls(listing: Listing): string | null {
+  const urls = uniqueListingImages(listing.imageUrls, listing.imageUrl ? [listing.imageUrl] : undefined);
+  return urls.length > 0 ? JSON.stringify(urls) : null;
+}
+
+function parseImageUrls(raw: string | null | undefined, fallback?: string | null): string[] | undefined {
+  let parsed: unknown;
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = undefined;
+    }
+  }
+  const fromJson = Array.isArray(parsed)
+    ? parsed.filter((item): item is string => typeof item === 'string')
+    : undefined;
+  const urls = uniqueListingImages(fromJson, fallback ? [fallback] : undefined);
+  return urls.length > 0 ? urls : undefined;
 }
 
 /** One row from the `listings` table, as returned by the libsql client. */
@@ -297,6 +433,14 @@ export interface ListingRow {
   score_reasons: string;
   is_good_deal: number;
   created_at: string;
+  vehicle_type: string | null;
+  fuel_type: string | null;
+  gearbox: string | null;
+  first_owner: number | null;
+  ww: number | null;
+  accidented: number | null;
+  customs_cleared: number | null;
+  image_urls: string | null;
 }
 
 /**
@@ -319,6 +463,7 @@ export function mapRowToScoredListing(
     return undefined;
   }
 
+  const imageUrls = parseImageUrls(row.image_urls, row.image_url);
   const listing: Listing = {
     sourceId: row.source_id as MarketplaceId,
     externalId: row.external_id,
@@ -329,8 +474,16 @@ export function mapRowToScoredListing(
     year: row.year ?? undefined,
     mileageKm: row.mileage_km ?? undefined,
     displacementCc: row.displacement_cc ?? undefined,
+    vehicleType: parseVehicleType(row.vehicle_type),
+    fuelType: (row.fuel_type as FuelType | null) ?? undefined,
+    gearbox: (row.gearbox as GearboxType | null) ?? undefined,
+    firstOwner: readBoolFlag(row.first_owner),
+    ww: readBoolFlag(row.ww),
+    accidented: readBoolFlag(row.accidented),
+    customsCleared: readBoolFlag(row.customs_cleared),
     city: row.city,
-    imageUrl: row.image_url ?? undefined,
+    imageUrl: row.image_url ?? imageUrls?.[0],
+    ...(imageUrls ? { imageUrls } : {}),
     postedAt: row.posted_at ? new Date(row.posted_at) : undefined,
     scrapedAt: new Date(row.scraped_at),
     firstSeenAt: row.created_at,

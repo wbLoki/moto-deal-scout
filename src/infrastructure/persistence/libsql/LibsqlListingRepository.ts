@@ -2,17 +2,22 @@ import type { Client, InValue, Row } from '@libsql/client';
 import type { Logger } from 'pino';
 import type { SortKey } from '../../../domain/entities/DealSort.js';
 import type { MarketplaceId } from '../../../domain/entities/Listing.js';
+import type { SavedSearch } from '../../../domain/entities/SavedSearch.js';
 import type { ScoredListing } from '../../../domain/entities/ScoredListing.js';
 import type { ModelCriteria } from '../../../domain/entities/SearchCriteria.js';
+import type { FuelType, GearboxType, VehicleType } from '../../../domain/entities/VehicleType.js';
 import type {
   DealFacets,
   DealQuery,
   DealTab,
   ListingRepository,
+  ModelYearMarket,
   TabCounts,
 } from '../../../domain/interfaces/ListingRepository.js';
+import { computeFairRange } from '../../../domain/services/fairRange.js';
 import { tierScoreBand } from '../../../domain/services/dealTier.js';
 import { mapRowToScoredListing, toInsertArgs, UPSERT_SQL, type ListingRow } from './schema.js';
+import { isSellerOrPlaceholderImage } from '../../sources/avito/parseAvitoSearchCards.js';
 
 /**
  * SQL ORDER BY fragment per sort key. A stable id tiebreaker is appended by
@@ -29,10 +34,60 @@ const ORDER_BY: Record<SortKey, string> = {
   score: 'l.score_total DESC',
 };
 
+const IMAGE_GAP_SQL = `(
+                image_url IS NULL
+                OR image_url = ''
+                OR image_url LIKE '%phoenix-assets%'
+                OR image_url LIKE '%avatar.svg%'
+                OR image_url LIKE '%/avatars/%'
+                OR image_url LIKE '%/users/%'
+                OR image_url LIKE '%/profile/%'
+              )`;
+
 const placeholders = (n: number): string => Array(n).fill('?').join(', ');
 
 /** Escapes LIKE wildcards so a user's `%`/`_` are matched literally (with ESCAPE '\'). */
 const likeContains = (term: string): string => `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+
+/**
+ * OR of AND-groups: a listing matches the "Your searches" tab when it satisfies
+ * any one of the user's saved searches for this vehicle type.
+ */
+function savedSearchPredicate(searches: readonly SavedSearch[]): { sql: string; args: InValue[] } {
+  if (searches.length === 0) return { sql: '0', args: [] };
+  const groups: string[] = [];
+  const args: InValue[] = [];
+  for (const s of searches) {
+    const parts = ['l.price_mad BETWEEN ? AND ?', '(l.year IS NULL OR l.year BETWEEN ? AND ?)'];
+    args.push(s.budgetMin, s.budgetMax, s.yearMin, s.yearMax);
+    if (s.mileageMax > 0) {
+      parts.push('(l.mileage_km IS NULL OR l.mileage_km <= ?)');
+      args.push(s.mileageMax);
+    }
+    if (s.modelIds.length > 0) {
+      parts.push(`l.matched_model_id IN (${placeholders(s.modelIds.length)})`);
+      args.push(...s.modelIds);
+    }
+    if (s.brands.length > 0) {
+      parts.push(`LOWER(m.brand) IN (${placeholders(s.brands.length)})`);
+      args.push(...s.brands.map((b) => b.trim().toLowerCase()));
+    }
+    if (s.cities.length > 0) {
+      parts.push(`LOWER(l.city) IN (${placeholders(s.cities.length)})`);
+      args.push(...s.cities.map((c) => c.trim().toLowerCase()));
+    }
+    if (s.fuelTypes.length > 0) {
+      parts.push(`l.fuel_type IN (${placeholders(s.fuelTypes.length)})`);
+      args.push(...s.fuelTypes);
+    }
+    if (s.gearboxes.length > 0) {
+      parts.push(`l.gearbox IN (${placeholders(s.gearboxes.length)})`);
+      args.push(...s.gearboxes);
+    }
+    groups.push(`(${parts.join(' AND ')})`);
+  }
+  return { sql: `(${groups.join(' OR ')})`, args };
+}
 
 /** The FROM/JOIN + WHERE of a deal query, with join args and where args kept separate. */
 interface QueryParts {
@@ -71,6 +126,9 @@ function buildParts(
   conds.push('l.price_mad >= m.price_min * ?');
   whereArgs.push(q.minPriceFactor);
 
+  conds.push("COALESCE(l.vehicle_type, m.vehicle_type, 'motorcycle') = ?");
+  whereArgs.push(q.vehicleType);
+
   if (opts.applyRange) {
     conds.push('l.price_mad BETWEEN ? AND ?');
     whereArgs.push(q.range.budgetMin, q.range.budgetMax);
@@ -82,9 +140,9 @@ function buildParts(
     conds.push('l.created_at >= ?');
     whereArgs.push(q.startOfToday);
   } else if (opts.tab === 'watched') {
-    // Caller guarantees a non-empty set (an empty watchlist short-circuits to 0).
-    conds.push(`l.matched_model_id IN (${placeholders(q.watchedModelIds.length)})`);
-    whereArgs.push(...q.watchedModelIds);
+    const pred = savedSearchPredicate(q.savedSearches);
+    conds.push(pred.sql);
+    whereArgs.push(...pred.args);
   }
 
   if (opts.applyFilters) {
@@ -104,6 +162,16 @@ function buildParts(
       const max = q.ccMax > 0 ? q.ccMax : Number.MAX_SAFE_INTEGER;
       conds.push('(l.displacement_cc IS NULL OR l.displacement_cc BETWEEN ? AND ?)');
       whereArgs.push(q.ccMin, max);
+    }
+
+    if (q.fuelTypes.length > 0) {
+      conds.push(`l.fuel_type IN (${placeholders(q.fuelTypes.length)})`);
+      whereArgs.push(...q.fuelTypes);
+    }
+
+    if (q.gearboxes.length > 0) {
+      conds.push(`l.gearbox IN (${placeholders(q.gearboxes.length)})`);
+      whereArgs.push(...q.gearboxes);
     }
 
     if (q.cities.length > 0) {
@@ -203,6 +271,11 @@ export class LibsqlListingRepository implements ListingRepository {
 
   async save(scored: ScoredListing): Promise<void> {
     await this.client.execute({ sql: UPSERT_SQL, args: toInsertArgs(scored) });
+    await this.recordPriceEventIfChanged(
+      scored.listing.sourceId,
+      scored.listing.externalId,
+      scored.listing.priceMAD,
+    );
   }
 
   async getGoodDealsSince(sinceDate: Date): Promise<ScoredListing[]> {
@@ -238,12 +311,11 @@ export class LibsqlListingRepository implements ListingRepository {
   }
 
   async queryDeals(q: DealQuery): Promise<{ deals: ScoredListing[]; total: number }> {
-    // An empty watchlist can't match anything; skip the round-trip entirely.
-    if (q.tab === 'watched' && q.watchedModelIds.length === 0) return { deals: [], total: 0 };
+    if (q.tab === 'watched' && q.savedSearches.length === 0) return { deals: [], total: 0 };
 
     const parts = buildParts(q, {
       tab: q.tab,
-      applyRange: q.tab !== 'saved',
+      applyRange: q.tab !== 'saved' && q.tab !== 'watched',
       applyFilters: true,
     });
     const where = parts.where ? `WHERE ${parts.where}` : '';
@@ -269,8 +341,12 @@ export class LibsqlListingRepository implements ListingRepository {
 
   async countDealsByTab(q: DealQuery): Promise<TabCounts> {
     const countFor = async (tab: DealTab): Promise<number> => {
-      if (tab === 'watched' && q.watchedModelIds.length === 0) return 0;
-      const parts = buildParts(q, { tab, applyRange: tab !== 'saved', applyFilters: false });
+      if (tab === 'watched' && q.savedSearches.length === 0) return 0;
+      const parts = buildParts(q, {
+        tab,
+        applyRange: tab !== 'saved' && tab !== 'watched',
+        applyFilters: false,
+      });
       const where = parts.where ? `WHERE ${parts.where}` : '';
       const res = await this.client.execute({
         sql: `SELECT COUNT(*) AS n FROM listings l ${parts.joins} ${where}`,
@@ -297,7 +373,7 @@ export class LibsqlListingRepository implements ListingRepository {
     const withPred = (extra: string): string =>
       parts.where ? `WHERE ${parts.where} AND ${extra}` : `WHERE ${extra}`;
 
-    const [brandsRes, citiesRes, maxRes] = await Promise.all([
+    const [brandsRes, citiesRes, maxRes, fuelRes, gearRes] = await Promise.all([
       this.client.execute({
         sql: `SELECT DISTINCT TRIM(m.brand) AS brand ${from}
               ${withPred(`TRIM(m.brand) != ''`)}
@@ -315,6 +391,18 @@ export class LibsqlListingRepository implements ListingRepository {
                      MAX(l.displacement_cc) AS maxCc,
                      MAX(l.price_mad) AS maxPrice
               ${from}${parts.where ? ` WHERE ${parts.where}` : ''}`,
+        args,
+      }),
+      this.client.execute({
+        sql: `SELECT DISTINCT l.fuel_type AS fuel ${from}
+              ${withPred(`l.fuel_type IS NOT NULL AND TRIM(l.fuel_type) != ''`)}
+              ORDER BY fuel`,
+        args,
+      }),
+      this.client.execute({
+        sql: `SELECT DISTINCT l.gearbox AS gearbox ${from}
+              ${withPred(`l.gearbox IS NOT NULL AND TRIM(l.gearbox) != ''`)}
+              ORDER BY gearbox`,
         args,
       }),
     ]);
@@ -342,6 +430,12 @@ export class LibsqlListingRepository implements ListingRepository {
       maxMileage: Number(maxRow?.maxMileage ?? 0),
       maxCc: Number(maxRow?.maxCc ?? 0),
       maxPrice: Number(maxRow?.maxPrice ?? 0),
+      fuels: (fuelRes.rows as unknown as { fuel: string }[])
+        .map((r) => r.fuel)
+        .filter((f): f is FuelType => f === 'essence' || f === 'diesel' || f === 'hybrid' || f === 'electric' || f === 'lpg'),
+      gearboxes: (gearRes.rows as unknown as { gearbox: string }[])
+        .map((r) => r.gearbox)
+        .filter((g): g is GearboxType => g === 'manual' || g === 'automatic'),
     };
   }
 
@@ -359,6 +453,56 @@ export class LibsqlListingRepository implements ListingRepository {
       args: [modelId, seenSince.toISOString()],
     });
     return (result.rows as unknown as { price_mad: number }[]).map((r) => Number(r.price_mad));
+  }
+
+  async getModelYearMarket(input: {
+    readonly modelId: string;
+    readonly year: number | null;
+    readonly vehicleType: VehicleType;
+    readonly sourceId: MarketplaceId;
+    readonly externalId: string;
+    readonly listingPrice: number;
+  }): Promise<ModelYearMarket> {
+    const empty: ModelYearMarket = {
+      samples: 0,
+      p25: null,
+      median: null,
+      p75: null,
+      listingPrice: input.listingPrice,
+      events: [],
+    };
+    const eventsRes = await this.client.execute({
+      sql: `SELECT observed_at, price_mad FROM listing_price_events
+            WHERE source_id = ? AND external_id = ?
+            ORDER BY observed_at ASC`,
+      args: [input.sourceId, input.externalId],
+    });
+    const events = (eventsRes.rows as unknown as { observed_at: string; price_mad: number }[]).map(
+      (r) => ({ observedAt: r.observed_at, priceMAD: Number(r.price_mad) }),
+    );
+    if (input.year == null) return { ...empty, events };
+
+    const pricesRes = await this.client.execute({
+      sql: `SELECT l.price_mad FROM listings l
+            WHERE l.matched_model_id = ?
+              AND l.year = ?
+              AND COALESCE(l.vehicle_type, 'motorcycle') = ?
+              AND l.price_mad > 0`,
+      args: [input.modelId, input.year, input.vehicleType],
+    });
+    const prices = (pricesRes.rows as unknown as { price_mad: number }[]).map((r) =>
+      Number(r.price_mad),
+    );
+    const band = computeFairRange(prices, { minSamples: 1 });
+    const mid = computeFairRange(prices, { minSamples: 1, lowQuantile: 0.5, highQuantile: 0.5 });
+    return {
+      samples: prices.length,
+      p25: band?.min ?? null,
+      median: mid?.min ?? null,
+      p75: band?.max ?? null,
+      listingPrice: input.listingPrice,
+      events,
+    };
   }
 
   async getStoredPrice(sourceId: MarketplaceId, externalId: string): Promise<number | undefined> {
@@ -395,6 +539,7 @@ export class LibsqlListingRepository implements ListingRepository {
             WHERE source_id = ? AND external_id = ?`,
       args: [newPriceMAD, oldPriceMAD, new Date().toISOString(), sourceId, externalId],
     });
+    await this.recordPriceEventIfChanged(sourceId, externalId, newPriceMAD);
   }
 
   async refreshMissingImage(
@@ -402,16 +547,12 @@ export class LibsqlListingRepository implements ListingRepository {
     externalId: string,
     imageUrl: string,
   ): Promise<void> {
+    if (isSellerOrPlaceholderImage(imageUrl)) return;
     await this.client.execute({
       sql: `UPDATE listings
             SET image_url = ?
             WHERE source_id = ? AND external_id = ?
-              AND (
-                image_url IS NULL
-                OR image_url = ''
-                OR image_url LIKE '%phoenix-assets%'
-                OR image_url LIKE '%avatar.svg%'
-              )`,
+              AND ${IMAGE_GAP_SQL}`,
       args: [imageUrl, sourceId, externalId],
     });
   }
@@ -422,24 +563,39 @@ export class LibsqlListingRepository implements ListingRepository {
     const result = await this.client.execute({
       sql: `SELECT external_id, url FROM listings
             WHERE source_id = ?
-              AND (
-                image_url IS NULL
-                OR image_url = ''
-                OR image_url LIKE '%phoenix-assets%'
-                OR image_url LIKE '%avatar.svg%'
-              )
+              AND ${IMAGE_GAP_SQL}
             ORDER BY created_at DESC`,
       args: [sourceId],
     });
     return result.rows.map((row) => ({
-      externalId: String(row.external_id),
-      url: String(row.url),
+      externalId: typeof row['external_id'] === 'string' ? row['external_id'] : '',
+      url: typeof row['url'] === 'string' ? row['url'] : '',
     }));
   }
 
   close(): Promise<void> {
     this.client.close();
     return Promise.resolve();
+  }
+
+  private async recordPriceEventIfChanged(
+    sourceId: MarketplaceId,
+    externalId: string,
+    priceMAD: number,
+  ): Promise<void> {
+    const last = await this.client.execute({
+      sql: `SELECT price_mad FROM listing_price_events
+            WHERE source_id = ? AND external_id = ?
+            ORDER BY observed_at DESC LIMIT 1`,
+      args: [sourceId, externalId],
+    });
+    const prev = (last.rows[0] as unknown as { price_mad: number } | undefined)?.price_mad;
+    if (prev != null && Number(prev) === priceMAD) return;
+    await this.client.execute({
+      sql: `INSERT INTO listing_price_events (source_id, external_id, price_mad)
+            VALUES (?, ?, ?)`,
+      args: [sourceId, externalId, priceMAD],
+    });
   }
 
   private mapRows(rows: readonly Row[]): ScoredListing[] {

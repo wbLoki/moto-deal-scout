@@ -1,5 +1,7 @@
 import type { Logger } from 'pino';
 import type { Listing } from '../../../domain/entities/Listing.js';
+import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
+import { uniqueListingImages } from '../../../domain/listingImages.js';
 import type {
   MarketplaceSource,
   SourceQuery,
@@ -7,10 +9,10 @@ import type {
 import { crawlPages } from '../shared/crawl.js';
 import { delay } from '../shared/throttle.js';
 import { parseNumber, slugifyWithHyphens } from '../shared/textParsing.js';
+import { bikerPhotoUrls } from './bikerPhotos.js';
 
 const BASE_URL = 'https://www.biker.ma';
 const LIST_PATH = '/api/v1/moto/annonce';
-const PHOTO_BASE = `${BASE_URL}/uploads/`;
 /** Page size matching Biker's public list endpoint default. */
 export const BIKER_PAGE_LIMIT = 45;
 const DEFAULT_MAX_PAGES = 3;
@@ -29,6 +31,13 @@ interface BikerAnnonce {
   readonly ville?: string | null;
   readonly dateajout?: string | null;
   readonly photo1?: string | null;
+  readonly photo2?: string | null;
+  readonly photo3?: string | null;
+  readonly photo4?: string | null;
+  readonly photo5?: string | null;
+  readonly photo6?: string | null;
+  readonly photo7?: string | null;
+  readonly photo8?: string | null;
   readonly etatannonce?: string | null;
   readonly vendu?: number | null;
 }
@@ -107,12 +116,23 @@ export class BikerSource implements MarketplaceSource {
         headers: { accept: 'application/json' },
       });
       if (!res.ok) return listing;
-      const data = await res.json<{ dateajout?: string; cylindre?: string | number }>();
+      const data = await res.json<BikerAnnonce>();
       const posted = data.dateajout ? new Date(data.dateajout) : undefined;
       const postedAt = posted && !Number.isNaN(posted.getTime()) ? posted : listing.postedAt;
       const cc = parseNumber(String(data.cylindre ?? ''));
       const displacementCc = cc && cc >= 25 && cc <= 3500 ? cc : listing.displacementCc;
-      return { ...listing, postedAt, displacementCc };
+      const photos = uniqueListingImages(
+        bikerPhotoUrls(data),
+        listing.imageUrls,
+        listing.imageUrl ? [listing.imageUrl] : undefined,
+      );
+      return {
+        ...listing,
+        postedAt,
+        displacementCc,
+        imageUrl: photos[0] ?? listing.imageUrl,
+        ...(photos.length > 0 ? { imageUrls: photos } : {}),
+      };
     } catch (err) {
       this.logger.warn({ err, externalId: listing.externalId }, 'Biker.ma detail enrich failed');
       return listing;
@@ -169,7 +189,7 @@ export class BikerSource implements MarketplaceSource {
     const displacementCc = cc && cc >= 25 && cc <= 3500 ? cc : undefined;
 
     const posted = row.dateajout ? new Date(row.dateajout) : undefined;
-    const photo = (row.photo1 ?? '').trim();
+    const photos = bikerPhotoUrls(row);
     const slug = slugifyWithHyphens(title) || 'moto';
 
     return {
@@ -182,8 +202,13 @@ export class BikerSource implements MarketplaceSource {
       year: year != null && year >= 1950 ? year : undefined,
       mileageKm,
       displacementCc,
+      vehicleType: 'motorcycle',
+      fuelType: undefined,
+      gearbox: undefined,
+      ...parseListingCondition(title, row.description?.trim() || undefined),
       city: (row.ville ?? '').trim() || 'Maroc',
-      imageUrl: photo ? `${PHOTO_BASE}${photo}` : undefined,
+      imageUrl: photos[0],
+      ...(photos.length > 0 ? { imageUrls: photos } : {}),
       postedAt: posted && !Number.isNaN(posted.getTime()) ? posted : undefined,
       scrapedAt,
     };

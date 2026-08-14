@@ -12,7 +12,7 @@ import type { ModelCriteria } from '../entities/SearchCriteria.js';
 export interface SourceQuery {
   /**
    * The model to search for. Omit to browse the marketplace's whole
-   * motorcycle category unfiltered — that's the discovery crawl, which
+   * motorcycle or car category unfiltered — that's the discovery crawl, which
    * finds models nobody has told us about yet.
    */
   readonly criteria?: ModelCriteria;

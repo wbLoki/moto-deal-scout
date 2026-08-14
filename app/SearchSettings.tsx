@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import type { SearchRange } from '../src/domain/entities/SearchCriteria.js';
+import type { VehicleType } from '../src/domain/entities/VehicleType.js';
 import { saveSearchRangeAction, type ActionResult } from './actions.js';
 import { yearOptions } from './dealFilters.js';
 import { useT } from './i18n/I18nProvider.js';
@@ -9,7 +10,15 @@ import type { Locale } from './i18n/locales.js';
 
 const YEARS = yearOptions();
 
-export function SearchSettings({ locale, current }: { locale: Locale; current: SearchRange }) {
+export function SearchSettings({
+  locale,
+  current,
+  vehicleType = 'motorcycle',
+}: {
+  locale: Locale;
+  current: SearchRange;
+  vehicleType?: VehicleType;
+}) {
   const t = useT(locale);
   const [budgetMin, setBudgetMin] = useState(current.budgetMin);
   const [budgetMax, setBudgetMax] = useState(current.budgetMax);
@@ -23,7 +32,10 @@ export function SearchSettings({ locale, current }: { locale: Locale; current: S
   const save = () => {
     setStatus(null);
     startSave(async () => {
-      const result = await saveSearchRangeAction({ budgetMin, budgetMax, yearMin, yearMax });
+      const result = await saveSearchRangeAction(
+        { budgetMin, budgetMax, yearMin, yearMax },
+        vehicleType,
+      );
       setStatus(result);
     });
   };

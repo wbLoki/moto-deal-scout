@@ -10,6 +10,8 @@ interface UserRow {
   password_hash: string | null;
   role: string;
   created_at: string;
+  phone: string | null;
+  whatsapp_opt_in: number | null;
 }
 
 function normalizeEmail(email: string): string {
@@ -24,6 +26,8 @@ function mapRow(row: UserRow): User {
     passwordHash: row.password_hash ?? undefined,
     role: row.role as UserRole,
     createdAt: new Date(row.created_at),
+    phone: row.phone ?? undefined,
+    whatsappOptIn: Number(row.whatsapp_opt_in) === 1,
   };
 }
 
@@ -84,6 +88,13 @@ export class LibsqlUserRepository implements UserRepository {
     await this.client.execute({
       sql: 'UPDATE users SET password_hash = ? WHERE id = ?',
       args: [passwordHash, userId],
+    });
+  }
+
+  async setWhatsAppPrefs(userId: string, phone: string | undefined, optIn: boolean): Promise<void> {
+    await this.client.execute({
+      sql: 'UPDATE users SET phone = ?, whatsapp_opt_in = ? WHERE id = ?',
+      args: [phone ?? null, optIn ? 1 : 0, userId],
     });
   }
 }

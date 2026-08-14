@@ -2,14 +2,19 @@ import pino from 'pino';
 import { DailyReportService } from './application/services/DailyReportService.js';
 import { DealScanner } from './application/services/DealScanner.js';
 import { NotificationDispatcher } from './application/services/NotificationDispatcher.js';
-import { loadCriteria } from './config/loadCriteria.js';
+import { CAR_CATALOG } from './catalog/carCatalog.js';
+import { MOTORCYCLE_CATALOG } from './catalog/motorcycleCatalog.js';
+import { defaultCarModels } from './config/defaultCarCriteria.js';
+import type { VehicleType } from './domain/entities/VehicleType.js';
 import { loadEnv } from './config/env.js';
+import { loadCriteria } from './config/loadCriteria.js';
 import type { SearchCriteria } from './domain/entities/SearchCriteria.js';
 import type { ListingRepository } from './domain/interfaces/ListingRepository.js';
 import type { MarketplaceSource } from './domain/interfaces/MarketplaceSource.js';
 import type { NotificationProvider } from './domain/interfaces/NotificationProvider.js';
 import { AvitoSource } from './infrastructure/sources/avito/AvitoSource.js';
 import { BikerSource } from './infrastructure/sources/biker/BikerSource.js';
+import { MoteurSource } from './infrastructure/sources/moteur/MoteurSource.js';
 import { ConsoleNotificationProvider } from './infrastructure/notifications/ConsoleNotificationProvider.js';
 import { DiscordNotificationProvider } from './infrastructure/notifications/DiscordNotificationProvider.js';
 import {
@@ -63,6 +68,8 @@ export interface ContainerOptions {
    * in the env, then to all sources. Lets a run target just Avito or just Biker.
    */
   readonly sources?: readonly string[];
+  /** Which vehicle market this container scrapes. Defaults to motorcycles. */
+  readonly vehicleType?: VehicleType;
 }
 
 export async function buildContainer(options: ContainerOptions = {}): Promise<Container> {
@@ -84,8 +91,12 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
   logger.info({ database: describeDbTarget(dbConfig.url) }, 'database target');
   const db = await openDatabase(dbConfig);
   const modelRepo = new LibsqlModelRepository(db);
-  await modelRepo.seedIfEmpty(config.models);
-  const enabledModels = await modelRepo.listEnabledCriteria();
+  const vehicleType = options.vehicleType ?? 'motorcycle';
+  await modelRepo.seedIfEmptyForType(config.models, 'motorcycle');
+  await modelRepo.seedIfEmptyForType(defaultCarModels, 'car');
+  const enabledModels = (await modelRepo.listEnabledCriteria()).filter(
+    (m) => m.vehicleType === vehicleType,
+  );
   const allModels = await modelRepo.listAll();
 
   // The daily scan only re-checks models someone actually follows. If nobody
@@ -120,10 +131,20 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
     throttleMs: env.SCRAPE_THROTTLE_MS,
     ...(env.AVITO_MAX_PAGES !== undefined ? { maxPages: env.AVITO_MAX_PAGES } : {}),
   };
-  const allSources: MarketplaceSource[] = [
-    new AvitoSource(htmlFetcher, avitoOptions, logger.child({ source: 'avito' })),
-    new BikerSource(sourceOptions, logger.child({ source: 'biker' })),
-  ];
+  const allSources: MarketplaceSource[] =
+    vehicleType === 'car'
+      ? [
+          new AvitoSource(
+            htmlFetcher,
+            { ...avitoOptions, sourceId: 'avito-cars' },
+            logger.child({ source: 'avito-cars' }),
+          ),
+          new MoteurSource(sourceOptions, logger.child({ source: 'moteur' })),
+        ]
+      : [
+          new AvitoSource(htmlFetcher, avitoOptions, logger.child({ source: 'avito' })),
+          new BikerSource(sourceOptions, logger.child({ source: 'biker' })),
+        ];
   const selection = options.sources ?? parseSourceList(env.SCRAPE_SOURCES);
   const sources = selection ? selectSources(allSources, selection) : allSources;
   logger.info({ sources: sources.map((s) => s.id) }, 'scraping sources');
@@ -141,7 +162,9 @@ export async function buildContainer(options: ContainerOptions = {}): Promise<Co
     incremental: !options.discovery?.full,
     ...(options.discovery
       ? {
-          resolver: new CatalogModelResolver(),
+          resolver: new CatalogModelResolver(
+            vehicleType === 'car' ? CAR_CATALOG : MOTORCYCLE_CATALOG,
+          ),
           // insertIfAbsent, never upsert: re-discovering an already-calibrated
           // model must not reset its price range back to the provisional one.
           modelSink: (model) => modelRepo.insertIfAbsent(model),

@@ -2,17 +2,17 @@ import type { Client } from '@libsql/client';
 import { loadEnv } from './config/env.js';
 import type { DailyReport, PriceDrop } from './domain/entities/DailyReport.js';
 import type { NewNotification } from './domain/entities/Notification.js';
+import type { SavedSearch } from './domain/entities/SavedSearch.js';
 import type { ScoredListing } from './domain/entities/ScoredListing.js';
-import type { SearchRange } from './domain/entities/SearchCriteria.js';
-import { listingWithinRange } from './domain/services/rangeFilter.js';
+import { listingMatchesSavedSearch } from './domain/services/savedSearchMatch.js';
 import {
   EmailAlertProvider,
   type DigestItem,
 } from './infrastructure/notifications/EmailAlertProvider.js';
+import { WhatsAppAlertProvider } from './infrastructure/notifications/WhatsAppAlertProvider.js';
 import { openDatabase, resolveDatabaseConfig } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlNotificationRepository } from './infrastructure/persistence/libsql/LibsqlNotificationRepository.js';
-import { LibsqlUserSearchRangeRepository } from './infrastructure/persistence/libsql/LibsqlUserSearchRangeRepository.js';
-import { DEFAULT_SEARCH_RANGE } from './settingsModel.js';
+import { LibsqlSavedSearchRepository } from './infrastructure/persistence/libsql/LibsqlSavedSearchRepository.js';
 import type { Env } from './config/env.js';
 
 const madFmt = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
@@ -29,21 +29,49 @@ function listingKey(sourceId: string, externalId: string): string {
   return `${sourceId}:${externalId}`;
 }
 
+function searchesByUser(
+  searches: readonly SavedSearch[],
+): Map<string, SavedSearch[]> {
+  const map = new Map<string, SavedSearch[]>();
+  for (const s of searches) {
+    const list = map.get(s.userId) ?? [];
+    list.push(s);
+    map.set(s.userId, list);
+  }
+  return map;
+}
+
+function matchesAnySearch(
+  listing: ScoredListing['listing'],
+  modelId: string,
+  brand: string,
+  searches: readonly SavedSearch[],
+): boolean {
+  return searches.some((s) => listingMatchesSavedSearch(listing, s, modelId, brand));
+}
+
 /**
- * Pure fan-out: turn freshly-scanned good deals into per-watcher notifications.
- * A deal alerts a watcher only if it falls inside that user's saved budget/year
- * range, so alerts stay relevant. Kept side-effect-free so it's easy to test.
+ * Pure fan-out: a good deal alerts a user when it matches any of their saved
+ * searches. Kept side-effect-free so it's easy to test.
  */
 export function newDealNotifications(
   deals: readonly ScoredListing[],
-  watchersByModel: ReadonlyMap<string, readonly string[]>,
-  rangeFor: (userId: string) => SearchRange,
+  searches: readonly SavedSearch[],
 ): NewNotification[] {
+  const byUser = searchesByUser(searches);
   const rows: NewNotification[] = [];
   for (const deal of deals) {
-    const watchers = watchersByModel.get(deal.match.criteria.id) ?? [];
-    for (const userId of watchers) {
-      if (!listingWithinRange(deal.listing, rangeFor(userId))) continue;
+    for (const [userId, userSearches] of byUser) {
+      if (
+        !matchesAnySearch(
+          deal.listing,
+          deal.match.criteria.id,
+          deal.match.criteria.brand,
+          userSearches,
+        )
+      ) {
+        continue;
+      }
       rows.push({
         userId,
         type: 'new_deal',
@@ -63,21 +91,22 @@ export function newDealNotifications(
 
 /**
  * Pure fan-out for price drops. Savers of the exact listing are always
- * alerted (they explicitly bookmarked it); watchers of the model are alerted
- * only when the (now cheaper) listing sits inside their saved range.
+ * alerted; other users are alerted when the cheaper listing matches a search.
  */
 export function priceDropNotifications(
   drops: readonly PriceDrop[],
-  watchersByModel: ReadonlyMap<string, readonly string[]>,
+  searches: readonly SavedSearch[],
   saversByListing: ReadonlyMap<string, readonly string[]>,
-  rangeFor: (userId: string) => SearchRange,
 ): NewNotification[] {
+  const byUser = searchesByUser(searches);
   const rows: NewNotification[] = [];
   for (const drop of drops) {
     const key = listingKey(drop.listing.sourceId, drop.listing.externalId);
     const recipients = new Set<string>(saversByListing.get(key) ?? []);
-    for (const userId of watchersByModel.get(drop.model.id) ?? []) {
-      if (listingWithinRange(drop.listing, rangeFor(userId))) recipients.add(userId);
+    for (const [userId, userSearches] of byUser) {
+      if (matchesAnySearch(drop.listing, drop.model.id, drop.model.brand, userSearches)) {
+        recipients.add(userId);
+      }
     }
     for (const userId of recipients) {
       rows.push({
@@ -97,16 +126,32 @@ export function priceDropNotifications(
   return rows;
 }
 
+const FREE_WHATSAPP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Free accounts get at most one WhatsApp per week, and only when a matching
+ * deal is waiting. No prior send → eligible (the pending-deal check is the caller).
+ */
+export function shouldSendFreeWeeklyWhatsApp(
+  lastSentAt: string | null | undefined,
+  now: Date,
+): boolean {
+  if (!lastSentAt) return true;
+  const t = Date.parse(lastSentAt);
+  if (Number.isNaN(t)) return true;
+  return now.getTime() - t >= FREE_WHATSAPP_INTERVAL_MS;
+}
+
 export interface AlertOutcome {
   /** Notification rows built and offered to the store (dedup may drop some). */
   readonly candidates: number;
 }
 
 /**
- * After a scan, alert users about fresh good deals for the models they follow.
- * Idempotent: the store's unique index drops any (user, listing) it has already
- * alerted, so re-running a scan never double-notifies. Email delivery is
- * layered on in a later phase.
+ * After a scan, alert users about fresh good deals matching their saved
+ * searches. Idempotent: the store's unique index drops any (user, listing) it
+ * has already alerted. Email and WhatsApp delivery are layered on and must not
+ * block each other or in-app alerts.
  */
 export async function runUserAlerts(report: DailyReport): Promise<AlertOutcome> {
   if (report.goodDeals.length === 0 && report.priceDrops.length === 0) {
@@ -117,31 +162,12 @@ export async function runUserAlerts(report: DailyReport): Promise<AlertOutcome> 
   const db = await openDatabase(resolveDatabaseConfig(env));
   try {
     const notifications = new LibsqlNotificationRepository(db);
-    const rangeRepo = new LibsqlUserSearchRangeRepository(db);
-
-    // Watchers of every model touched by a new deal or a price drop.
-    const modelIds = [
-      ...new Set([
-        ...report.goodDeals.map((d) => d.match.criteria.id),
-        ...report.priceDrops.map((d) => d.model.id),
-      ]),
-    ];
-    const watchersByModel = await watchersOf(db, modelIds);
+    const searches = await new LibsqlSavedSearchRepository(db).listAll();
     const saversByListing = await saversOf(db, report.priceDrops);
 
-    // Resolve every involved watcher's range up front, then fan out purely.
-    const userIds = new Set<string>();
-    for (const users of watchersByModel.values()) for (const u of users) userIds.add(u);
-    const rangeByUser = new Map<string, SearchRange>();
-    for (const userId of userIds) {
-      rangeByUser.set(userId, (await rangeRepo.get(userId)) ?? DEFAULT_SEARCH_RANGE);
-    }
-    const rangeFor = (userId: string): SearchRange =>
-      rangeByUser.get(userId) ?? DEFAULT_SEARCH_RANGE;
-
     const rows = [
-      ...newDealNotifications(report.goodDeals, watchersByModel, rangeFor),
-      ...priceDropNotifications(report.priceDrops, watchersByModel, saversByListing, rangeFor),
+      ...newDealNotifications(report.goodDeals, searches),
+      ...priceDropNotifications(report.priceDrops, searches, saversByListing),
     ];
     await notifications.insertMany(rows);
     await sendPendingDigests(db, env, notifications);
@@ -152,12 +178,19 @@ export async function runUserAlerts(report: DailyReport): Promise<AlertOutcome> 
 }
 
 /**
- * Emails any not-yet-emailed notifications as one digest per user. No-ops when
- * email isn't configured (in-app alerts stand alone). A failed send is logged
- * and the rows stay pending, so the next scan retries them rather than losing
- * the alert or crashing the scan.
+ * Emails and WhatsApps any not-yet-delivered notifications. Each channel is
+ * independent: a failed send is logged and those rows stay pending.
  */
 async function sendPendingDigests(
+  db: Client,
+  env: Env,
+  notifications: LibsqlNotificationRepository,
+): Promise<void> {
+  await sendEmailDigests(db, env, notifications);
+  await sendWhatsAppDigests(db, env, notifications);
+}
+
+async function sendEmailDigests(
   db: Client,
   env: Env,
   notifications: LibsqlNotificationRepository,
@@ -187,6 +220,37 @@ async function sendPendingDigests(
   }
 }
 
+async function sendWhatsAppDigests(
+  db: Client,
+  env: Env,
+  notifications: LibsqlNotificationRepository,
+): Promise<void> {
+  const live: boolean = false;
+  if (!live) return;
+
+  const provider = WhatsAppAlertProvider.fromEnv(env);
+  if (!provider) return;
+
+  const grouped = await notifications.listUnwhatsappedGroupedByUser();
+  if (grouped.size === 0) return;
+
+  const userIds = [...grouped.keys()];
+  const prefs = await whatsappPrefsFor(db, userIds);
+  const lastSent = await lastWhatsappedAtByUser(db, userIds);
+  const now = new Date();
+  for (const [userId, list] of grouped) {
+    const pref = prefs.get(userId);
+    if (!pref?.optIn || !pref.phone) continue;
+    if (!shouldSendFreeWeeklyWhatsApp(lastSent.get(userId), now)) continue;
+    try {
+      await provider.sendDigests([{ phone: pref.phone, notifications: list }]);
+      await notifications.markWhatsapped(list.map((n) => n.id));
+    } catch (err) {
+      console.error('[alerts] failed to send WhatsApp digest:', err);
+    }
+  }
+}
+
 /** userId -> email, for the given users. */
 async function emailsFor(db: Client, userIds: readonly string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
@@ -202,19 +266,46 @@ async function emailsFor(db: Client, userIds: readonly string[]): Promise<Map<st
   return map;
 }
 
-/** modelId -> userIds following it, for the given models. */
-async function watchersOf(db: Client, modelIds: readonly string[]): Promise<Map<string, string[]>> {
-  const map = new Map<string, string[]>();
-  if (modelIds.length === 0) return map;
-  const placeholders = modelIds.map(() => '?').join(', ');
+async function whatsappPrefsFor(
+  db: Client,
+  userIds: readonly string[],
+): Promise<Map<string, { phone: string; optIn: boolean }>> {
+  const map = new Map<string, { phone: string; optIn: boolean }>();
+  if (userIds.length === 0) return map;
+  const placeholders = userIds.map(() => '?').join(', ');
   const result = await db.execute({
-    sql: `SELECT user_id, model_id FROM user_watched_models WHERE model_id IN (${placeholders})`,
-    args: [...modelIds],
+    sql: `SELECT id, phone, whatsapp_opt_in FROM users WHERE id IN (${placeholders})`,
+    args: [...userIds],
   });
-  for (const row of result.rows as unknown as { user_id: string; model_id: string }[]) {
-    const list = map.get(row.model_id) ?? [];
-    list.push(row.user_id);
-    map.set(row.model_id, list);
+  for (const row of result.rows as unknown as {
+    id: string;
+    phone: string | null;
+    whatsapp_opt_in: number | null;
+  }[]) {
+    map.set(row.id, {
+      phone: (row.phone ?? '').trim(),
+      optIn: Number(row.whatsapp_opt_in) === 1,
+    });
+  }
+  return map;
+}
+
+async function lastWhatsappedAtByUser(
+  db: Client,
+  userIds: readonly string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (userIds.length === 0) return map;
+  const placeholders = userIds.map(() => '?').join(', ');
+  const result = await db.execute({
+    sql: `SELECT user_id, MAX(whatsapped_at) AS last_sent
+          FROM notifications
+          WHERE user_id IN (${placeholders}) AND whatsapped_at IS NOT NULL
+          GROUP BY user_id`,
+    args: [...userIds],
+  });
+  for (const row of result.rows as unknown as { user_id: string; last_sent: string | null }[]) {
+    if (row.last_sent) map.set(row.user_id, row.last_sent);
   }
   return map;
 }

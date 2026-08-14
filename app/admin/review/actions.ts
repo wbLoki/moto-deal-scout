@@ -32,6 +32,7 @@ function revalidateDashboards(): void {
   revalidatePath('/admin/review');
   revalidatePath('/admin');
   revalidatePath('/');
+  revalidatePath('/cars');
   revalidateTag(PUBLIC_DASHBOARD_TAG);
 }
 
@@ -53,6 +54,7 @@ export async function promoteReviewAction(formData: FormData): Promise<void> {
     ...(year !== undefined ? { year } : {}),
     ...(mileageKm !== undefined ? { mileageKm } : {}),
     ...(displacementCc !== undefined ? { displacementCc } : {}),
+    ...(str(formData, 'vehicleType') ? { vehicleType: str(formData, 'vehicleType') } : {}),
   };
   await promoteReview(input);
   revalidateDashboards();

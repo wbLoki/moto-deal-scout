@@ -13,6 +13,7 @@ import type { BikeEvaluation, BikeInput } from '../src/compareModel.js';
 import { useT } from './i18n/I18nProvider.js';
 import type { ErrorKey, SignInFeature } from './i18n/en.js';
 import type { Locale } from './i18n/locales.js';
+import type { VehicleType } from '../src/domain/entities/VehicleType.js';
 
 interface CatalogBrand {
   readonly brand: string;
@@ -40,10 +41,12 @@ export function CompareForm({
   catalog,
   signedIn,
   locale,
+  vehicleType = 'motorcycle',
 }: {
   catalog: readonly CatalogBrand[];
   signedIn: boolean;
   locale: Locale;
+  vehicleType?: VehicleType;
 }) {
   const t = useT(locale);
   const [brand, setBrand] = useState('');
@@ -77,10 +80,11 @@ export function CompareForm({
       displacementCc?: number;
       priceMAD?: number;
       city?: string;
-    } = { brand, model };
+      vehicleType: VehicleType;
+    } = { brand, model, vehicleType };
     if (year) input.year = Number(year);
     if (mileage.trim()) input.mileageKm = Number(mileage);
-    if (displacement.trim()) input.displacementCc = Number(displacement);
+    if (vehicleType !== 'car' && displacement.trim()) input.displacementCc = Number(displacement);
     if (price.trim()) input.priceMAD = Number(price);
     if (city.trim()) input.city = city.trim();
     return input;
@@ -124,7 +128,7 @@ export function CompareForm({
     }
     setError(null);
     startTransition(async () => {
-      const res = await evaluatePastedListingAction(pasteText);
+      const res = await evaluatePastedListingAction(pasteText, vehicleType);
       if (res.ok && res.evaluation) {
         // Fill the form with what Claude read, so the user can correct + re-run.
         if (res.extracted) applyExtracted(res.extracted);
@@ -209,6 +213,7 @@ export function CompareForm({
             />
           </label>
 
+          {vehicleType !== 'car' && (
           <label className="field">
             <span>{t.compare.displacement}</span>
             <input
@@ -221,6 +226,7 @@ export function CompareForm({
               onChange={(e) => setDisplacement(e.target.value)}
             />
           </label>
+          )}
 
           <label className="field">
             <span>{t.compare.price}</span>

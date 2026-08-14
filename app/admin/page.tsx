@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '../../auth.js';
+import { parseVehicleType } from '../../src/domain/entities/VehicleType.js';
 import { getAdminModelsPage } from '../../src/adminService.js';
 import { AdminNav } from '../AdminNav.js';
 import { ModelsList } from '../ModelsList.js';
@@ -10,25 +11,30 @@ import { approveRequestAction, rejectRequestAction } from '../request-actions.js
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export default function AdminPage() {
+export default function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ type?: string }>;
+}) {
   return (
     <PageShell>
-      <AdminBody />
+      <AdminBody searchParams={searchParams} />
     </PageShell>
   );
 }
 
-async function AdminBody() {
+async function AdminBody({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
   if (session.user.role !== 'admin') redirect('/');
 
-  const { models, pending } = await getAdminModelsPage();
+  const vehicleType = parseVehicleType((await searchParams).type);
+  const { models, pending } = await getAdminModelsPage(vehicleType);
 
   return (
     <>
       <h1 className="title">Admin · Models</h1>
-      <AdminNav active="models" />
+      <AdminNav active="models" vehicleType={vehicleType} />
       <p className="subtitle">
         Models are discovered automatically by the weekly crawl — you don&apos;t add them by hand.
         This page is for overrides: disable one to stop tracking it, or lock your own price range

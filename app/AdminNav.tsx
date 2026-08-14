@@ -12,20 +12,41 @@ const TABS = [
 /** Sub-navigation shown at the top of the admin pages. */
 export function AdminNav({
   active,
+  vehicleType,
 }: {
   active: 'models' | 'review' | 'listings' | 'users' | 'analytics' | 'price-review';
+  vehicleType?: 'motorcycle' | 'car';
 }) {
+  const typeQuery = vehicleType === 'car' ? '?type=car' : '';
   return (
-    <nav className="admin-nav">
-      {TABS.map((t) => (
-        <Link
-          key={t.id}
-          href={t.href}
-          className={t.id === active ? 'admin-nav-link active' : 'admin-nav-link'}
-        >
-          {t.label}
-        </Link>
-      ))}
-    </nav>
+    <>
+      <nav className="admin-nav">
+        {TABS.map((t) => (
+          <Link
+            key={t.id}
+            href={`${t.href}${typeQuery}`}
+            className={t.id === active ? 'admin-nav-link active' : 'admin-nav-link'}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </nav>
+      {(active === 'models' || active === 'review' || active === 'listings' || active === 'price-review') && (
+        <nav className="admin-nav">
+          <Link
+            href={`${TABS.find((t) => t.id === active)?.href ?? '/admin'}`}
+            className={vehicleType !== 'car' ? 'admin-nav-link active' : 'admin-nav-link'}
+          >
+            Motos
+          </Link>
+          <Link
+            href={`${TABS.find((t) => t.id === active)?.href ?? '/admin'}?type=car`}
+            className={vehicleType === 'car' ? 'admin-nav-link active' : 'admin-nav-link'}
+          >
+            Cars
+          </Link>
+        </nav>
+      )}
+    </>
   );
 }

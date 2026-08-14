@@ -25,9 +25,10 @@ const envSchema = z.object({
 
   /**
    * Comma-separated marketplace source ids to scrape (e.g. `avito,biker`).
-   * Both run when unset. GHA daily scan is Biker-only (datacenter IPs can't
-   * clear Avito's Cloudflare challenge). Avito runs on a residential box
-   * (local/Pi Playwright). A `--source` CLI flag overrides it.
+   * All sources run when unset. GHA daily scan is Biker-only (datacenter IPs
+   * can't clear Avito's Cloudflare challenge). Avito motos, Avito cars, and
+   * Moteur run on a residential box (local/Pi Playwright). A `--source` CLI
+   * flag overrides it.
    */
   SCRAPE_SOURCES: z.string().min(1).optional(),
   /** Milliseconds to wait between requests to the same marketplace, to stay polite. */
@@ -91,6 +92,18 @@ const envSchema = z.object({
   ALERT_FROM_EMAIL: z.string().min(1).default('Moto Deal Scout <alerts@motosnipe.com>'),
   /** Public base URL used to build links in emails (e.g. the /notifications page). */
   APP_BASE_URL: z.string().url().default('https://motosnipe.com'),
+
+  /**
+   * WhatsApp Cloud API. When any of token / phone-number id / template name
+   * is unset, WhatsApp delivery is skipped (in-app and email still work).
+   * The template must be a pre-approved utility template in Meta Business Manager
+   * with named body params `model_vehicle` and `price`, plus a Visit website
+   * button whose URL is `https://motosnipe.com/l/{{1}}` (suffix `sourceId/externalId`).
+   */
+  WHATSAPP_TOKEN: z.string().min(1).optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
+  WHATSAPP_TEMPLATE_NAME: z.string().min(1).optional(),
+  WHATSAPP_TEMPLATE_LANG: z.string().min(1).default('fr'),
 
   /**
    * Where scans run. On Cloudflare the web host can't run Playwright, so the

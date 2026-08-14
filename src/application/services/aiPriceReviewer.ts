@@ -31,18 +31,21 @@ const JSON_SCHEMA: JsonObjectSchema = {
   required: ['verdict', 'suggestedMinMAD', 'suggestedMaxMAD', 'note'],
 };
 
-const SYSTEM = [
-  'You review calibrated fair-price ranges for used motorcycles in the Moroccan market (MAD).',
-  'Given a model and OUR fair range, judge whether it is plausible for the Moroccan used market',
-  '(imports, taxes and local demand make prices differ from Europe).',
-  "Return 'plausible' if reasonable, 'too-low' or 'too-high' if our range is clearly off, or 'unsure' if you can't tell.",
-  'When off, suggest a corrected min/max in MAD; otherwise use null. Keep the note to one short sentence.',
-].join(' ');
+function systemPrompt(kind: 'motorcycle' | 'car'): string {
+  const noun = kind === 'car' ? 'used cars' : 'used motorcycles';
+  return [
+    `You review calibrated fair-price ranges for ${noun} in the Moroccan market (MAD).`,
+    'Given a model and OUR fair range, judge whether it is plausible for the Moroccan used market',
+    '(imports, taxes and local demand make prices differ from Europe).',
+    "Return 'plausible' if reasonable, 'too-low' or 'too-high' if our range is clearly off, or 'unsure' if you can't tell.",
+    'When off, suggest a corrected min/max in MAD; otherwise use null. Keep the note to one short sentence.',
+  ].join(' ');
+}
 
 /** Asks Claude whether one model's calibrated fair range looks plausible. */
 export async function reviewRange(ai: AiExtractor, model: ModelCriteria): Promise<RangeReview> {
   const raw = await ai.extract({
-    system: SYSTEM,
+    system: systemPrompt(model.vehicleType),
     user: `Model: ${model.brand} ${model.model}\nOur fair range: ${model.priceRangeMAD.min}–${model.priceRangeMAD.max} MAD`,
     toolName: 'report_range_review',
     toolDescription: 'Report whether our fair range for this model is plausible.',

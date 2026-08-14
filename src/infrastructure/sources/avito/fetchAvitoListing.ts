@@ -1,4 +1,8 @@
-import type { Listing } from '../../../domain/entities/Listing.js';
+import type { Listing, MarketplaceId } from '../../../domain/entities/Listing.js';
+import { vehicleTypeForMarketplace } from '../../../domain/entities/Listing.js';
+import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
+import { parseFuelType, parseGearbox } from '../../../domain/entities/VehicleType.js';
+import { uniqueListingImages } from '../../../domain/listingImages.js';
 import { parseNumber, parseYear } from '../shared/textParsing.js';
 import { parseListingUrl } from '../../../application/services/parseListingUrl.js';
 import { normalizeListingImageUrl } from './parseAvitoSearchCards.js';
@@ -72,6 +76,7 @@ export function listingFromAvitoAd(
   ad: AvitoAd,
   pageUrl: string,
   scrapedAt: Date = new Date(),
+  sourceId: MarketplaceId = 'avito',
 ): Listing {
   const parsed = parseListingUrl(pageUrl);
   const externalId = String(ad.listId ?? parsed?.externalId ?? '');
@@ -90,6 +95,8 @@ export function listingFromAvitoAd(
   const yearRaw = findParam(ad.params, ['regdate']);
   const mileageRaw = findParam(ad.params, ['mileage_exact', 'mileage']);
   const ccRaw = findParam(ad.params, ['cylinder_size']);
+  const fuelRaw = findParam(ad.params, ['fuel', 'carburant', 'fuel_type']);
+  const gearboxRaw = findParam(ad.params, ['gearbox', 'transmission', 'boite', 'gearbox_type']);
 
   const year =
     typeof yearRaw === 'number' ? yearRaw : parseYear(paramText(yearRaw));
@@ -97,9 +104,10 @@ export function listingFromAvitoAd(
     typeof mileageRaw === 'number' ? mileageRaw : parseNumber(paramText(mileageRaw));
   const displacementCc =
     typeof ccRaw === 'number' ? ccRaw : parseNumber(paramText(ccRaw));
+  const images = extractAdImages(ad);
 
   return {
-    sourceId: 'avito' as const,
+    sourceId,
     externalId,
     url: pageUrl,
     title: (ad.subject ?? '').trim() || `Avito #${externalId}`,
@@ -111,8 +119,16 @@ export function listingFromAvitoAd(
       displacementCc != null && displacementCc >= 25 && displacementCc <= 3500
         ? displacementCc
         : undefined,
+    vehicleType: vehicleTypeForMarketplace(sourceId),
+    fuelType: parseFuelType(paramText(fuelRaw)),
+    gearbox: parseGearbox(paramText(gearboxRaw)),
+    ...parseListingCondition(
+      (ad.subject ?? '').trim() || `Avito #${externalId}`,
+      ad.description?.trim() || undefined,
+    ),
     city: ad.location?.city?.name?.trim() || 'Maroc',
-    imageUrl: extractAdImage(ad),
+    imageUrl: images[0],
+    ...(images.length > 0 ? { imageUrls: images } : {}),
     postedAt: undefined,
     scrapedAt,
   };
@@ -127,7 +143,7 @@ function imageCandidateUrl(value: unknown): string | undefined {
   return undefined;
 }
 
-function extractAdImage(ad: AvitoAd): string | undefined {
+function extractAdImages(ad: AvitoAd): string[] {
   const classifieds: string[] = [];
   const other: string[] = [];
   const push = (url: string | undefined): void => {
@@ -138,32 +154,39 @@ function extractAdImage(ad: AvitoAd): string | undefined {
   push(imageCandidateUrl(ad.defaultImage));
   push(imageCandidateUrl(ad.imageUrl));
   for (const collection of [ad.images, ad.photos]) {
-    for (const item of collection ?? []) push(imageCandidateUrl(item));
+    for (const item of collection ?? []) {
+      push(imageCandidateUrl(item));
+      if (item && typeof item === 'object') {
+        const rec = item as Record<string, unknown>;
+        push(imageCandidateUrl(rec['full']));
+        push(imageCandidateUrl(rec['large']));
+        push(imageCandidateUrl(rec['src']));
+      }
+    }
   }
-  push(findAvitoCdnUrl(ad));
-  return classifieds[0] ?? other[0];
+  if (classifieds.length === 0) {
+    for (const url of collectAvitoCdnUrls(ad)) push(url);
+  }
+  return uniqueListingImages(classifieds, other);
 }
 
-function findAvitoCdnUrl(node: unknown, depth = 0): string | undefined {
-  if (depth > 6 || node == null) return undefined;
+function collectAvitoCdnUrls(node: unknown, depth = 0, into: string[] = []): string[] {
+  if (depth > 6 || node == null || into.length >= 40) return into;
   if (typeof node === 'string') {
     const url = normalizeListingImageUrl(node);
-    return url && /content\.avito\.ma/i.test(url) ? url : undefined;
+    if (url && /classifieds\/images/i.test(url)) into.push(url);
+    return into;
   }
   if (Array.isArray(node)) {
-    for (const item of node) {
-      const url = findAvitoCdnUrl(item, depth + 1);
-      if (url) return url;
-    }
-    return undefined;
+    for (const item of node) collectAvitoCdnUrls(item, depth + 1, into);
+    return into;
   }
   if (typeof node === 'object') {
     for (const value of Object.values(node as Record<string, unknown>)) {
-      const url = findAvitoCdnUrl(value, depth + 1);
-      if (url) return url;
+      collectAvitoCdnUrls(value, depth + 1, into);
     }
   }
-  return undefined;
+  return into;
 }
 
 /** Pulls the ad object from Avito's Next.js page props. */
@@ -196,7 +219,8 @@ export function listingFromAvitoHtml(
     throw new AvitoListingFetchError('Avito page had no listing data (__NEXT_DATA__).');
   }
   const ad = adFromNextData(JSON.parse(match[1]));
-  return listingFromAvitoAd(ad, pageUrl, scrapedAt);
+  const parsed = parseListingUrl(pageUrl);
+  return listingFromAvitoAd(ad, pageUrl, scrapedAt, parsed?.sourceId ?? 'avito');
 }
 
 /**
@@ -206,8 +230,8 @@ export function listingFromAvitoHtml(
  */
 export async function fetchAvitoListing(url: string): Promise<Listing> {
   const parsed = parseListingUrl(url);
-  if (!parsed || parsed.sourceId !== 'avito') {
-    throw new AvitoListingFetchError('URL must be an Avito.ma motorcycle listing link.');
+  if (!parsed || (parsed.sourceId !== 'avito' && parsed.sourceId !== 'avito-cars')) {
+    throw new AvitoListingFetchError('URL must be an Avito.ma listing link.');
   }
 
   try {

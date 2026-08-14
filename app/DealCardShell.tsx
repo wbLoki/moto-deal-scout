@@ -1,11 +1,14 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { type ReactNode } from 'react';
+import Link from 'next/link';
 import { CalendarIcon, ExternalLinkIcon } from './icons.js';
 import { ListingImage } from './ListingImage.js';
 import { useT } from './i18n/I18nProvider.js';
 import type { Locale } from './i18n/locales.js';
+import type { FuelType, GearboxType, VehicleType } from '../src/domain/entities/VehicleType.js';
 import type { DealTierLevel } from '../src/domain/services/dealTier.js';
+import { listingPageButtonSuffix } from '../src/infrastructure/notifications/listingPagePath.js';
 
 const madFmt = new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 });
 const dateFmt = new Intl.DateTimeFormat('fr-MA', {
@@ -30,8 +33,11 @@ export interface DealCardData {
   readonly mileageKm: number | null;
   readonly city: string;
   readonly sourceId: string;
+  readonly externalId: string;
   readonly url: string;
   readonly imageUrl: string | null;
+  /** Gallery photos; cards use `imageUrl`. Empty when the ad has no photo. */
+  readonly imageUrls: readonly string[];
   readonly tierLabel: string;
   readonly tierLevel: string;
   /** Deal score 0-100 (for the "best deal" sort; not shown on public cards). */
@@ -40,6 +46,14 @@ export interface DealCardData {
   readonly createdAt: string;
   /** ISO marketplace publish date, or null when the source didn't provide one. */
   readonly postedAt: string | null;
+  readonly vehicleType: VehicleType;
+  readonly modelId: string;
+  readonly fuelType: FuelType | null;
+  readonly gearbox: GearboxType | null;
+  readonly firstOwner: boolean | null;
+  readonly ww: boolean | null;
+  readonly accidented: boolean | null;
+  readonly customsCleared: boolean | null;
 }
 
 function isTierLevel(level: string): level is DealTierLevel {
@@ -55,9 +69,8 @@ function isTierLevel(level: string): level is DealTierLevel {
 
 /**
  * Presentational deal card used by both the anonymous public feed and the
- * logged-in dashboard, so the two look identical. Interactive/affordance
- * differences are injected via `topRight` (watch/save controls, or a
- * "sign in" prompt); member-only extras (`scoreTitle`, `matchPct`) are optional.
+ * logged-in dashboard. Click the card body (not marketplace link / bookmark)
+ * to open the listing page.
  */
 export function DealCardShell({
   data,
@@ -75,8 +88,12 @@ export function DealCardShell({
   const t = useT(locale);
   const postedLabel = formatPostDate(data.postedAt ?? data.createdAt, t);
   const tierLabel = isTierLevel(data.tierLevel) ? t.tiers[data.tierLevel] : data.tierLabel;
+  const title = `${data.brand} ${data.model}`;
+  const href = `/l/${listingPageButtonSuffix(data.sourceId, data.externalId)}`;
+
   return (
     <article className="card">
+      <Link className="card-hit" href={href} aria-label={title} />
       {topRight}
       <span
         className={`tag tag-${data.tierLevel} card-tag`}
@@ -89,7 +106,7 @@ export function DealCardShell({
           <ListingImage
             className="card-media"
             src={data.imageUrl}
-            alt={`${data.brand} ${data.model}`}
+            alt={title}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1100px) 50vw, 33vw"
           />
@@ -99,9 +116,7 @@ export function DealCardShell({
       )}
       <div className="card-body">
         <div className="card-top">
-          <h3 className="card-title">
-            {data.brand} {data.model}
-          </h3>
+          <h3 className="card-title">{title}</h3>
         </div>
         <div className="price">{madFmt.format(data.priceMAD)} MAD</div>
         <div className="meta">
