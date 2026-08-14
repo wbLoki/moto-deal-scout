@@ -4,7 +4,15 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2024-12-30",
   // Required by OpenNext so Node built-ins (buffer, crypto, etc.) work on Workers.
-  "compatibility_flags": ["nodejs_compat"],
+  // global_fetch_strictly_public: same-zone fetch() (www / apex / preview) must
+  // go out over the public internet instead of Error 1042.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // OpenNext calls the Worker from itself for middleware/cache. Without this
+  // binding it falls back to fetch(https://www.motosnipe.com/...), which is
+  // what produces the empty `globalThis.fetch` + startActiveSpan error log.
+  "services": [
+    { "binding": "WORKER_SELF_REFERENCE", "service": "motosnipe" }
+  ],
   // Cloudflare Browser Rendering — compare Avito links (Quick Action /content).
   // Free plan: ~10 browser-minutes/day shared with the GHA REST crawl.
   "browser": {
@@ -43,6 +51,9 @@
       "browser": {
         "binding": "BROWSER"
       },
+      "services": [
+        { "binding": "WORKER_SELF_REFERENCE", "service": "motosnipe-preview" }
+      ],
       "routes": [
         { "pattern": "preview.motosnipe.com", "custom_domain": true }
       ],
