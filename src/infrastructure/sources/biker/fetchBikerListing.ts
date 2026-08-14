@@ -1,4 +1,5 @@
 import type { Listing } from '../../../domain/entities/Listing.js';
+import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
 import { parseListingUrl } from '../../../application/services/parseListingUrl.js';
 import { parseNumber, slugifyWithHyphens } from '../shared/textParsing.js';
 
@@ -87,6 +88,7 @@ export function listingFromBikerDetail(
       vehicleType: 'motorcycle',
       fuelType: undefined,
       gearbox: undefined,
+      ...parseListingCondition(title, data.description?.trim() || undefined),
       city: (data.ville ?? '').trim() || 'Maroc',
       imageUrl: undefined,
       postedAt: posted && !Number.isNaN(posted.getTime()) ? posted : undefined,

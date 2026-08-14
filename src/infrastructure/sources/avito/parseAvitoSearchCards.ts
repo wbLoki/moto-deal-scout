@@ -1,5 +1,6 @@
 import { parseHTML } from 'linkedom';
 import type { Listing, MarketplaceId } from '../../../domain/entities/Listing.js';
+import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
 import type { FuelType, GearboxType, VehicleType } from '../../../domain/entities/VehicleType.js';
 import { parseFuelType, parseGearbox } from '../../../domain/entities/VehicleType.js';
 import {
@@ -119,6 +120,7 @@ export function rawCardToListing(
     vehicleType: context.vehicleType,
     fuelType,
     gearbox,
+    ...parseListingCondition(raw.title, undefined),
     city: raw.city || 'Maroc',
     imageUrl: preferListingPhoto(normalizeListingImageUrl(raw.image), nextImages.get(externalId)),
     postedAt: parseRelativeFrenchDate(raw.relativeDate),

@@ -39,7 +39,7 @@ async function CarsBody() {
   const locale = await getLocale();
   const t = dictionaryFor(locale);
 
-  const { criteria, facets, tabCounts, initialTab, initialSort, watchedModelIds, searchRange } =
+  const { criteria, facets, tabCounts, initialTab, initialSort, savedSearchCount, searchRange } =
     data;
 
   return (
@@ -53,8 +53,9 @@ async function CarsBody() {
         initialSort={initialSort}
         tabCounts={tabCounts}
         facets={facets}
-        watchedModelIds={watchedModelIds}
+        savedSearchCount={savedSearchCount}
         savedKeys={data.savedKeys}
+        searchRange={searchRange}
         locale={locale}
         vehicleType="car"
         sidebar={

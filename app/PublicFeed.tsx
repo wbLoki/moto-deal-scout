@@ -10,7 +10,7 @@ import { SignInModal } from './SignInModal.js';
 import { PAGE_SIZE, type SortKey } from './dealSort.js';
 import { MIN_YEAR, ratingFilterOptions, yearOptions, type FilterOption } from './dealFilters.js';
 import { MultiSelect } from './MultiSelect.js';
-import { BookmarkIcon, EyeIcon } from './icons.js';
+import { BookmarkIcon } from './icons.js';
 import { fetchPublicDealsPageAction } from './deal-actions.js';
 import type { DealView } from './dealView.js';
 import type { PublicDealsInput } from '../src/readModel.js';
@@ -53,15 +53,6 @@ function PublicCardActions({
   const t = useT(locale);
   return (
     <div className="card-actions">
-      <button
-        type="button"
-        className="watch-eye"
-        title={t.card.follow}
-        aria-label={t.card.follow}
-        onClick={() => onNeedSignIn('follow')}
-      >
-        <EyeIcon size={18} />
-      </button>
       <button
         type="button"
         className="watch-eye"

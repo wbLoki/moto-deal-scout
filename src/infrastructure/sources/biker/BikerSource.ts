@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { Listing } from '../../../domain/entities/Listing.js';
+import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
 import type {
   MarketplaceSource,
   SourceQuery,
@@ -185,6 +186,7 @@ export class BikerSource implements MarketplaceSource {
       vehicleType: 'motorcycle',
       fuelType: undefined,
       gearbox: undefined,
+      ...parseListingCondition(title, row.description?.trim() || undefined),
       city: (row.ville ?? '').trim() || 'Maroc',
       imageUrl: photo ? `${PHOTO_BASE}${photo}` : undefined,
       postedAt: posted && !Number.isNaN(posted.getTime()) ? posted : undefined,

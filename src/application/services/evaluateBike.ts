@@ -1,4 +1,5 @@
 import type { Listing } from '../../domain/entities/Listing.js';
+import { EMPTY_CONDITION } from '../../domain/entities/ListingCondition.js';
 import type { GlobalCriteria, ModelCriteria } from '../../domain/entities/SearchCriteria.js';
 import { isCalibrated } from '../../domain/services/calibrationState.js';
 import { dealTierFor } from '../../domain/services/dealTier.js';
@@ -77,6 +78,7 @@ function toListing(input: BikeInput, priceMAD: number): Listing {
     vehicleType: input.vehicleType ?? 'motorcycle',
     fuelType: undefined,
     gearbox: undefined,
+    ...EMPTY_CONDITION,
     city: input.city ?? '',
     imageUrl: undefined,
     postedAt: undefined,

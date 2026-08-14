@@ -15,6 +15,7 @@ export default tseslint.config(
       '.open-next/**',
       '.wrangler/**',
       'cloudflare-env.d.ts',
+      'worker-configuration.d.ts',
       'next-env.d.ts',
       'next.config.mjs',
       'eslint.config.mjs',

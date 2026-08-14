@@ -8,6 +8,8 @@ export interface User {
   readonly passwordHash: string | undefined;
   readonly role: UserRole;
   readonly createdAt: Date;
+  readonly phone: string | undefined;
+  readonly whatsappOptIn: boolean;
 }
 
 /** Fields needed to create an account; the id and timestamps are assigned by the store. */

@@ -3,7 +3,7 @@ import { auth } from '../../auth.js';
 import { getProfilePageData } from '../../src/watchlist.js';
 import { AccountSettings } from '../AccountSettings.js';
 import { PageShell } from '../PageShell.js';
-import { WatchedModelsForm } from '../WatchedModelsForm.js';
+import { SavedSearchesForm } from '../SavedSearchesForm.js';
 import { dictionaryFor, getLocale } from '../i18n/getLocale.js';
 
 export const runtime = 'nodejs';
@@ -22,9 +22,15 @@ async function ProfileBody() {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
 
-  const { account, models, profile } = await getProfilePageData(session.user.id);
+  const { account, models, searches } = await getProfilePageData(session.user.id);
   const locale = await getLocale();
   const t = dictionaryFor(locale);
+  const motoBrands = [
+    ...new Set(models.filter((m) => m.vehicleType === 'motorcycle').map((m) => m.brand)),
+  ].sort();
+  const carBrands = [
+    ...new Set(models.filter((m) => m.vehicleType === 'car').map((m) => m.brand)),
+  ].sort();
 
   return (
     <>
@@ -39,39 +45,31 @@ async function ProfileBody() {
             email={account.email}
             name={account.name ?? ''}
             hasPassword={account.hasPassword}
+            phone={account.phone ?? ''}
+            whatsappOptIn={account.whatsappOptIn}
           />
         )}
       </section>
 
       <section className="admin-section">
         <h2 className="settings-title">{t.nav.motos}</h2>
-        <p className="settings-hint">{t.profile.watchedHint}</p>
-        <WatchedModelsForm
-          models={models
-            .filter((m) => m.vehicleType === 'motorcycle')
-            .map((m) => ({ id: m.id, brand: m.brand, model: m.model }))}
-          watchedIds={profile.watchedModelIds.filter((id) =>
-            models.some((m) => m.id === id && m.vehicleType === 'motorcycle'),
-          )}
-          mode="profile"
+        <p className="settings-hint">{t.profile.savedSearchesHint}</p>
+        <SavedSearchesForm
           locale={locale}
           vehicleType="motorcycle"
+          searches={searches}
+          brands={motoBrands}
         />
       </section>
 
       <section className="admin-section">
         <h2 className="settings-title">{t.nav.cars}</h2>
-        <p className="settings-hint">{t.profile.watchedHint}</p>
-        <WatchedModelsForm
-          models={models
-            .filter((m) => m.vehicleType === 'car')
-            .map((m) => ({ id: m.id, brand: m.brand, model: m.model }))}
-          watchedIds={profile.watchedModelIds.filter((id) =>
-            models.some((m) => m.id === id && m.vehicleType === 'car'),
-          )}
-          mode="profile"
+        <p className="settings-hint">{t.profile.savedSearchesHint}</p>
+        <SavedSearchesForm
           locale={locale}
           vehicleType="car"
+          searches={searches}
+          brands={carBrands}
         />
       </section>
     </>

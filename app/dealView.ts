@@ -48,6 +48,7 @@ export function toDealView(scored: ScoredListing): DealView {
     mileageKm: listing.mileageKm ?? null,
     city: listing.city,
     sourceId: listing.sourceId,
+    externalId: listing.externalId,
     url: listing.url,
     imageUrl: displayableListingImage(listing.imageUrl),
     matchConfidence: match.confidence,
@@ -56,5 +57,12 @@ export function toDealView(scored: ScoredListing): DealView {
     postedAt: toIso(listing.postedAt),
     tierLabel: tier.label,
     tierLevel: tier.level,
+    vehicleType: listing.vehicleType,
+    fuelType: listing.fuelType ?? null,
+    gearbox: listing.gearbox ?? null,
+    firstOwner: listing.firstOwner ?? null,
+    ww: listing.ww ?? null,
+    accidented: listing.accidented ?? null,
+    customsCleared: listing.customsCleared ?? null,
   };
 }

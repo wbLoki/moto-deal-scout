@@ -5,6 +5,7 @@ import {
   changeEmailAction,
   changePasswordAction,
   updateNameAction,
+  updateWhatsAppAction,
   type AccountState,
 } from './account-actions.js';
 import { useT } from './i18n/I18nProvider.js';
@@ -20,8 +21,10 @@ function Status({ state, locale }: { state: AccountState; locale: Locale }) {
       ? t.account.nameUpdated
       : state.code === 'email_updated'
         ? t.account.emailUpdated
-        : state.code === 'password_changed'
-          ? t.account.passwordChanged
+      : state.code === 'password_changed'
+        ? t.account.passwordChanged
+        : state.code === 'whatsapp_updated'
+          ? t.profile.whatsappUpdated
           : t.errors[state.code];
   return <p className={state.ok ? 'settings-status ok' : 'settings-status err'}>{text}</p>;
 }
@@ -31,16 +34,21 @@ export function AccountSettings({
   email,
   name,
   hasPassword,
+  phone,
+  whatsappOptIn,
 }: {
   locale: Locale;
   email: string;
   name: string;
   hasPassword: boolean;
+  phone: string;
+  whatsappOptIn: boolean;
 }) {
   const t = useT(locale);
   const [nameState, nameAction, namePending] = useActionState(updateNameAction, initial);
   const [emailState, emailAction, emailPending] = useActionState(changeEmailAction, initial);
   const [pwState, pwAction, pwPending] = useActionState(changePasswordAction, initial);
+  const [waState, waAction, waPending] = useActionState(updateWhatsAppAction, initial);
 
   return (
     <div className="account">
@@ -119,6 +127,23 @@ export function AccountSettings({
       ) : (
         <p className="settings-hint account-form">{t.account.oauthHint(email)}</p>
       )}
+
+      <form action={waAction} className="auth-form account-form">
+        <h3 className="account-form-title">{t.profile.whatsapp}</h3>
+        <p className="settings-hint">{t.profile.whatsappHint}</p>
+        <label className="auth-field">
+          <span>{t.profile.phone}</span>
+          <input type="tel" name="phone" defaultValue={phone} placeholder="+2126…" />
+        </label>
+        <label className="auth-field" style={{ flexDirection: 'row', gap: '0.5rem' }}>
+          <input type="checkbox" name="whatsappOptIn" defaultChecked={whatsappOptIn} />
+          <span>{t.profile.whatsappOptIn}</span>
+        </label>
+        <Status state={waState} locale={locale} />
+        <button className="btn btn-primary" type="submit" disabled={waPending}>
+          {waPending ? t.range.saving : t.profile.saveWhatsApp}
+        </button>
+      </form>
     </div>
   );
 }

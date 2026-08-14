@@ -23,4 +23,5 @@ export interface StoredNotification extends NewNotification {
   readonly createdAt: string;
   readonly readAt: string | null;
   readonly emailedAt: string | null;
+  readonly whatsappedAt: string | null;
 }

@@ -1,5 +1,6 @@
 import type { Listing, MarketplaceId } from '../../../domain/entities/Listing.js';
 import { vehicleTypeForMarketplace } from '../../../domain/entities/Listing.js';
+import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
 import { parseFuelType, parseGearbox } from '../../../domain/entities/VehicleType.js';
 import { parseNumber, parseYear } from '../shared/textParsing.js';
 import { parseListingUrl } from '../../../application/services/parseListingUrl.js';
@@ -119,6 +120,10 @@ export function listingFromAvitoAd(
     vehicleType: vehicleTypeForMarketplace(sourceId),
     fuelType: parseFuelType(paramText(fuelRaw)),
     gearbox: parseGearbox(paramText(gearboxRaw)),
+    ...parseListingCondition(
+      (ad.subject ?? '').trim() || `Avito #${externalId}`,
+      ad.description?.trim() || undefined,
+    ),
     city: ad.location?.city?.name?.trim() || 'Maroc',
     imageUrl: extractAdImage(ad),
     postedAt: undefined,

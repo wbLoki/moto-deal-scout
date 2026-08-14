@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import Link from 'next/link';
-import { setWatchedModelAction } from './watchlist-actions.js';
-import { setSavedListingAction } from './saved-actions.js';
+import { createSavedSearchAction, setSavedListingAction } from './saved-actions.js';
 import { fetchDealsPageAction } from './deal-actions.js';
 import { BrowseSidebar } from './BrowseSidebar.js';
 import { DealCardShell } from './DealCardShell.js';
@@ -20,6 +19,7 @@ import type { DealFacets, DealTab, TabCounts } from '../src/domain/interfaces/Li
 import type { DealTierLevel } from '../src/domain/services/dealTier.js';
 import { useT } from './i18n/I18nProvider.js';
 import type { Locale } from './i18n/locales.js';
+import type { SearchRange } from '../src/domain/entities/SearchCriteria.js';
 import type { FuelType, GearboxType, VehicleType } from '../src/domain/entities/VehicleType.js';
 import { FUEL_TYPES, GEARBOX_TYPES } from '../src/domain/entities/VehicleType.js';
 
@@ -32,49 +32,6 @@ function titleCase(s: string): string {
     .split(/\s+/)
     .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
     .join(' ');
-}
-
-/** Eye toggle to follow/unfollow the card's model. */
-function WatchEye({
-  watching,
-  label,
-  onToggle,
-  locale,
-}: {
-  watching: boolean;
-  label: string;
-  onToggle: () => void;
-  locale: Locale;
-}) {
-  const t = useT(locale);
-  return (
-    <button
-      type="button"
-      className={watching ? 'watch-eye on' : 'watch-eye'}
-      aria-pressed={watching}
-      title={watching ? t.card.unwatch(label) : t.card.watch(label)}
-      onClick={onToggle}
-    >
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-        <path
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"
-        />
-        <circle
-          cx="12"
-          cy="12"
-          r="3"
-          fill={watching ? 'currentColor' : 'none'}
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-      </svg>
-    </button>
-  );
 }
 
 /** Bookmark toggle to save/unsave the individual listing. */
@@ -105,16 +62,12 @@ function SaveButton({
 
 function DealCard({
   deal,
-  watching,
   saved,
-  onToggleWatch,
   onToggleSave,
   locale,
 }: {
   deal: DealView;
-  watching: boolean;
   saved: boolean;
-  onToggleWatch: (modelId: string) => void;
   onToggleSave: (key: string) => void;
   locale: Locale;
 }) {
@@ -128,12 +81,6 @@ function DealCard({
       matchPct={Math.round(deal.matchConfidence * 100)}
       topRight={
         <div className="card-actions">
-          <WatchEye
-            watching={watching}
-            label={label}
-            locale={locale}
-            onToggle={() => onToggleWatch(deal.modelId)}
-          />
           <SaveButton
             saved={saved}
             label={label}
@@ -155,8 +102,9 @@ export function DealTabs({
   initialSort,
   tabCounts,
   facets,
-  watchedModelIds,
+  savedSearchCount,
   savedKeys,
+  searchRange,
   locale,
   sidebar,
   vehicleType = 'motorcycle',
@@ -167,8 +115,9 @@ export function DealTabs({
   initialSort: SortKey;
   tabCounts: TabCounts;
   facets: DealFacets;
-  watchedModelIds: readonly string[];
+  savedSearchCount: number;
   savedKeys: readonly string[];
+  searchRange: SearchRange;
   locale: Locale;
   /** Injected sidebar content (saved range + scan control) shown with the filters. */
   sidebar?: ReactNode;
@@ -180,10 +129,8 @@ export function DealTabs({
   const [total, setTotal] = useState(initialTotal);
   const [counts, setCounts] = useState<TabCounts>(tabCounts);
 
-  // Watched models and saved listings live in client state so toggles flip
-  // instantly (optimistic); a refetch then refreshes the counts and tabs.
-  const [watched, setWatched] = useState<ReadonlySet<string>>(() => new Set(watchedModelIds));
   const [savedSet, setSavedSet] = useState<ReadonlySet<string>>(() => new Set(savedKeys));
+  const [searchSaveNote, setSearchSaveNote] = useState<string | null>(null);
 
   const [active, setActive] = useState<DealTab>(initialTab);
   const [query, setQuery] = useState('');
@@ -318,16 +265,6 @@ export function DealTabs({
     isCar,
   ]);
 
-  const toggleWatch = (modelId: string) => {
-    const willWatch = !watched.has(modelId);
-    setWatched(withToggle(watched, modelId, willWatch));
-    startTransition(async () => {
-      const res = await setWatchedModelAction(modelId, willWatch);
-      if (!res.ok) setWatched((prev) => withToggle(prev, modelId, !willWatch));
-      else setRefreshKey((k) => k + 1);
-    });
-  };
-
   const toggleSave = (key: string) => {
     const willSave = !savedSet.has(key);
     setSavedSet(withToggle(savedSet, key, willSave));
@@ -349,7 +286,7 @@ export function DealTabs({
     if (id === 'daily') return t.empty.daily;
     if (id === 'saved') return isCar ? t.empty.savedCar : t.empty.saved;
     if (id === 'watched') {
-      return watched.size > 0 ? (
+      return savedSearchCount > 0 ? (
         t.empty.watchedNoListings
       ) : (
         <>
@@ -509,6 +446,41 @@ export function DealTabs({
           allLabel={t.filters.allCities}
         />
 
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            setSearchSaveNote(null);
+            startTransition(async () => {
+              const res = await createSavedSearchAction({
+                name:
+                  brandsSel.length === 1
+                    ? titleCase(brandsSel[0]!)
+                    : vehicleType === 'car'
+                      ? 'Cars'
+                      : 'Motos',
+                vehicleType,
+                budgetMin: searchRange.budgetMin,
+                budgetMax: searchRange.budgetMax,
+                yearMin: searchRange.yearMin,
+                yearMax: searchRange.yearMax,
+                mileageMax: kmMax >= kmCap ? 0 : kmMax,
+                brands: brandsSel,
+                cities,
+                fuelTypes: isCar ? fuelTypes : [],
+                gearboxes: isCar ? gearboxes : [],
+              });
+              if (res.ok) {
+                setSearchSaveNote(t.card.searchSaved);
+                setRefreshKey((k) => k + 1);
+              }
+            });
+          }}
+        >
+          {t.card.saveThisSearch}
+        </button>
+        {searchSaveNote && <p className="settings-status ok">{searchSaveNote}</p>}
+
         {rangeInvalid && <p className="settings-error">{t.filters.rangeInvalid}</p>}
       </BrowseSidebar>
 
@@ -537,9 +509,7 @@ export function DealTabs({
             <DealCard
               key={deal.key}
               deal={deal}
-              watching={watched.has(deal.modelId)}
               saved={savedSet.has(deal.key)}
-              onToggleWatch={toggleWatch}
               onToggleSave={toggleSave}
               locale={locale}
             />

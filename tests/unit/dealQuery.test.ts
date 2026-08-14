@@ -4,6 +4,7 @@ import type { StoredModel } from '../../src/domain/entities/Model.js';
 import type { ScoredListing } from '../../src/domain/entities/ScoredListing.js';
 import type { SearchRange } from '../../src/domain/entities/SearchCriteria.js';
 import type { DealQuery } from '../../src/domain/interfaces/ListingRepository.js';
+import type { SavedSearch } from '../../src/domain/entities/SavedSearch.js';
 import { openDatabase } from '../../src/infrastructure/persistence/libsql/Database.js';
 import { LibsqlListingRepository } from '../../src/infrastructure/persistence/libsql/LibsqlListingRepository.js';
 import { LibsqlModelRepository } from '../../src/infrastructure/persistence/libsql/LibsqlModelRepository.js';
@@ -69,6 +70,26 @@ function scored(over: {
   };
 }
 
+function makeSearch(over: Partial<SavedSearch> = {}): SavedSearch {
+  return {
+    id: 's1',
+    userId: 'u1',
+    name: 'Motos',
+    vehicleType: 'motorcycle',
+    budgetMin: 0,
+    budgetMax: 10_000_000,
+    yearMin: 1990,
+    yearMax: 2100,
+    mileageMax: 0,
+    brands: [],
+    cities: [],
+    fuelTypes: [],
+    gearboxes: [],
+    modelIds: [],
+    ...over,
+  };
+}
+
 function query(over: Partial<DealQuery> = {}): DealQuery {
   return {
     userId: 'u1',
@@ -76,7 +97,7 @@ function query(over: Partial<DealQuery> = {}): DealQuery {
     vehicleType: 'motorcycle',
     range: WIDE_RANGE,
     minPriceFactor: 0.5,
-    watchedModelIds: [],
+    savedSearches: [],
     search: '',
     mileageMin: 0,
     mileageMax: 0,
@@ -216,10 +237,14 @@ describe('LibsqlListingRepository.queryDeals', () => {
     expect(p2.deals.map((d) => d.listing.priceMAD)).toEqual([70000, 80000]);
   });
 
-  it('scopes the watched tab to the followed models, and short-circuits an empty set', async () => {
-    const watched = await repo.queryDeals(query({ tab: 'watched', watchedModelIds: ['honda-cb500f'] }));
+  it('scopes the watched tab to saved searches, and short-circuits an empty set', async () => {
+    const hondaOnly = makeSearch({ modelIds: ['honda-cb500f'] });
+    const watched = await repo.queryDeals(query({ tab: 'watched', savedSearches: [hondaOnly] }));
     expect(watched.deals.map((d) => d.listing.externalId)).toEqual(['honda']);
-    expect(await repo.queryDeals(query({ tab: 'watched', watchedModelIds: [] }))).toEqual({ deals: [], total: 0 });
+    expect(await repo.queryDeals(query({ tab: 'watched', savedSearches: [] }))).toEqual({
+      deals: [],
+      total: 0,
+    });
   });
 
   it('scopes the saved tab to the user bookmarks, ignoring the range', async () => {
@@ -250,7 +275,8 @@ describe('LibsqlListingRepository.countDealsByTab & getDealFacets', () => {
   afterEach(() => db.close());
 
   it('counts each tab, respecting the range but not search/filters', async () => {
-    const counts = await repo.countDealsByTab(query({ search: 'nomatch', watchedModelIds: ['honda-cb500f'] }));
+    const hondaOnly = makeSearch({ modelIds: ['honda-cb500f'] });
+    const counts = await repo.countDealsByTab(query({ search: 'nomatch', savedSearches: [hondaOnly] }));
     expect(counts.all).toBe(2);
     expect(counts.daily).toBe(2); // both created just now
     expect(counts.watched).toBe(1);

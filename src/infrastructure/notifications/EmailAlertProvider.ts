@@ -70,7 +70,7 @@ export class EmailAlertProvider {
         <table style="width:100%;border-collapse:collapse">${rows}</table>
         <p style="font-size:13px;color:#666;margin:20px 0 0">
           <a href="${notificationsUrl}" style="color:#2563eb">Voir toutes vos alertes</a>
-          · Gérez les modèles suivis dans votre profil.
+          · Gérez vos recherches dans votre profil.
         </p>
       </div>`;
   }
@@ -80,7 +80,7 @@ export class EmailAlertProvider {
     const sub =
       n.type === 'price_drop'
         ? `Baisse de prix${n.oldPriceMAD !== null ? ` depuis ${madFmt.format(n.oldPriceMAD)} MAD` : ''}`
-        : 'Nouvelle affaire pour un modèle que vous suivez';
+        : 'Nouvelle affaire correspondant à une recherche';
     return `
       <tr>
         <td style="padding:10px 0;border-bottom:1px solid #eee">

@@ -60,13 +60,13 @@ export const fr: Dictionary = {
     orContinueWith: 'ou continuer avec',
     welcome: 'Bienvenue',
     onboardingSubtitle:
-      'Choisissez les motos à suivre. Vous aurez un fil dédié, et vous pourrez les modifier à tout moment dans votre profil.',
+      'Créez votre première recherche (budget et année, marques facultatives). Vous recevrez un fil et des alertes, et pourrez en ajouter d’autres dans votre profil.',
   },
   home: {
     bannerBefore: 'Parcourez toutes les affaires gratuitement. ',
     bannerStrong: 'Créez un compte',
     bannerAfter:
-      ' pour suivre des modèles, enregistrer des motos et être alerté dès qu’une affaire correspond.',
+      ' pour enregistrer des recherches, mettre des annonces de côté et être alerté dès qu’une affaire correspond.',
     footer:
       'Données collectées sur Avito.ma et Biker.ma. Les prix peuvent contenir des fautes du vendeur — vérifiez toujours l’annonce avant d’agir.',
     trackedModels: (n: number) =>
@@ -124,13 +124,13 @@ export const fr: Dictionary = {
   },
   tabs: {
     daily: 'Affaires du jour',
-    watched: 'Modèles suivis',
+    watched: 'Vos recherches',
     saved: 'Enregistrées',
     all: 'Toutes les affaires',
   },
   tabsShort: {
     daily: 'Jour',
-    watched: 'Suivis',
+    watched: 'Recherches',
     saved: 'Enregistrées',
     all: 'Toutes',
   },
@@ -138,9 +138,8 @@ export const fr: Dictionary = {
     daily: 'Pas encore de nouvelles annonces aujourd’hui — le scan quotidien tourne chaque matin.',
     saved: 'Aucune moto enregistrée — touchez le signet d’une carte pour l’ajouter ici.',
     savedCar: 'Aucune voiture enregistrée — touchez le signet d’une carte pour l’ajouter ici.',
-    watchedNoListings: 'Aucune annonce pour vos modèles suivis dans cette fourchette.',
-    watchedLead:
-      'Vous ne suivez encore aucun modèle — touchez l’œil sur une carte, ou choisissez-en sur votre ',
+    watchedNoListings: 'Aucune annonce ne correspond à vos recherches enregistrées.',
+    watchedLead: 'Vous n’avez pas encore de recherche — créez-en une sur votre ',
     watchedTail: '.',
     all: 'Aucune annonce dans votre fourchette. Élargissez budget/année, ou attendez le prochain scan.',
     noSearch: (q: string) => `Aucune affaire ne correspond à « ${q} ».`,
@@ -162,21 +161,51 @@ export const fr: Dictionary = {
     unsave: (label: string) => `Retirer ${label}`,
     saveNamed: (label: string) => `Enregistrer ${label}`,
     score: (n: number) => `Score ${n}/100`,
+    firstOwner: 'Première main',
+    ww: 'WW',
+    customsCleared: 'Dédouanée',
+    accidented: 'Accidentée',
+    neverAccidented: 'Jamais accidentée',
+    marketLoading: 'Chargement des prix du marché…',
+    marketEmpty: 'Pas assez d’annonces pour ce modèle et cette année.',
+    marketTitle: (model: string, year: string | number) => `${model} ${year}`,
+    marketBand: (low: string, high: string, n: number) =>
+      `${low}–${high} MAD (${n} annonce${n === 1 ? '' : 's'})`,
+    marketSamples: (n: number) => `${n} annonce${n === 1 ? '' : 's'}`,
+    marketThisListing: (price: string, median: string) =>
+      `Cette annonce : ${price} MAD · médiane ${median} MAD`,
+    saveThisSearch: 'Enregistrer cette recherche',
+    searchSaved: 'Recherche enregistrée.',
   },
   range: {
     title: 'Votre fourchette',
-    hint: 'Le tableau de bord n’affiche que les affaires dans ce budget et cette plage d’années.',
+    hint: 'Utilisée par défaut quand vous enregistrez une recherche, et pour filtrer Tout / Jour.',
     save: 'Enregistrer',
     saving: 'Enregistrement…',
     saved: 'Fourchette enregistrée — vos affaires sont filtrées.',
   },
   profile: {
     title: 'Profil',
-    subtitle: 'Gérez votre compte et les modèles que vous suivez.',
+    subtitle: 'Gérez votre compte, vos recherches et les alertes WhatsApp.',
     loading: 'Chargement du profil…',
     account: 'Compte',
-    watchedModels: 'Modèles suivis',
-    watchedHint: 'L’onglet « Suivis » du tableau de bord montre les affaires pour ces modèles.',
+    savedSearches: 'Recherches enregistrées',
+    savedSearchesHint:
+      'L’onglet « Vos recherches » et les alertes utilisent ces filtres. Les signets restent séparés.',
+    whatsapp: 'Alertes WhatsApp',
+    whatsappHint:
+      'Optez pour recevoir les alertes sur WhatsApp. Le numéro doit être en E.164 (ex. +2126…). Un modèle Meta approuvé est requis.',
+    phone: 'Téléphone (E.164)',
+    whatsappOptIn: 'Envoyer les alertes sur WhatsApp',
+    saveWhatsApp: 'Enregistrer WhatsApp',
+    whatsappUpdated: 'Paramètres WhatsApp enregistrés.',
+    invalidPhone: 'Saisissez un numéro au format E.164, par exemple +212612345678.',
+    searchName: 'Nom',
+    newSearch: 'Nouvelle recherche',
+    createSearch: 'Enregistrer la recherche',
+    deleteSearch: 'Supprimer',
+    noSearches: 'Aucune recherche enregistrée.',
+    searchSummary: (budget: string, years: string) => `${budget} MAD · ${years}`,
   },
   account: {
     name: 'Nom',
@@ -198,13 +227,13 @@ export const fr: Dictionary = {
   },
   notifications: {
     title: 'Notifications',
-    subtitleLead: 'Alertes pour les modèles que vous suivez. Suivez-en d’autres dans votre ',
+    subtitleLead: 'Alertes pour les affaires qui correspondent à vos recherches. Gérez-les dans votre ',
     subtitleTail: '.',
     empty:
-      'Pas encore de notifications — suivez des modèles et nous vous alerterons dès qu’une affaire correspond.',
+      'Pas encore de notifications — enregistrez une recherche et nous vous alerterons dès qu’une affaire correspond.',
     priceDrop: 'Baisse de prix',
     priceDropFrom: (oldPrice: string) => `Baisse de prix depuis ${oldPrice} MAD`,
-    newDeal: 'Nouvelle affaire pour un modèle que vous suivez',
+    newDeal: 'Nouvelle affaire correspondant à une recherche',
     justNow: 'à l’instant',
     minutesAgo: (n: number) => `il y a ${n} min`,
     hoursAgo: (n: number) => `il y a ${n} h`,
@@ -293,7 +322,7 @@ export const fr: Dictionary = {
   signInModal: {
     follow: {
       title: 'Connectez-vous pour suivre des modèles',
-      body: 'Créez un compte gratuit pour suivre des modèles, et soyez alerté dès qu’une affaire correspond.',
+      body: 'Créez un compte gratuit pour enregistrer des recherches, et soyez alerté dès qu’une affaire correspond.',
     },
     save: {
       title: 'Connectez-vous pour enregistrer des motos',
@@ -346,6 +375,8 @@ export const fr: Dictionary = {
     read_listing_failed: 'Impossible de lire cette annonce. Réessayez.',
     request_failed: 'Impossible d’envoyer la demande.',
     watchlist_save_failed: 'Échec de l’enregistrement.',
+    invalid_phone: 'Saisissez un numéro au format E.164, par exemple +212612345678.',
+    whatsapp_update_failed: 'Impossible d’enregistrer les paramètres WhatsApp.',
     generic: 'Une erreur s’est produite. Réessayez.',
   },
 };

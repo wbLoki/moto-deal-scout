@@ -159,12 +159,37 @@ export async function changePassword(
 /** Loads a user's public profile fields for the settings UI. */
 export async function getAccount(
   userId: string,
-): Promise<{ email: string; name: string | undefined; hasPassword: boolean } | null> {
+): Promise<{
+  email: string;
+  name: string | undefined;
+  hasPassword: boolean;
+  phone: string | undefined;
+  whatsappOptIn: boolean;
+} | null> {
   const db = await openDatabaseFromEnv();
   try {
     const user = await new LibsqlUserRepository(db).findById(userId);
     if (!user) return null;
-    return { email: user.email, name: user.name, hasPassword: Boolean(user.passwordHash) };
+    return {
+      email: user.email,
+      name: user.name,
+      hasPassword: Boolean(user.passwordHash),
+      phone: user.phone,
+      whatsappOptIn: user.whatsappOptIn,
+    };
+  } finally {
+    db.close();
+  }
+}
+
+export async function updateWhatsAppPrefs(
+  userId: string,
+  phone: string | undefined,
+  optIn: boolean,
+): Promise<void> {
+  const db = await openDatabaseFromEnv();
+  try {
+    await new LibsqlUserRepository(db).setWhatsAppPrefs(userId, phone, optIn);
   } finally {
     db.close();
   }

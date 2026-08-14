@@ -3,6 +3,7 @@ import { ListingScorer } from './application/services/ListingScorer.js';
 import { loadEnv } from './config/env.js';
 import { loadCriteria } from './config/loadCriteria.js';
 import type { Listing } from './domain/entities/Listing.js';
+import { parseListingCondition } from './domain/entities/ListingCondition.js';
 import type { StoredModel } from './domain/entities/Model.js';
 import type { VehicleType } from './domain/entities/VehicleType.js';
 import { parseFuelType, parseGearbox, parseVehicleType } from './domain/entities/VehicleType.js';
@@ -265,6 +266,7 @@ export async function promoteReview(input: PromoteInput): Promise<void> {
       vehicleType: parseVehicleType(row.vehicle_type),
       fuelType: parseFuelType(row.fuel_type) ?? undefined,
       gearbox: parseGearbox(row.gearbox) ?? undefined,
+      ...parseListingCondition(row.title, undefined),
       city: row.city,
       imageUrl: row.image_url ?? undefined,
       postedAt: row.posted_at ? new Date(row.posted_at) : undefined,

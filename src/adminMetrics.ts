@@ -329,7 +329,7 @@ export async function listUsers(): Promise<AdminUser[]> {
     const result = await db.execute(
       `SELECT u.id, u.email, u.name, u.role, u.created_at,
               (u.password_hash IS NOT NULL) AS has_password,
-              (SELECT COUNT(*) FROM user_watched_models w WHERE w.user_id = u.id) AS watched_count,
+              (SELECT COUNT(*) FROM user_saved_searches s WHERE s.user_id = u.id) AS watched_count,
               (SELECT 1 FROM user_onboarding o WHERE o.user_id = u.id) AS onboarded,
               (SELECT 1 FROM user_search_ranges r WHERE r.user_id = u.id) AS has_range
          FROM users u

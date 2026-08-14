@@ -1,22 +1,30 @@
 import { loadCriteria } from './config/loadCriteria.js';
 import { loadEnv } from './config/env.js';
 import type { StoredModel } from './domain/entities/Model.js';
+import type { SavedSearch } from './domain/entities/SavedSearch.js';
 import type { VehicleType } from './domain/entities/VehicleType.js';
 import { openDatabaseFromEnv } from './infrastructure/persistence/libsql/Database.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
+import { LibsqlSavedSearchRepository } from './infrastructure/persistence/libsql/LibsqlSavedSearchRepository.js';
 import { LibsqlUserProfileRepository } from './infrastructure/persistence/libsql/LibsqlUserProfileRepository.js';
 import { LibsqlUserRepository } from './infrastructure/persistence/libsql/LibsqlUserRepository.js';
 import { seedModelsOnce } from './infrastructure/persistence/libsql/seedModelsOnce.js';
 
 export interface UserProfile {
   readonly onboarded: boolean;
-  readonly watchedModelIds: readonly string[];
 }
 
 export interface ProfilePageData {
-  readonly account: { email: string; name: string | undefined; hasPassword: boolean } | null;
+  readonly account: {
+    email: string;
+    name: string | undefined;
+    hasPassword: boolean;
+    phone: string | undefined;
+    whatsappOptIn: boolean;
+  } | null;
   readonly models: StoredModel[];
   readonly profile: UserProfile;
+  readonly searches: readonly SavedSearch[];
 }
 
 /** The enabled models a user can choose to follow (id/brand/model matter for the picker). */
@@ -34,20 +42,15 @@ export async function listTrackedModels(): Promise<StoredModel[]> {
 export async function getUserProfile(userId: string): Promise<UserProfile> {
   const db = await openDatabaseFromEnv();
   try {
-    const repo = new LibsqlUserProfileRepository(db);
-    const [onboarded, watchedModelIds] = await Promise.all([
-      repo.isOnboarded(userId),
-      repo.getWatchedModelIds(userId),
-    ]);
-    return { onboarded, watchedModelIds };
+    const onboarded = await new LibsqlUserProfileRepository(db).isOnboarded(userId);
+    return { onboarded };
   } finally {
     db.close();
   }
 }
 
 /**
- * Single DB open for the profile page (account + model picker + watchlist).
- * Avoids three separate open/close cycles on one navigation.
+ * Single DB open for the profile page (account + saved searches).
  */
 export async function getProfilePageData(userId: string): Promise<ProfilePageData> {
   const db = await openDatabaseFromEnv();
@@ -55,22 +58,30 @@ export async function getProfilePageData(userId: string): Promise<ProfilePageDat
     const users = new LibsqlUserRepository(db);
     const models = new LibsqlModelRepository(db);
     const profiles = new LibsqlUserProfileRepository(db);
+    const searches = new LibsqlSavedSearchRepository(db);
     const config = await loadCriteria(loadEnv().CRITERIA_CONFIG_PATH);
     await seedModelsOnce(db, config.models);
 
-    const [user, allModels, onboarded, watchedModelIds] = await Promise.all([
+    const [user, allModels, onboarded, saved] = await Promise.all([
       users.findById(userId),
       models.listAll(),
       profiles.isOnboarded(userId),
-      profiles.getWatchedModelIds(userId),
+      searches.listForUser(userId),
     ]);
 
     return {
       account: user
-        ? { email: user.email, name: user.name, hasPassword: Boolean(user.passwordHash) }
+        ? {
+            email: user.email,
+            name: user.name,
+            hasPassword: Boolean(user.passwordHash),
+            phone: user.phone,
+            whatsappOptIn: user.whatsappOptIn,
+          }
         : null,
       models: allModels.filter((m) => m.enabled),
-      profile: { onboarded, watchedModelIds },
+      profile: { onboarded },
+      searches: saved,
     };
   } finally {
     db.close();

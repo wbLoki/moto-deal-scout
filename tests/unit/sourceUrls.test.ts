@@ -27,7 +27,7 @@ describe('buildAvitoUrl', () => {
 describe('AvitoSource', () => {
   it('uses sourceId avito-cars for the car category', () => {
     const source = new AvitoSource(
-      { fetchRenderedHtml: async () => '' },
+      { fetchRenderedHtml: () => Promise.resolve('') },
       { throttleMs: 0, sourceId: 'avito-cars' },
       { error: () => undefined, warn: () => undefined, info: () => undefined, child: () => ({}) } as never,
     );

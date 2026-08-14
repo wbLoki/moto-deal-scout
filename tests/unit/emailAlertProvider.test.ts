@@ -19,6 +19,7 @@ function note(over: Partial<StoredNotification> = {}): StoredNotification {
     createdAt: '2026-08-05T07:00:00.000Z',
     readAt: null,
     emailedAt: null,
+    whatsappedAt: null,
     ...over,
   };
 }

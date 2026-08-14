@@ -94,6 +94,16 @@ const envSchema = z.object({
   APP_BASE_URL: z.string().url().default('https://motosnipe.com'),
 
   /**
+   * WhatsApp Cloud API. When any of token / phone-number id / template name
+   * is unset, WhatsApp delivery is skipped (in-app and email still work).
+   * The template must be a pre-approved utility template in Meta Business Manager.
+   */
+  WHATSAPP_TOKEN: z.string().min(1).optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().min(1).optional(),
+  WHATSAPP_TEMPLATE_NAME: z.string().min(1).optional(),
+  WHATSAPP_TEMPLATE_LANG: z.string().min(1).default('fr'),
+
+  /**
    * Where scans run. On Cloudflare the web host can't run Playwright, so the
    * admin "Scan now" button triggers a GitHub Actions workflow instead. Set
    * `GITHUB_REPO` ("owner/repo") and a `GITHUB_DISPATCH_TOKEN` (a PAT with the

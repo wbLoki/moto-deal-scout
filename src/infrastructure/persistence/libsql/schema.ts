@@ -184,6 +184,37 @@ export const MIGRATIONS: readonly string[] = [
      ON notifications (user_id, type, source_id, external_id)`,
   `CREATE INDEX IF NOT EXISTS idx_notifications_user_created
      ON notifications (user_id, created_at)`,
+  // Price observations for a listing (insert + each later drop) so the card
+  // can show this ad's own path once more than one scrape exists.
+  `CREATE TABLE IF NOT EXISTS listing_price_events (
+    source_id   TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    observed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    price_mad   REAL NOT NULL,
+    PRIMARY KEY (source_id, external_id, observed_at)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_listing_price_events_listing
+     ON listing_price_events (source_id, external_id, observed_at)`,
+  // Named filter snapshots that drive the "Your searches" tab and alerts.
+  `CREATE TABLE IF NOT EXISTS user_saved_searches (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name         TEXT NOT NULL,
+    vehicle_type TEXT NOT NULL,
+    budget_min   INTEGER NOT NULL,
+    budget_max   INTEGER NOT NULL,
+    year_min     INTEGER NOT NULL,
+    year_max     INTEGER NOT NULL,
+    mileage_max  INTEGER NOT NULL DEFAULT 0,
+    brands       TEXT NOT NULL DEFAULT '[]',
+    cities       TEXT NOT NULL DEFAULT '[]',
+    fuel_types   TEXT NOT NULL DEFAULT '[]',
+    gearboxes    TEXT NOT NULL DEFAULT '[]',
+    model_ids    TEXT NOT NULL DEFAULT '[]',
+    created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_user_saved_searches_user
+     ON user_saved_searches (user_id, vehicle_type)`,
   // Individual listings a user bookmarked. Keyed by the listing's (source,
   // external) id so it survives re-scrapes; price-drop alerts also target these.
   `CREATE TABLE IF NOT EXISTS user_saved_listings (
@@ -220,6 +251,13 @@ export const ADDITIVE_COLUMNS: ReadonlyArray<{
   { table: 'review_listings', column: 'vehicle_type', definition: "TEXT NOT NULL DEFAULT 'motorcycle'" },
   { table: 'review_listings', column: 'fuel_type', definition: 'TEXT' },
   { table: 'review_listings', column: 'gearbox', definition: 'TEXT' },
+  { table: 'listings', column: 'first_owner', definition: 'INTEGER' },
+  { table: 'listings', column: 'ww', definition: 'INTEGER' },
+  { table: 'listings', column: 'accidented', definition: 'INTEGER' },
+  { table: 'listings', column: 'customs_cleared', definition: 'INTEGER' },
+  { table: 'users', column: 'phone', definition: 'TEXT' },
+  { table: 'users', column: 'whatsapp_opt_in', definition: 'INTEGER NOT NULL DEFAULT 0' },
+  { table: 'notifications', column: 'whatsapped_at', definition: 'TEXT' },
 ];
 
 /**
@@ -262,7 +300,20 @@ const INSERT_COLUMNS = [
   'vehicle_type',
   'fuel_type',
   'gearbox',
+  'first_owner',
+  'ww',
+  'accidented',
+  'customs_cleared',
 ] as const;
+
+function boolFlag(value: boolean | undefined): number | null {
+  return value === undefined ? null : value ? 1 : 0;
+}
+
+function readBoolFlag(value: number | null | undefined): boolean | undefined {
+  if (value == null) return undefined;
+  return Number(value) === 1;
+}
 
 const UPDATE_ON_CONFLICT = INSERT_COLUMNS.filter((c) => c !== 'source_id' && c !== 'external_id')
   .map((c) => `${c} = excluded.${c}`)
@@ -307,6 +358,10 @@ export function toInsertArgs(scored: ScoredListing): SqlValue[] {
     listing.vehicleType,
     listing.fuelType ?? null,
     listing.gearbox ?? null,
+    boolFlag(listing.firstOwner),
+    boolFlag(listing.ww),
+    boolFlag(listing.accidented),
+    boolFlag(listing.customsCleared),
   ];
 }
 
@@ -338,6 +393,10 @@ export interface ListingRow {
   vehicle_type: string | null;
   fuel_type: string | null;
   gearbox: string | null;
+  first_owner: number | null;
+  ww: number | null;
+  accidented: number | null;
+  customs_cleared: number | null;
 }
 
 /**
@@ -373,6 +432,10 @@ export function mapRowToScoredListing(
     vehicleType: parseVehicleType(row.vehicle_type),
     fuelType: (row.fuel_type as FuelType | null) ?? undefined,
     gearbox: (row.gearbox as GearboxType | null) ?? undefined,
+    firstOwner: readBoolFlag(row.first_owner),
+    ww: readBoolFlag(row.ww),
+    accidented: readBoolFlag(row.accidented),
+    customsCleared: readBoolFlag(row.customs_cleared),
     city: row.city,
     imageUrl: row.image_url ?? undefined,
     postedAt: row.posted_at ? new Date(row.posted_at) : undefined,

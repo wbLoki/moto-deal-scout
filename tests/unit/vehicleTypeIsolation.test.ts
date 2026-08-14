@@ -1,11 +1,9 @@
 import type { Client } from '@libsql/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../../src/infrastructure/persistence/libsql/Database.js';
-import { LibsqlModelRepository } from '../../src/infrastructure/persistence/libsql/LibsqlModelRepository.js';
-import { LibsqlUserProfileRepository } from '../../src/infrastructure/persistence/libsql/LibsqlUserProfileRepository.js';
 import { LibsqlUserRepository } from '../../src/infrastructure/persistence/libsql/LibsqlUserRepository.js';
+import { LibsqlSavedSearchRepository } from '../../src/infrastructure/persistence/libsql/LibsqlSavedSearchRepository.js';
 import { LibsqlUserSearchRangeRepository } from '../../src/infrastructure/persistence/libsql/LibsqlUserSearchRangeRepository.js';
-import { makeModelCriteria } from '../fixtures/sampleData.js';
 
 describe('per-vehicle-type isolation', () => {
   let db: Client;
@@ -36,29 +34,26 @@ describe('per-vehicle-type isolation', () => {
     expect(await ranges.get(userId, 'car')).toMatchObject({ budgetMax: 600000, yearMin: 2010 });
   });
 
-  it('saving a car watchlist does not clear motorcycle watches', async () => {
-    const models = new LibsqlModelRepository(db);
-    await models.upsert({
-      ...makeModelCriteria({ id: 'yamaha-mt07', brand: 'Yamaha', model: 'MT-07', vehicleType: 'motorcycle' }),
-      enabled: true,
-      autoCalibrate: true,
+  it('a car saved search does not match motorcycle listings in the repository', async () => {
+    const searches = new LibsqlSavedSearchRepository(db);
+    await searches.insert({
+      id: 'car-s',
+      userId,
+      name: 'Cars',
+      vehicleType: 'car',
+      budgetMin: 0,
+      budgetMax: 600000,
+      yearMin: 2010,
+      yearMax: 2026,
+      mileageMax: 0,
+      brands: [],
+      cities: [],
+      fuelTypes: [],
+      gearboxes: [],
+      modelIds: [],
     });
-    await models.upsert({
-      ...makeModelCriteria({
-        id: 'dacia-duster',
-        brand: 'Dacia',
-        model: 'Duster',
-        vehicleType: 'car',
-      }),
-      enabled: true,
-      autoCalibrate: true,
-    });
-
-    const profile = new LibsqlUserProfileRepository(db);
-    await profile.setWatchedModelIdsForType(userId, 'motorcycle', ['yamaha-mt07']);
-    await profile.setWatchedModelIdsForType(userId, 'car', ['dacia-duster']);
-    await profile.setWatchedModelIdsForType(userId, 'car', []);
-
-    expect(await profile.getWatchedModelIds(userId)).toEqual(['yamaha-mt07']);
+    const listed = await searches.listForUser(userId, 'motorcycle');
+    expect(listed).toEqual([]);
+    expect(await searches.listForUser(userId, 'car')).toHaveLength(1);
   });
 });

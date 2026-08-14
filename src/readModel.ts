@@ -3,6 +3,7 @@ import { loadCriteria } from './config/loadCriteria.js';
 import { loadEnv } from './config/env.js';
 import { DEFAULT_SORT, PAGE_SIZE, type SortKey } from './domain/entities/DealSort.js';
 import type { StoredModel } from './domain/entities/Model.js';
+import type { MarketplaceId } from './domain/entities/Listing.js';
 import type { ScoredListing } from './domain/entities/ScoredListing.js';
 import type {
   ModelCriteria,
@@ -19,9 +20,11 @@ import { openDatabase, resolveDatabaseConfig } from './infrastructure/persistenc
 import { LibsqlListingRepository } from './infrastructure/persistence/libsql/LibsqlListingRepository.js';
 import { LibsqlModelRepository } from './infrastructure/persistence/libsql/LibsqlModelRepository.js';
 import { LibsqlSavedListingRepository } from './infrastructure/persistence/libsql/LibsqlSavedListingRepository.js';
+import { LibsqlSavedSearchRepository } from './infrastructure/persistence/libsql/LibsqlSavedSearchRepository.js';
 import { LibsqlUserProfileRepository } from './infrastructure/persistence/libsql/LibsqlUserProfileRepository.js';
 import { LibsqlUserSearchRangeRepository } from './infrastructure/persistence/libsql/LibsqlUserSearchRangeRepository.js';
 import type { FuelType, GearboxType, VehicleType } from './domain/entities/VehicleType.js';
+import type { SavedSearch } from './domain/entities/SavedSearch.js';
 import { seedModelsOnce } from './infrastructure/persistence/libsql/seedModelsOnce.js';
 import { defaultSearchRangeFor } from './settingsModel.js';
 
@@ -66,7 +69,7 @@ export interface DashboardData {
   readonly criteria: SearchCriteria;
   readonly onboarded: boolean;
   readonly searchRange: SearchRange;
-  readonly watchedModelIds: readonly string[];
+  readonly savedSearchCount: number;
   /** Keys ("source:external") of the user's bookmarks, for optimistic save state. */
   readonly savedKeys: readonly string[];
   /** Filter dropdown options, derived from the whole in-range set. */
@@ -128,7 +131,7 @@ function toDealQuery(
   ctx: {
     range: SearchRange;
     minPriceFactor: number;
-    watchedModelIds: readonly string[];
+    savedSearches: readonly SavedSearch[];
     vehicleType: VehicleType;
   },
   input: DealsPageInput,
@@ -139,7 +142,7 @@ function toDealQuery(
     vehicleType: ctx.vehicleType,
     range: ctx.range,
     minPriceFactor: ctx.minPriceFactor,
-    watchedModelIds: ctx.watchedModelIds,
+    savedSearches: ctx.savedSearches,
     search: input.search,
     mileageMin: input.mileageMin,
     mileageMax: input.mileageMax,
@@ -179,20 +182,19 @@ export async function getDashboardData(
     const profileRepo = new LibsqlUserProfileRepository(db);
     const rangeRepo = new LibsqlUserSearchRangeRepository(db);
     const savedRepo = new LibsqlSavedListingRepository(db);
-    const [onboarded, allWatched, storedRange, savedKeys] = await Promise.all([
+    const searchRepo = new LibsqlSavedSearchRepository(db);
+    const [onboarded, storedRange, savedKeys, savedSearches] = await Promise.all([
       profileRepo.isOnboarded(userId),
-      profileRepo.getWatchedModelIds(userId),
       rangeRepo.get(userId, vehicleType),
       savedRepo.listSavedKeys(userId),
+      searchRepo.listForUser(userId, vehicleType),
     ]);
-    const typeIds = new Set(allModels.filter((m) => m.vehicleType === vehicleType).map((m) => m.id));
-    const watchedModelIds = allWatched.filter((id) => typeIds.has(id));
     const searchRange = storedRange ?? defaultSearchRangeFor(vehicleType);
 
     const ctx = {
       range: searchRange,
       minPriceFactor: config.global.minPriceFactor,
-      watchedModelIds,
+      savedSearches,
       vehicleType,
     };
     const [facets, tabCounts] = await Promise.all([
@@ -209,7 +211,7 @@ export async function getDashboardData(
       criteria: { models: enabledModels, global: config.global },
       onboarded,
       searchRange,
-      watchedModelIds,
+      savedSearchCount: savedSearches.length,
       savedKeys,
       facets,
       tabCounts,
@@ -237,17 +239,14 @@ export async function getDealsPage(userId: string, input: DealsPageInput): Promi
     const allModels = await new LibsqlModelRepository(db).listAll();
     const listings = new LibsqlListingRepository(db, allModels);
 
-    const [storedRange, allWatched] = await Promise.all([
+    const [storedRange, savedSearches] = await Promise.all([
       new LibsqlUserSearchRangeRepository(db).get(userId, input.vehicleType),
-      new LibsqlUserProfileRepository(db).getWatchedModelIds(userId),
+      new LibsqlSavedSearchRepository(db).listForUser(userId, input.vehicleType),
     ]);
-    const typeIds = new Set(
-      allModels.filter((m) => m.vehicleType === input.vehicleType).map((m) => m.id),
-    );
     const ctx = {
       range: storedRange ?? defaultSearchRangeFor(input.vehicleType),
       minPriceFactor: config.global.minPriceFactor,
-      watchedModelIds: allWatched.filter((id) => typeIds.has(id)),
+      savedSearches,
       vehicleType: input.vehicleType,
     };
 
@@ -320,7 +319,7 @@ function toPublicDealQuery(input: PublicDealsInput, minPriceFactor: number): Dea
       yearMax: input.yearMax,
     },
     minPriceFactor,
-    watchedModelIds: [],
+    savedSearches: [],
     search: input.search,
     mileageMin: input.mileageMin,
     mileageMax: input.mileageMax,
@@ -403,6 +402,31 @@ export async function getPublicDealsPage(
     const allModels = await new LibsqlModelRepository(db).listAll();
     const listings = new LibsqlListingRepository(db, allModels);
     return await listings.queryDeals(toPublicDealQuery(input, config.global.minPriceFactor));
+  } finally {
+    db.close();
+  }
+}
+
+export async function getModelYearMarket(input: {
+  readonly modelId: string;
+  readonly year: number | null;
+  readonly vehicleType: VehicleType;
+  readonly sourceId: string;
+  readonly externalId: string;
+  readonly listingPrice: number;
+}) {
+  const env = loadEnv();
+  const db = await openDatabase(resolveDatabaseConfig(env));
+  try {
+    const allModels = await new LibsqlModelRepository(db).listAll();
+    return await new LibsqlListingRepository(db, allModels).getModelYearMarket({
+      modelId: input.modelId,
+      year: input.year,
+      vehicleType: input.vehicleType,
+      sourceId: input.sourceId as MarketplaceId,
+      externalId: input.externalId,
+      listingPrice: input.listingPrice,
+    });
   } finally {
     db.close();
   }

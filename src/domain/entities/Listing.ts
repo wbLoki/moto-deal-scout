@@ -42,6 +42,11 @@ export interface Listing {
   readonly fuelType: FuelType | undefined;
   /** Gearbox, when the source reports it (cars). */
   readonly gearbox: GearboxType | undefined;
+  /** Parsed from title/description; undefined = the ad didn't mention it. */
+  readonly firstOwner: boolean | undefined;
+  readonly ww: boolean | undefined;
+  readonly accidented: boolean | undefined;
+  readonly customsCleared: boolean | undefined;
   readonly city: string;
   readonly imageUrl: string | undefined;
   /** Publish date reported by the marketplace, when available. */

@@ -190,6 +190,24 @@ class InMemoryRepository implements ListingRepository {
     );
   }
 
+  getModelYearMarket(): Promise<{
+    samples: number;
+    p25: number | null;
+    median: number | null;
+    p75: number | null;
+    listingPrice: number;
+    events: readonly { observedAt: string; priceMAD: number }[];
+  }> {
+    return Promise.resolve({
+      samples: 0,
+      p25: null,
+      median: null,
+      p75: null,
+      listingPrice: 0,
+      events: [],
+    });
+  }
+
   close(): Promise<void> {
     return Promise.resolve();
   }

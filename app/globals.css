@@ -1029,6 +1029,52 @@ body.nav-open {
   background: rgba(255, 122, 26, 0.18);
 }
 
+.card {
+  cursor: pointer;
+}
+
+.card-details {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.card-details-row {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.card-details-row.muted {
+  color: var(--muted);
+}
+
+.card-sparkline {
+  color: var(--accent);
+  margin-top: 0.25rem;
+}
+
+.saved-search-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.saved-search-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) .watch-eye {
     background: rgba(255, 255, 255, 0.85);
@@ -1936,6 +1982,59 @@ body.nav-open {
   border-radius: var(--radius-lg);
   padding: 1.75rem;
   box-shadow: var(--shadow-lg);
+}
+
+.deal-modal {
+  max-width: 480px;
+  max-height: min(92vh, 880px);
+  overflow: auto;
+  padding: 0 1.5rem 1.5rem;
+}
+
+.deal-modal-media {
+  position: relative;
+  width: calc(100% + 3rem);
+  margin: 0 -1.5rem 1rem;
+  aspect-ratio: 4 / 3;
+  background: var(--panel-2);
+  overflow: hidden;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.deal-modal-media.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.deal-modal-img {
+  object-fit: cover;
+}
+
+.deal-modal .tag {
+  margin-bottom: 0.5rem;
+}
+
+.deal-modal .price {
+  margin: 0.15rem 0 0.4rem;
+}
+
+.deal-modal .card-details {
+  margin-top: 0.85rem;
+}
+
+.deal-modal .modal-actions {
+  margin-top: 1.1rem;
+}
+
+.deal-modal .modal-close {
+  z-index: 2;
+  background: rgba(10, 12, 15, 0.5);
+  color: #fff;
+  backdrop-filter: blur(6px);
+  border-radius: var(--pill);
 }
 
 .modal-close {

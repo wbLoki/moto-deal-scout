@@ -1,5 +1,6 @@
 import { parseHTML } from 'linkedom';
 import type { Listing } from '../../../domain/entities/Listing.js';
+import { parseListingCondition } from '../../../domain/entities/ListingCondition.js';
 import { parseFuelType, parseGearbox } from '../../../domain/entities/VehicleType.js';
 import { parseNumber, parseYear } from '../shared/textParsing.js';
 
@@ -68,6 +69,7 @@ function listingFromCard(card: Element, scrapedAt: Date): Listing | undefined {
     vehicleType: 'car',
     fuelType,
     gearbox,
+    ...parseListingCondition(title, description),
     city: city || 'Maroc',
     imageUrl: imgSrc ? absoluteUrl(imgSrc) : undefined,
     postedAt: posted,

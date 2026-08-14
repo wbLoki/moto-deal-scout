@@ -15,4 +15,6 @@ export interface NotificationRepository {
   /** Un-emailed notifications grouped by user, for building the digest. */
   listUnemailedGroupedByUser(): Promise<Map<string, StoredNotification[]>>;
   markEmailed(ids: readonly string[]): Promise<void>;
+  listUnwhatsappedGroupedByUser(): Promise<Map<string, StoredNotification[]>>;
+  markWhatsapped(ids: readonly string[]): Promise<void>;
 }

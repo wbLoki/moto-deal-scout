@@ -88,6 +88,7 @@ async function applyMigrations(client: Client): Promise<void> {
     await client.execute(statement);
   }
   await copyLegacySearchRanges(client);
+  await copyWatchlistsToSavedSearches(client);
 }
 
 /**
@@ -103,6 +104,82 @@ async function copyLegacySearchRanges(client: Client): Promise<void> {
      WHERE NOT EXISTS (
        SELECT 1 FROM user_vehicle_search_ranges r
         WHERE r.user_id = user_search_ranges.user_id AND r.vehicle_type = 'motorcycle'
+     )
+  `);
+}
+
+/**
+ * One saved search per (user, vehicle type) from the old range + watchlist.
+ * Users with a range but no watches get an open (any-model) search. Users with
+ * watches but no range get the default budget/year for that type. Idempotent.
+ */
+async function copyWatchlistsToSavedSearches(client: Client): Promise<void> {
+  await client.execute(`
+    INSERT INTO user_saved_searches
+      (id, user_id, name, vehicle_type, budget_min, budget_max, year_min, year_max,
+       mileage_max, brands, cities, fuel_types, gearboxes, model_ids)
+    SELECT
+      lower(hex(randomblob(16))),
+      r.user_id,
+      CASE r.vehicle_type WHEN 'car' THEN 'Cars' ELSE 'Motos' END,
+      r.vehicle_type,
+      r.budget_min,
+      r.budget_max,
+      r.year_min,
+      r.year_max,
+      0,
+      '[]',
+      '[]',
+      '[]',
+      '[]',
+      COALESCE((
+        SELECT json_group_array(w.model_id)
+          FROM user_watched_models w
+          JOIN models m ON m.id = w.model_id
+         WHERE w.user_id = r.user_id
+           AND COALESCE(m.vehicle_type, 'motorcycle') = r.vehicle_type
+      ), '[]')
+      FROM user_vehicle_search_ranges r
+     WHERE NOT EXISTS (
+       SELECT 1 FROM user_saved_searches s
+        WHERE s.user_id = r.user_id AND s.vehicle_type = r.vehicle_type
+     )
+  `);
+
+  await client.execute(`
+    INSERT INTO user_saved_searches
+      (id, user_id, name, vehicle_type, budget_min, budget_max, year_min, year_max,
+       mileage_max, brands, cities, fuel_types, gearboxes, model_ids)
+    SELECT
+      lower(hex(randomblob(16))),
+      x.user_id,
+      CASE x.vehicle_type WHEN 'car' THEN 'Cars' ELSE 'Motos' END,
+      x.vehicle_type,
+      0,
+      CASE x.vehicle_type WHEN 'car' THEN 600000 ELSE 200000 END,
+      CASE x.vehicle_type WHEN 'car' THEN 2010 ELSE 2015 END,
+      CAST(strftime('%Y', 'now') AS INTEGER) + 1,
+      0,
+      '[]',
+      '[]',
+      '[]',
+      '[]',
+      COALESCE((
+        SELECT json_group_array(w.model_id)
+          FROM user_watched_models w
+          JOIN models m ON m.id = w.model_id
+         WHERE w.user_id = x.user_id
+           AND COALESCE(m.vehicle_type, 'motorcycle') = x.vehicle_type
+      ), '[]')
+      FROM (
+        SELECT w.user_id, COALESCE(m.vehicle_type, 'motorcycle') AS vehicle_type
+          FROM user_watched_models w
+          JOIN models m ON m.id = w.model_id
+         GROUP BY w.user_id, COALESCE(m.vehicle_type, 'motorcycle')
+      ) x
+     WHERE NOT EXISTS (
+       SELECT 1 FROM user_saved_searches s
+        WHERE s.user_id = x.user_id AND s.vehicle_type = x.vehicle_type
      )
   `);
 }
