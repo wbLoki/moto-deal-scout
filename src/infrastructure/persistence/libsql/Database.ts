@@ -252,35 +252,36 @@ async function ensureMigrated(config: DatabaseConfig): Promise<void> {
 
 /**
  * Opens (creating if needed) the database and applies migrations. The same
- * code path serves the local CLI (a `file:` URL) and Vercel (a Turso
- * `libsql://` URL) — only the config differs.
+ * code path serves the local CLI (a `file:` URL) and Turso (`libsql://`) —
+ * only the config differs.
  *
- * For durable databases, schema migrations run at most once per process and
- * a single shared client is reused (close is a no-op) on Node. Cloudflare
- * Workers cannot reuse I/O objects across requests, so each Worker open gets
- * a fresh HTTP client. `:memory:` still gets a fresh migrated client per open
- * for test isolation.
+ * Cloudflare Workers skip DDL: each statement is a Turso HTTP subrequest, and
+ * the Free plan caps those at 50 per invocation. Schema is applied by the CLI
+ * / scanner, not on the request path. `:memory:` still migrates on every open
+ * for test isolation. On Node, durable URLs migrate once per process and reuse
+ * a shared client (close is a no-op).
  */
 export async function openDatabase(config: DatabaseConfig): Promise<Client> {
   ensureLocalDirectoryExists(config.url);
 
-  if (shouldCacheMigration(config.url)) {
-    await ensureMigrated(config);
-    if (isCloudflareWorker()) {
-      return createDbClient(config);
-    }
-    const key = sharedClientKey(config);
-    let shared = sharedClients.get(key);
-    if (!shared) {
-      shared = await createDbClient(config);
-      sharedClients.set(key, shared);
-    }
-    return wrapSharedClient(shared);
+  if (!shouldCacheMigration(config.url)) {
+    const client = await createDbClient(config);
+    await applyMigrations(client);
+    return client;
   }
 
-  const client = await createDbClient(config);
-  await applyMigrations(client);
-  return client;
+  if (isCloudflareWorker()) {
+    return createDbClient(config);
+  }
+
+  await ensureMigrated(config);
+  const key = sharedClientKey(config);
+  let shared = sharedClients.get(key);
+  if (!shared) {
+    shared = await createDbClient(config);
+    sharedClients.set(key, shared);
+  }
+  return wrapSharedClient(shared);
 }
 
 /** Adds any {@link ADDITIVE_COLUMNS} a table is missing (idempotent). */

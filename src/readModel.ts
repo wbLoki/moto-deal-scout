@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { loadCriteria } from './config/loadCriteria.js';
 import { loadEnv } from './config/env.js';
@@ -433,19 +434,18 @@ export async function getModelYearMarket(input: {
 }
 
 /** One scored listing for the public `/l/[sourceId]/[externalId]` page. */
-export async function getScoredListing(
-  sourceId: MarketplaceId,
-  externalId: string,
-): Promise<ScoredListing | undefined> {
-  const env = loadEnv();
-  const db = await openDatabase(resolveDatabaseConfig(env));
-  try {
-    const allModels = await new LibsqlModelRepository(db).listAll();
-    return await new LibsqlListingRepository(db, allModels).findBySourceExternalId(
-      sourceId,
-      externalId,
-    );
-  } finally {
-    db.close();
-  }
-}
+export const getScoredListing = cache(
+  async (sourceId: MarketplaceId, externalId: string): Promise<ScoredListing | undefined> => {
+    const env = loadEnv();
+    const db = await openDatabase(resolveDatabaseConfig(env));
+    try {
+      const allModels = await new LibsqlModelRepository(db).listAll();
+      return await new LibsqlListingRepository(db, allModels).findBySourceExternalId(
+        sourceId,
+        externalId,
+      );
+    } finally {
+      db.close();
+    }
+  },
+);
