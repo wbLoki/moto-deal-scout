@@ -39,11 +39,53 @@ function sharedClientKey(config: DatabaseConfig): string {
 }
 
 /** The libsql client factory, as both the native and web entry points expose it. */
-type CreateClient = (config: { url: string; authToken?: string }) => Client;
+type CreateClient = (config: {
+  url: string;
+  authToken?: string;
+  fetch?: (request: Request) => Promise<Response>;
+}) => Client;
+
+type NextPatchedFetch = typeof fetch & { _nextOriginalFetch?: typeof fetch };
 
 /** True for remote Turso URLs (libsql://, https://, wss://) — anything but a local file/memory DB. */
 function isRemoteUrl(url: string): boolean {
   return !url.startsWith('file:') && url !== ':memory:';
+}
+
+function isCloudflareWorker(): boolean {
+  return (
+    typeof globalThis.navigator === 'object' &&
+    globalThis.navigator.userAgent === 'Cloudflare-Workers'
+  );
+}
+
+/**
+ * Next.js patches `globalThis.fetch` with OTel (`startActiveSpan`) and then
+ * calls `fetch(request, { next: { fetchType } })`. OpenNext also replaces
+ * `Request` with a subclass. Together, workerd's native fetch throws with an
+ * empty message — the `at globalThis.fetch` / `startActiveSpan` stack in
+ * Workers Logs on `GET /`. Bypass both by sending a URL string + init to the
+ * pre-Next fetch.
+ */
+function fetchForLibsql(request: Request): Promise<Response> {
+  const current = globalThis.fetch as NextPatchedFetch;
+  const origin = (current._nextOriginalFetch ?? current).bind(globalThis);
+  const init: RequestInit = {
+    method: request.method,
+    headers: request.headers,
+    redirect: request.redirect,
+  };
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    init.body = request.body;
+    if (typeof ReadableStream !== 'undefined' && request.body instanceof ReadableStream) {
+      (init as RequestInit & { duplex: 'half' }).duplex = 'half';
+    }
+  }
+  return origin(request.url, init).catch((err: unknown) => {
+    const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    console.error(`[libsql] ${request.method} ${request.url} failed: ${detail}`);
+    throw err;
+  });
 }
 
 /**
@@ -60,9 +102,12 @@ async function loadCreateClient(url: string): Promise<CreateClient> {
 
 async function createDbClient(config: DatabaseConfig): Promise<Client> {
   const createClient = await loadCreateClient(config.url);
-  return createClient(
-    config.authToken ? { url: config.url, authToken: config.authToken } : { url: config.url },
-  );
+  const remote = isRemoteUrl(config.url);
+  return createClient({
+    url: config.url,
+    ...(config.authToken ? { authToken: config.authToken } : {}),
+    ...(remote ? { fetch: fetchForLibsql } : {}),
+  });
 }
 
 /** Shared durable clients ignore close() so existing finally-blocks stay safe. */
@@ -211,14 +256,19 @@ async function ensureMigrated(config: DatabaseConfig): Promise<void> {
  * `libsql://` URL) — only the config differs.
  *
  * For durable databases, schema migrations run at most once per process and
- * a single shared client is reused (close is a no-op). `:memory:` still gets
- * a fresh migrated client per open for test isolation.
+ * a single shared client is reused (close is a no-op) on Node. Cloudflare
+ * Workers cannot reuse I/O objects across requests, so each Worker open gets
+ * a fresh HTTP client. `:memory:` still gets a fresh migrated client per open
+ * for test isolation.
  */
 export async function openDatabase(config: DatabaseConfig): Promise<Client> {
   ensureLocalDirectoryExists(config.url);
 
   if (shouldCacheMigration(config.url)) {
     await ensureMigrated(config);
+    if (isCloudflareWorker()) {
+      return createDbClient(config);
+    }
     const key = sharedClientKey(config);
     let shared = sharedClients.get(key);
     if (!shared) {
