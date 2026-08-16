@@ -2623,6 +2623,17 @@ body.nav-open {
 }
 
 /* --- Chips / watched-model picker --- */
+.watch-mode-toggle {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.watch-mode-toggle .btn {
+  flex: 1 1 0;
+  min-width: 120px;
+}
+
 .watch-picker {
   display: flex;
   flex-direction: column;

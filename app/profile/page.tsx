@@ -25,12 +25,14 @@ async function ProfileBody() {
   const { account, models, searches } = await getProfilePageData(session.user.id);
   const locale = await getLocale();
   const t = dictionaryFor(locale);
-  const motoBrands = [
-    ...new Set(models.filter((m) => m.vehicleType === 'motorcycle').map((m) => m.brand)),
-  ].sort();
-  const carBrands = [
-    ...new Set(models.filter((m) => m.vehicleType === 'car').map((m) => m.brand)),
-  ].sort();
+  const motoModels = models
+    .filter((m) => m.vehicleType === 'motorcycle')
+    .map((m) => ({ id: m.id, brand: m.brand, model: m.model }));
+  const carModels = models
+    .filter((m) => m.vehicleType === 'car')
+    .map((m) => ({ id: m.id, brand: m.brand, model: m.model }));
+  const motoBrands = [...new Set(motoModels.map((m) => m.brand))].sort();
+  const carBrands = [...new Set(carModels.map((m) => m.brand))].sort();
 
   return (
     <>
@@ -57,6 +59,7 @@ async function ProfileBody() {
           vehicleType="motorcycle"
           searches={searches}
           brands={motoBrands}
+          models={motoModels}
         />
       </section>
 
@@ -68,6 +71,7 @@ async function ProfileBody() {
           vehicleType="car"
           searches={searches}
           brands={carBrands}
+          models={carModels}
         />
       </section>
     </>
