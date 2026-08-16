@@ -1,10 +1,11 @@
 'use client';
 
-import { useActionState, useTransition } from 'react';
+import { useActionState, useMemo, useState, useTransition } from 'react';
 import type { SavedSearch } from '../src/domain/entities/SavedSearch.js';
 import type { VehicleType } from '../src/domain/entities/VehicleType.js';
 import { defaultSearchRangeFor } from '../src/settingsModel.js';
 import { yearOptions } from './dealFilters.js';
+import { ModelPicker, type PickableModel } from './ModelPicker.js';
 import {
   createProfileSearchAction,
   deleteSavedSearchAction,
@@ -22,17 +23,25 @@ export function SavedSearchesForm({
   vehicleType,
   searches,
   brands,
+  models,
 }: {
   locale: Locale;
   vehicleType: VehicleType;
   searches: readonly SavedSearch[];
   brands: readonly string[];
+  models: readonly PickableModel[];
 }) {
   const t = useT(locale);
   const ofType = searches.filter((s) => s.vehicleType === vehicleType);
   const [state, action, pending] = useActionState(createProfileSearchAction, initial);
   const [, startDelete] = useTransition();
+  const [mode, setMode] = useState<'criteria' | 'models'>('criteria');
   const range = defaultSearchRangeFor(vehicleType);
+  const modelById = useMemo(() => new Map(models.map((m) => [m.id, m])), [models]);
+  const modelLabel = (id: string) => {
+    const m = modelById.get(id);
+    return m ? `${m.brand} ${m.model}` : id;
+  };
 
   return (
     <div className="saved-searches">
@@ -49,7 +58,11 @@ export function SavedSearchesForm({
                     `${madFmt.format(s.budgetMin)}–${madFmt.format(s.budgetMax)}`,
                     `${s.yearMin}–${s.yearMax}`,
                   )}
-                  {s.brands.length > 0 ? ` · ${s.brands.join(', ')}` : ''}
+                  {s.modelIds.length > 0
+                    ? ` · ${s.modelIds.map(modelLabel).join(', ')}`
+                    : s.brands.length > 0
+                      ? ` · ${s.brands.join(', ')}`
+                      : ''}
                 </p>
               </div>
               <button
@@ -71,6 +84,26 @@ export function SavedSearchesForm({
       <form action={action} className="auth-form">
         <h3 className="account-form-title">{t.profile.newSearch}</h3>
         <input type="hidden" name="vehicleType" value={vehicleType} />
+
+        <div className="watch-mode-toggle" role="group" aria-label={t.profile.watchBy}>
+          <button
+            type="button"
+            className={mode === 'criteria' ? 'btn btn-primary' : 'btn'}
+            aria-pressed={mode === 'criteria'}
+            onClick={() => setMode('criteria')}
+          >
+            {t.profile.byCriteria}
+          </button>
+          <button
+            type="button"
+            className={mode === 'models' ? 'btn btn-primary' : 'btn'}
+            aria-pressed={mode === 'models'}
+            onClick={() => setMode('models')}
+          >
+            {t.profile.byModels}
+          </button>
+        </div>
+
         <label className="auth-field">
           <span>{t.profile.searchName}</span>
           <input
@@ -112,18 +145,25 @@ export function SavedSearchesForm({
             </select>
           </label>
         </div>
-        {brands.length > 0 && (
-          <label className="auth-field">
-            <span>{t.filters.brand}</span>
-            <select name="brands" multiple size={Math.min(6, brands.length)}>
-              {brands.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+        {mode === 'criteria'
+          ? brands.length > 0 && (
+              <label className="auth-field">
+                <span>{t.filters.brand}</span>
+                <select name="brands" multiple size={Math.min(6, brands.length)}>
+                  {brands.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )
+          : (
+              <div className="auth-field">
+                <span>{t.profile.pickModels}</span>
+                <ModelPicker name="modelIds" models={models} locale={locale} />
+              </div>
+            )}
         {state.error && <p className="settings-status err">{t.errors[state.error]}</p>}
         {state.ok && <p className="settings-status ok">{t.card.searchSaved}</p>}
         <button className="btn btn-primary" type="submit" disabled={pending}>

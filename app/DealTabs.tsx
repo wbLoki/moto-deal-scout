@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from 'react';
 import Link from 'next/link';
-import { createSavedSearchAction, setSavedListingAction } from './saved-actions.js';
+import { setSavedListingAction } from './saved-actions.js';
 import { fetchDealsPageAction } from './deal-actions.js';
 import { BrowseSidebar } from './BrowseSidebar.js';
 import { DealCardShell } from './DealCardShell.js';
@@ -10,7 +10,7 @@ import { DealSearchBar } from './DealSearchBar.js';
 import { SortSelect } from './SortSelect.js';
 import { Pagination } from './Pagination.js';
 import { PAGE_SIZE, type SortKey } from './dealSort.js';
-import { ratingFilterOptions, type FilterOption } from './dealFilters.js';
+import { ratingFilterOptions, yearOptions, type FilterOption } from './dealFilters.js';
 import { MultiSelect } from './MultiSelect.js';
 import { BookmarkIcon } from './icons.js';
 import type { DealView } from './dealView.js';
@@ -94,6 +94,7 @@ function DealCard({
 }
 
 const TAB_IDS: DealTab[] = ['daily', 'watched', 'saved', 'all'];
+const YEARS = yearOptions();
 
 export function DealTabs({
   initialDeals,
@@ -130,7 +131,6 @@ export function DealTabs({
   const [counts, setCounts] = useState<TabCounts>(tabCounts);
 
   const [savedSet, setSavedSet] = useState<ReadonlySet<string>>(() => new Set(savedKeys));
-  const [searchSaveNote, setSearchSaveNote] = useState<string | null>(null);
 
   const [active, setActive] = useState<DealTab>(initialTab);
   const [query, setQuery] = useState('');
@@ -158,10 +158,17 @@ export function DealTabs({
     [facets.maxCc],
   );
 
+  const liveRange = !sidebar;
+  const [budgetMin, setBudgetMin] = useState(searchRange.budgetMin);
+  const [budgetMax, setBudgetMax] = useState(searchRange.budgetMax);
+  const [yearMin, setYearMin] = useState(searchRange.yearMin);
+  const [yearMax, setYearMax] = useState(searchRange.yearMax);
   const [kmMin, setKmMin] = useState(0);
   const [kmMax, setKmMax] = useState(kmCap);
   const [ccMin, setCcMin] = useState(0);
   const [ccMax, setCcMax] = useState(ccCap);
+  const [debouncedBudgetMin, setDebouncedBudgetMin] = useState(searchRange.budgetMin);
+  const [debouncedBudgetMax, setDebouncedBudgetMax] = useState(searchRange.budgetMax);
   const [debouncedKmMin, setDebouncedKmMin] = useState(0);
   const [debouncedKmMax, setDebouncedKmMax] = useState(kmCap);
   const [debouncedCcMin, setDebouncedCcMin] = useState(0);
@@ -173,12 +180,19 @@ export function DealTabs({
   const [gearboxes, setGearboxes] = useState<string[]>([]);
   const isCar = vehicleType === 'car';
 
-  const rangeInvalid = debouncedKmMax < debouncedKmMin || debouncedCcMax < debouncedCcMin;
+  const rangeInvalid =
+    (liveRange && (debouncedBudgetMax < debouncedBudgetMin || yearMax < yearMin)) ||
+    debouncedKmMax < debouncedKmMin ||
+    debouncedCcMax < debouncedCcMin;
 
   // Any control change returns to page 1; only the pager itself keeps a page.
   const resetPage = () => setPage(1);
   const resetFilters = () => {
     setQuery('');
+    setBudgetMin(searchRange.budgetMin);
+    setBudgetMax(searchRange.budgetMax);
+    setYearMin(searchRange.yearMin);
+    setYearMax(searchRange.yearMax);
     setKmMin(0);
     setKmMax(kmCap);
     setCcMin(0);
@@ -195,6 +209,8 @@ export function DealTabs({
   useEffect(() => {
     const t = setTimeout(() => {
       setDebouncedQuery(query);
+      setDebouncedBudgetMin(budgetMin);
+      setDebouncedBudgetMax(budgetMax);
       setDebouncedKmMin(kmMin);
       setDebouncedKmMax(kmMax);
       setDebouncedCcMin(ccMin);
@@ -202,7 +218,7 @@ export function DealTabs({
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [query, kmMin, kmMax, ccMin, ccMax]);
+  }, [query, budgetMin, budgetMax, kmMin, kmMax, ccMin, ccMax]);
 
   // The one place we talk to the server: whenever the tab, search, sort, page,
   // filters or a watch/save toggle (refreshKey) change, fetch that exact page.
@@ -222,6 +238,14 @@ export function DealTabs({
       tab: active,
       vehicleType,
       search: debouncedQuery.trim(),
+      ...(liveRange
+        ? {
+            budgetMin: debouncedBudgetMin,
+            budgetMax: debouncedBudgetMax,
+            yearMin,
+            yearMax,
+          }
+        : {}),
       mileageMin: debouncedKmMin,
       mileageMax: debouncedKmMax >= kmCap ? 0 : debouncedKmMax,
       ccMin: isCar ? 0 : debouncedCcMin,
@@ -248,6 +272,11 @@ export function DealTabs({
     debouncedQuery,
     sort,
     page,
+    liveRange,
+    debouncedBudgetMin,
+    debouncedBudgetMax,
+    yearMin,
+    yearMax,
     debouncedKmMin,
     debouncedKmMax,
     debouncedCcMin,
@@ -328,6 +357,74 @@ export function DealTabs({
             {t.common.reset}
           </button>
         </div>
+
+        {liveRange && (
+          <>
+            <div className="sidebar-section">
+              <h3 className="sidebar-title">{t.filters.budget}</h3>
+              <div className="sidebar-row">
+                <label>
+                  <span>{t.common.min}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1000}
+                    value={budgetMin}
+                    onChange={(e) => setBudgetMin(Number(e.target.value))}
+                  />
+                </label>
+                <label>
+                  <span>{t.common.max}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1000}
+                    value={budgetMax}
+                    onChange={(e) => setBudgetMax(Number(e.target.value))}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="sidebar-section">
+              <h3 className="sidebar-title">{t.filters.year}</h3>
+              <div className="sidebar-row">
+                <label>
+                  <span>{t.common.from}</span>
+                  <select
+                    value={yearMin}
+                    onChange={(e) => {
+                      setYearMin(Number(e.target.value));
+                      resetPage();
+                    }}
+                  >
+                    {YEARS.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>{t.common.to}</span>
+                  <select
+                    value={yearMax}
+                    onChange={(e) => {
+                      setYearMax(Number(e.target.value));
+                      resetPage();
+                    }}
+                  >
+                    {YEARS.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="sidebar-section">
           <h3 className="sidebar-title">{t.filters.mileage}</h3>
@@ -445,41 +542,6 @@ export function DealTabs({
           }}
           allLabel={t.filters.allCities}
         />
-
-        <button
-          type="button"
-          className="btn"
-          onClick={() => {
-            setSearchSaveNote(null);
-            startTransition(async () => {
-              const res = await createSavedSearchAction({
-                name:
-                  brandsSel.length === 1
-                    ? titleCase(brandsSel[0]!)
-                    : vehicleType === 'car'
-                      ? 'Cars'
-                      : 'Motos',
-                vehicleType,
-                budgetMin: searchRange.budgetMin,
-                budgetMax: searchRange.budgetMax,
-                yearMin: searchRange.yearMin,
-                yearMax: searchRange.yearMax,
-                mileageMax: kmMax >= kmCap ? 0 : kmMax,
-                brands: brandsSel,
-                cities,
-                fuelTypes: isCar ? fuelTypes : [],
-                gearboxes: isCar ? gearboxes : [],
-              });
-              if (res.ok) {
-                setSearchSaveNote(t.card.searchSaved);
-                setRefreshKey((k) => k + 1);
-              }
-            });
-          }}
-        >
-          {t.card.saveThisSearch}
-        </button>
-        {searchSaveNote && <p className="settings-status ok">{searchSaveNote}</p>}
 
         {rangeInvalid && <p className="settings-error">{t.filters.rangeInvalid}</p>}
       </BrowseSidebar>

@@ -2,15 +2,13 @@ import { redirect } from 'next/navigation';
 import { auth } from '../auth.js';
 import { getDashboardData, getPublicDashboard } from '../src/readModel.js';
 import { PublicHome } from './PublicHome.js';
-import { SearchSettings } from './SearchSettings.js';
-import { ScanNowButton } from './ScanNowButton.js';
 import { DealTabs } from './DealTabs.js';
 import { toDealView } from './dealView.js';
 import { PageShell } from './PageShell.js';
 import { dictionaryFor, getLocale } from './i18n/getLocale.js';
 
 // Reads the database on each request, so it must run on the Node runtime
-// and never be statically cached. maxDuration covers the admin "Scan now".
+// and never be statically cached.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -37,8 +35,6 @@ async function HomeBody() {
       />
     );
   }
-  const isAdmin = session.user.role === 'admin';
-
   const data = await getDashboardData(session.user.id);
   if (!data.onboarded) redirect('/onboarding');
 
@@ -63,21 +59,6 @@ async function HomeBody() {
         savedKeys={data.savedKeys}
         searchRange={searchRange}
         locale={locale}
-        sidebar={
-          <>
-            <SearchSettings locale={locale} current={searchRange} vehicleType="motorcycle" />
-            {isAdmin ? (
-              <ScanNowButton />
-            ) : (
-              <div className="scan-now">
-                <button className="btn" type="button" disabled title={t.home.scanSoonTitle}>
-                  {t.home.scanNow}
-                </button>
-                <span className="status-pill">{t.home.comingSoon}</span>
-              </div>
-            )}
-          </>
-        }
       />
 
       <div className="footer">{t.home.footer}</div>

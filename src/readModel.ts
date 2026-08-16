@@ -32,9 +32,6 @@ import { defaultSearchRangeFor } from './settingsModel.js';
 /** Cache tag for the anonymous homepage; invalidate after scans/admin model edits. */
 export const PUBLIC_DASHBOARD_TAG = 'public-dashboard';
 
-/** The order tabs are auto-selected in for first paint — first non-empty wins. */
-const TAB_PRIORITY: readonly DealTab[] = ['daily', 'watched', 'saved', 'all'];
-
 /**
  * The filter/sort/page controls the dashboard sends back for each feed request.
  * Mirrors the client's sidebar state; the server answers it entirely in SQL.
@@ -43,6 +40,11 @@ export interface DealsPageInput {
   readonly tab: DealTab;
   readonly vehicleType: VehicleType;
   readonly search: string;
+  /** When set, overrides the user's saved budget/year range for this request. */
+  readonly budgetMin?: number;
+  readonly budgetMax?: number;
+  readonly yearMin?: number;
+  readonly yearMax?: number;
   readonly mileageMin: number;
   /** `0` means "no upper bound". */
   readonly mileageMax: number;
@@ -203,7 +205,10 @@ export async function getDashboardData(
       listings.countDealsByTab(toDealQuery(userId, ctx, baseInput('all', vehicleType))),
     ]);
 
-    const initialTab = TAB_PRIORITY.find((t) => tabCounts[t] > 0) ?? 'all';
+    // Signed-in visitors land on the general "All" feed, same as anonymous
+    // visitors — not pre-filtered to their watched searches or bookmarks. The
+    // watched/saved/daily tabs stay available; they're just not the default.
+    const initialTab: DealTab = 'all';
     const { deals: initialDeals, total: initialTotal } = await listings.queryDeals(
       toDealQuery(userId, ctx, baseInput(initialTab, vehicleType)),
     );
@@ -244,8 +249,14 @@ export async function getDealsPage(userId: string, input: DealsPageInput): Promi
       new LibsqlUserSearchRangeRepository(db).get(userId, input.vehicleType),
       new LibsqlSavedSearchRepository(db).listForUser(userId, input.vehicleType),
     ]);
+    const fallback = storedRange ?? defaultSearchRangeFor(input.vehicleType);
     const ctx = {
-      range: storedRange ?? defaultSearchRangeFor(input.vehicleType),
+      range: {
+        budgetMin: input.budgetMin ?? fallback.budgetMin,
+        budgetMax: input.budgetMax ?? fallback.budgetMax,
+        yearMin: input.yearMin ?? fallback.yearMin,
+        yearMax: input.yearMax ?? fallback.yearMax,
+      },
       minPriceFactor: config.global.minPriceFactor,
       savedSearches,
       vehicleType: input.vehicleType,

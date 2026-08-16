@@ -17,9 +17,10 @@ export default async function OnboardingPage() {
   if (profile.onboarded) redirect('/');
   const locale = await getLocale();
   const t = dictionaryFor(locale);
-  const brands = [
-    ...new Set(models.filter((m) => m.vehicleType === 'motorcycle').map((m) => m.brand)),
-  ].sort();
+  const motoModels = models
+    .filter((m) => m.vehicleType === 'motorcycle')
+    .map((m) => ({ id: m.id, brand: m.brand, model: m.model }));
+  const brands = [...new Set(motoModels.map((m) => m.brand))].sort();
 
   return (
     <AuthShell>
@@ -29,7 +30,7 @@ export default async function OnboardingPage() {
           <SparklesIcon className="icon-trail" />
         </h1>
         <p className="auth-subtitle">{t.auth.onboardingSubtitle}</p>
-        <OnboardingSearchForm locale={locale} brands={brands} />
+        <OnboardingSearchForm locale={locale} brands={brands} models={motoModels} />
       </div>
     </AuthShell>
   );
