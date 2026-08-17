@@ -1,6 +1,21 @@
 import type { Listing } from '../entities/Listing.js';
 import type { SavedSearch } from '../entities/SavedSearch.js';
 
+/**
+ * True when a listing's matched model is one the search watches. A bare
+ * catalog name also covers displacement variants (`yamaha-nmax` matches
+ * `yamaha-nmax-155`) because ads often omit or include the cc. A distinct
+ * series (`kawasaki-z650` vs `kawasaki-z650rs`) does not match — variants
+ * are hyphen-suffixed ids, not a glued suffix.
+ */
+export function savedSearchCoversModelId(
+  listingModelId: string,
+  watchedIds: readonly string[],
+): boolean {
+  if (watchedIds.length === 0) return true;
+  return watchedIds.some((id) => listingModelId === id || listingModelId.startsWith(`${id}-`));
+}
+
 /** True when a listing satisfies every set constraint on the saved search. */
 export function listingMatchesSavedSearch(
   listing: Pick<
@@ -32,7 +47,7 @@ export function listingMatchesSavedSearch(
   ) {
     return false;
   }
-  if (search.modelIds.length > 0 && !search.modelIds.includes(matchedModelId)) return false;
+  if (!savedSearchCoversModelId(matchedModelId, search.modelIds)) return false;
   if (search.brands.length > 0) {
     const needle = brand.trim().toLowerCase();
     if (!search.brands.some((b) => b.trim().toLowerCase() === needle)) return false;

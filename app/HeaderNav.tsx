@@ -33,6 +33,7 @@ export function HeaderNav({ children, locale }: { children: ReactNode; locale: L
   const [mounted, setMounted] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
   const navId = useId();
 
   useEffect(() => setMounted(true), []);
@@ -45,9 +46,17 @@ export function HeaderNav({ children, locale }: { children: ReactNode; locale: L
   useEffect(() => {
     if (!open) return;
     document.body.classList.add('nav-open');
+    const header = wrapRef.current?.closest('.site-header');
+    if (header instanceof HTMLElement) {
+      document.documentElement.style.setProperty(
+        '--site-header-height',
+        `${header.getBoundingClientRect().height}px`,
+      );
+    }
     const onPointer = (e: PointerEvent) => {
-      const wrap = wrapRef.current;
-      if (wrap && !wrap.contains(e.target as Node)) close(false);
+      const target = e.target as Node;
+      if (wrapRef.current?.contains(target) || navRef.current?.contains(target)) return;
+      close(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -55,8 +64,11 @@ export function HeaderNav({ children, locale }: { children: ReactNode; locale: L
         close();
         return;
       }
-      if (e.key !== 'Tab' || !wrapRef.current) return;
-      const items = focusables(wrapRef.current);
+      if (e.key !== 'Tab') return;
+      const items = [
+        ...(wrapRef.current ? focusables(wrapRef.current) : []),
+        ...(navRef.current ? focusables(navRef.current) : []),
+      ];
       if (items.length === 0) return;
       const first = items[0]!;
       const last = items[items.length - 1]!;
@@ -86,6 +98,22 @@ export function HeaderNav({ children, locale }: { children: ReactNode; locale: L
     return () => mq.removeEventListener('change', onChange);
   }, []);
 
+  const nav = (
+    <nav
+      ref={navRef}
+      id={navId}
+      className="site-nav"
+      aria-label={t.common.mainNav}
+      data-open={open || undefined}
+      onClick={(e) => {
+        const el = e.target as HTMLElement;
+        if (el.closest('a') || el.closest('.nav-signout')) close(false);
+      }}
+    >
+      <ul className="site-nav-list">{children}</ul>
+    </nav>
+  );
+
   return (
     <div className="header-nav" ref={wrapRef}>
       <button
@@ -99,24 +127,15 @@ export function HeaderNav({ children, locale }: { children: ReactNode; locale: L
       >
         {open ? <CloseIcon size={22} /> : <MenuIcon size={22} />}
       </button>
-      {mounted &&
-        open &&
-        createPortal(
-          <div className="nav-backdrop" aria-hidden="true" onClick={() => close(false)} />,
-          document.body,
-        )}
-      <nav
-        id={navId}
-        className="site-nav"
-        aria-label={t.common.mainNav}
-        data-open={open || undefined}
-        onClick={(e) => {
-          const t = e.target as HTMLElement;
-          if (t.closest('a') || t.closest('.nav-signout')) close(false);
-        }}
-      >
-        <ul className="site-nav-list">{children}</ul>
-      </nav>
+      {mounted && open
+        ? createPortal(
+            <>
+              <div className="nav-backdrop" aria-hidden="true" onClick={() => close(false)} />
+              {nav}
+            </>,
+            document.body,
+          )
+        : nav}
     </div>
   );
 }

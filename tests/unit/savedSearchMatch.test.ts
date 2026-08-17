@@ -40,4 +40,15 @@ describe('listingMatchesSavedSearch', () => {
       listingMatchesSavedSearch(listing, search({ modelIds: ['honda-cb500f'] }), 'yamaha-mt07', 'Yamaha'),
     ).toBe(false);
   });
+
+  it('covers displacement variants of a watched model, but not a glued series suffix', () => {
+    const listing = makeListing({ priceMAD: 70000, year: 2019 });
+    const nmax = search({ modelIds: ['yamaha-nmax'] });
+    expect(listingMatchesSavedSearch(listing, nmax, 'yamaha-nmax', 'Yamaha')).toBe(true);
+    expect(listingMatchesSavedSearch(listing, nmax, 'yamaha-nmax-155', 'Yamaha')).toBe(true);
+    expect(listingMatchesSavedSearch(listing, nmax, 'yamaha-mt07', 'Yamaha')).toBe(false);
+    const z650 = search({ modelIds: ['kawasaki-z650'] });
+    expect(listingMatchesSavedSearch(listing, z650, 'kawasaki-z650', 'Kawasaki')).toBe(true);
+    expect(listingMatchesSavedSearch(listing, z650, 'kawasaki-z650rs', 'Kawasaki')).toBe(false);
+  });
 });

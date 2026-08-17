@@ -442,6 +442,16 @@ body.nav-open {
   overflow: hidden;
 }
 
+html:has(body.nav-open) {
+  overflow-x: visible;
+}
+
+/* overflow-x: clip on .container makes position:fixed descendants stick to the
+   page box, not the viewport — release it while the overlay is open. */
+body.nav-open .container {
+  overflow: visible;
+}
+
 .nav-backdrop {
   display: none;
 }
@@ -456,6 +466,14 @@ body.nav-open {
   }
 
   body.nav-open .site-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
     background: var(--panel);
   }
 
@@ -484,11 +502,15 @@ body.nav-open {
   }
 
   .site-nav {
-    position: absolute;
-    top: 100%;
+    /* Viewport-fixed: absolute+sticky header + backdrop-filter keeps the panel
+       at the header's in-flow position, which is off-screen after scroll. */
+    position: fixed;
+    top: var(--site-header-height, 3.6rem);
     left: 0;
     right: 0;
     z-index: 40;
+    max-height: calc(100dvh - var(--site-header-height, 3.6rem));
+    overflow-y: auto;
     padding: 0.5rem max(1.25rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom))
       max(1.25rem, env(safe-area-inset-left));
     background: var(--panel);

@@ -247,6 +247,43 @@ describe('LibsqlListingRepository.queryDeals', () => {
     });
   });
 
+  it('includes displacement variants of a watched model on the watched tab', async () => {
+    const modelRepo = new LibsqlModelRepository(db);
+    await modelRepo.upsert(storedModel({ id: 'yamaha-nmax', brand: 'Yamaha', model: 'NMAX' }));
+    await modelRepo.upsert(
+      storedModel({
+        id: 'yamaha-nmax-155',
+        brand: 'Yamaha',
+        model: 'NMAX 155',
+        priceRangeMAD: { min: 0, max: 120000 },
+      }),
+    );
+    repo = new LibsqlListingRepository(db, await modelRepo.listAll());
+    await repo.save(
+      scored({
+        externalId: 'nmax155',
+        modelId: 'yamaha-nmax-155',
+        brand: 'Yamaha',
+        model: 'NMAX 155',
+        priceMAD: 28000,
+        priceMin: 0,
+      }),
+    );
+
+    const watched = await repo.queryDeals(
+      query({ tab: 'watched', savedSearches: [makeSearch({ modelIds: ['yamaha-nmax'] })] }),
+    );
+    expect(watched.deals.map((d) => d.listing.externalId)).toContain('nmax155');
+  });
+
+  it('does not apply sidebar filters on the watched tab', async () => {
+    const hondaOnly = makeSearch({ modelIds: ['honda-cb500f'] });
+    const watched = await repo.queryDeals(
+      query({ tab: 'watched', savedSearches: [hondaOnly], ccMin: 600, ccMax: 800, brands: ['yamaha'] }),
+    );
+    expect(watched.deals.map((d) => d.listing.externalId)).toEqual(['honda']);
+  });
+
   it('scopes the saved tab to the user bookmarks, ignoring the range', async () => {
     await db.execute({ sql: 'INSERT INTO users (id, email) VALUES (?, ?)', args: ['u1', 'u1@x.co'] });
     await new LibsqlSavedListingRepository(db).add('u1', 'avito', 'good');

@@ -47,7 +47,10 @@ const IMAGE_GAP_SQL = `(
 const placeholders = (n: number): string => Array(n).fill('?').join(', ');
 
 /** Escapes LIKE wildcards so a user's `%`/`_` are matched literally (with ESCAPE '\'). */
-const likeContains = (term: string): string => `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+const escapeLike = (term: string): string => term.replace(/[\\%_]/g, (c) => `\\${c}`);
+const likeContains = (term: string): string => `%${escapeLike(term)}%`;
+/** `yamaha-nmax` → `yamaha-nmax-%` so NMAX 155 matches a bare NMAX watch. */
+const likeModelVariant = (modelId: string): string => `${escapeLike(modelId)}-%`;
 
 /**
  * OR of AND-groups: a listing matches the "Your searches" tab when it satisfies
@@ -65,8 +68,11 @@ function savedSearchPredicate(searches: readonly SavedSearch[]): { sql: string; 
       args.push(s.mileageMax);
     }
     if (s.modelIds.length > 0) {
-      parts.push(`l.matched_model_id IN (${placeholders(s.modelIds.length)})`);
-      args.push(...s.modelIds);
+      const variants = s.modelIds.map(() => `l.matched_model_id LIKE ? ESCAPE '\\'`).join(' OR ');
+      parts.push(
+        `(l.matched_model_id IN (${placeholders(s.modelIds.length)}) OR ${variants})`,
+      );
+      args.push(...s.modelIds, ...s.modelIds.map(likeModelVariant));
     }
     if (s.brands.length > 0) {
       parts.push(`LOWER(m.brand) IN (${placeholders(s.brands.length)})`);
@@ -316,7 +322,9 @@ export class LibsqlListingRepository implements ListingRepository {
     const parts = buildParts(q, {
       tab: q.tab,
       applyRange: q.tab !== 'saved' && q.tab !== 'watched',
-      applyFilters: true,
+      // Sidebar filters stay on All/Daily. "Your searches" is the saved-search
+      // snapshot — leftover cc/brand/city chips must not hide watched bikes.
+      applyFilters: q.tab !== 'watched',
     });
     const where = parts.where ? `WHERE ${parts.where}` : '';
     const orderBy = `${ORDER_BY[q.sort]}, l.source_id, l.external_id`;
