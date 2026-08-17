@@ -16,6 +16,7 @@ import type {
 import { provisionalModel } from '../../domain/services/provisionalModel.js';
 import type { CatalogModelResolver } from './CatalogModelResolver.js';
 import { MIN_DISCOVERY_CONFIDENCE } from './CatalogModelResolver.js';
+import { withListingDisplacement } from '../../catalog/modelDisplacement.js';
 import { listingWithinRange } from '../../domain/services/rangeFilter.js';
 import { priceIsPlausible } from '../../domain/services/priceFilter.js';
 import { isCalibrated } from '../../domain/services/calibrationState.js';
@@ -367,10 +368,11 @@ export class DealScanner {
     // extra detail-page fetch some sources need to fill in fields like the
     // Biker.ma post date. Sources without one leave the listing unchanged.
     const enriched = source.enrich ? await source.enrich(listing) : listing;
+    const withCc = withListingDisplacement(enriched, model.model);
 
-    const score = this.scorer.score(enriched, model, this.criteria.global);
+    const score = this.scorer.score(withCc, model, this.criteria.global);
     const result: ScoredListing = {
-      listing: enriched,
+      listing: withCc,
       match: { criteria: model, confidence },
       score,
       // An uncalibrated model can't be judged a good deal — its price factor

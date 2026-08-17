@@ -160,7 +160,7 @@ function buildParts(
 
     if (q.ccMin > 0 || q.ccMax > 0) {
       const max = q.ccMax > 0 ? q.ccMax : Number.MAX_SAFE_INTEGER;
-      conds.push('(l.displacement_cc IS NULL OR l.displacement_cc BETWEEN ? AND ?)');
+      conds.push('COALESCE(l.displacement_cc, 0) BETWEEN ? AND ?');
       whereArgs.push(q.ccMin, max);
     }
 

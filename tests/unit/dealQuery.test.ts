@@ -186,7 +186,7 @@ describe('LibsqlListingRepository.queryDeals', () => {
     expect(ids).not.toContain('good'); // 45000 excluded
   });
 
-  it('filters by displacement (cc), passing null-cc listings through', async () => {
+  it('filters by displacement (cc); missing cc uses the matched model fallback', async () => {
     await repo.save(scored({ externalId: 'cc125', displacementCc: 125 }));
     await repo.save(scored({ externalId: 'cc650', displacementCc: 650 }));
 
@@ -194,8 +194,8 @@ describe('LibsqlListingRepository.queryDeals', () => {
     const ids = deals.map((d) => d.listing.externalId);
     expect(ids).toContain('cc125');
     expect(ids).not.toContain('cc650');
-    // The four seeded listings have no cc and must pass, like the year/mileage nulls.
-    expect(ids).toContain('hot');
+    // Seeded Yamaha MT-07 rows get the 689cc fallback, so they are out of 100–200.
+    expect(ids).not.toContain('hot');
   });
 
   it('filters by deal-rating tier and the calibrating state', async () => {

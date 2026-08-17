@@ -1,4 +1,5 @@
 import type { Client } from '@libsql/client';
+import { withListingDisplacement } from './catalog/modelDisplacement.js';
 import { ListingScorer } from './application/services/ListingScorer.js';
 import { loadEnv } from './config/env.js';
 import { loadCriteria } from './config/loadCriteria.js';
@@ -253,25 +254,28 @@ export async function promoteReview(input: PromoteInput): Promise<void> {
     const row = res.rows[0] as unknown as PromoteRow | undefined;
     if (!row) throw new Error('Review listing not found (already handled?).');
 
-    const listing: Listing = {
-      sourceId: row.source_id as Listing['sourceId'],
-      externalId: row.external_id,
-      url: row.url,
-      title: row.title,
-      description: undefined,
-      priceMAD: row.price_mad,
-      year: input.year ?? row.year ?? undefined,
-      mileageKm: input.mileageKm ?? row.mileage_km ?? undefined,
-      displacementCc: input.displacementCc ?? row.displacement_cc ?? undefined,
-      vehicleType: parseVehicleType(row.vehicle_type),
-      fuelType: parseFuelType(row.fuel_type) ?? undefined,
-      gearbox: parseGearbox(row.gearbox) ?? undefined,
-      ...parseListingCondition(row.title, undefined),
-      city: row.city,
-      imageUrl: row.image_url ?? undefined,
-      postedAt: row.posted_at ? new Date(row.posted_at) : undefined,
-      scrapedAt: new Date(),
-    };
+    const listing = withListingDisplacement(
+      {
+        sourceId: row.source_id as Listing['sourceId'],
+        externalId: row.external_id,
+        url: row.url,
+        title: row.title,
+        description: undefined,
+        priceMAD: row.price_mad,
+        year: input.year ?? row.year ?? undefined,
+        mileageKm: input.mileageKm ?? row.mileage_km ?? undefined,
+        displacementCc: input.displacementCc ?? row.displacement_cc ?? undefined,
+        vehicleType: parseVehicleType(row.vehicle_type),
+        fuelType: parseFuelType(row.fuel_type) ?? undefined,
+        gearbox: parseGearbox(row.gearbox) ?? undefined,
+        ...parseListingCondition(row.title, undefined),
+        city: row.city,
+        imageUrl: row.image_url ?? undefined,
+        postedAt: row.posted_at ? new Date(row.posted_at) : undefined,
+        scrapedAt: new Date(),
+      },
+      model.model,
+    );
 
     const global = (await loadCriteria(loadEnv().CRITERIA_CONFIG_PATH)).global;
     const score = new ListingScorer().score(listing, model, global);

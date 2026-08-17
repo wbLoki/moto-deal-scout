@@ -46,7 +46,7 @@ export interface Listing {
   readonly priceMAD: number;
   readonly year: number | undefined;
   readonly mileageKm: number | undefined;
-  /** Engine displacement in cc, when the source reports it. */
+  /** Engine displacement in cc. `0` when unknown; scrapes fall back to the matched model's typical size. */
   readonly displacementCc: number | undefined;
   /** Motorcycle vs car. Set by the source that scraped this ad. */
   readonly vehicleType: VehicleType;

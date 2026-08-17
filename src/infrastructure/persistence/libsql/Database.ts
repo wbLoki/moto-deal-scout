@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Client } from '@libsql/client';
+import { fallbackDisplacementCc } from '../../../catalog/modelDisplacement.js';
 import type { Env } from '../../../config/env.js';
 import { loadEnv } from '../../../config/env.js';
 import { ADDITIVE_COLUMNS, MIGRATIONS, POST_COLUMN_INDEXES } from './schema.js';
@@ -134,6 +135,7 @@ async function applyMigrations(client: Client): Promise<void> {
   }
   await copyLegacySearchRanges(client);
   await copyWatchlistsToSavedSearches(client);
+  await backfillListingDisplacement(client);
 }
 
 /**
@@ -282,6 +284,31 @@ export async function openDatabase(config: DatabaseConfig): Promise<Client> {
     sharedClients.set(key, shared);
   }
   return wrapSharedClient(shared);
+}
+
+/**
+ * Fills missing listing cc from the matched model's typical size (or 0).
+ * Idempotent: only rows with NULL/0 displacement are touched.
+ */
+async function backfillListingDisplacement(client: Client): Promise<void> {
+  const models = await client.execute('SELECT id, model, vehicle_type FROM models');
+  for (const row of models.rows) {
+    const id = typeof row['id'] === 'string' ? row['id'] : '';
+    if (!id) continue;
+    const vehicleType = typeof row['vehicle_type'] === 'string' ? row['vehicle_type'] : 'motorcycle';
+    const model = typeof row['model'] === 'string' ? row['model'] : '';
+    const cc = vehicleType === 'car' ? 0 : fallbackDisplacementCc(model);
+    await client.execute({
+      sql: `UPDATE listings
+            SET displacement_cc = ?
+          WHERE matched_model_id = ?
+            AND (displacement_cc IS NULL OR displacement_cc = 0)`,
+      args: [cc, id],
+    });
+  }
+  await client.execute(
+    `UPDATE listings SET displacement_cc = 0 WHERE displacement_cc IS NULL`,
+  );
 }
 
 /** Adds any {@link ADDITIVE_COLUMNS} a table is missing (idempotent). */

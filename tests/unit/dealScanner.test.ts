@@ -251,6 +251,32 @@ describe('DealScanner', () => {
     expect(repository.saved).toHaveLength(1);
   });
 
+  it('fills missing displacement from the matched model, defaulting unknown names to 0', async () => {
+    const listing = makeListing({ externalId: '1', displacementCc: undefined });
+    const scanner = new DealScanner({
+      sources: [new FakeSource('avito', 'Avito.ma', [[listing]])],
+      repository,
+      criteria: buildCriteria(),
+      logger: silentLogger,
+    });
+    await scanner.scan();
+    expect(repository.saved[0]?.listing.displacementCc).toBe(689);
+
+    const unknownRepo = new InMemoryRepository();
+    const unknown = makeModelCriteria({ id: 'custom-foo', brand: 'Custom', model: 'NoSize' });
+    await new DealScanner({
+      sources: [
+        new FakeSource('avito', 'Avito.ma', [
+          [makeListing({ externalId: '2', title: 'Custom NoSize 2020', displacementCc: undefined })],
+        ]),
+      ],
+      repository: unknownRepo,
+      criteria: { models: [unknown], global: makeGlobalCriteria() },
+      logger: silentLogger,
+    }).scan();
+    expect(unknownRepo.saved[0]?.listing.displacementCc).toBe(0);
+  });
+
   it('skips listings already seen', async () => {
     const criteria = buildCriteria();
     const listing = makeListing({ externalId: '1' });

@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { Listing, MarketplaceId } from '../../../domain/entities/Listing.js';
+import { fallbackDisplacementCc } from '../../../catalog/modelDisplacement.js';
 import type { ScoredListing } from '../../../domain/entities/ScoredListing.js';
 import type { ModelCriteria } from '../../../domain/entities/SearchCriteria.js';
 import type { FuelType, GearboxType } from '../../../domain/entities/VehicleType.js';
@@ -350,6 +351,12 @@ export const UPSERT_SQL = `
 /** A libsql value: what a bound parameter may be. */
 type SqlValue = string | number | null;
 
+function storedDisplacementCc(listing: Listing, modelName: string): number {
+  if (listing.vehicleType === 'car') return listing.displacementCc ?? 0;
+  if (listing.displacementCc != null && listing.displacementCc > 0) return listing.displacementCc;
+  return fallbackDisplacementCc(modelName);
+}
+
 /** Flattens a scored listing into the positional args for {@link UPSERT_SQL}. */
 export function toInsertArgs(scored: ScoredListing): SqlValue[] {
   const { listing, match, score } = scored;
@@ -362,7 +369,7 @@ export function toInsertArgs(scored: ScoredListing): SqlValue[] {
     listing.priceMAD,
     listing.year ?? null,
     listing.mileageKm ?? null,
-    listing.displacementCc ?? null,
+    storedDisplacementCc(listing, match.criteria.model),
     listing.city,
     listing.imageUrl ?? null,
     listing.postedAt?.toISOString() ?? null,
@@ -473,7 +480,7 @@ export function mapRowToScoredListing(
     priceMAD: row.price_mad,
     year: row.year ?? undefined,
     mileageKm: row.mileage_km ?? undefined,
-    displacementCc: row.displacement_cc ?? undefined,
+    displacementCc: row.displacement_cc ?? 0,
     vehicleType: parseVehicleType(row.vehicle_type),
     fuelType: (row.fuel_type as FuelType | null) ?? undefined,
     gearbox: (row.gearbox as GearboxType | null) ?? undefined,

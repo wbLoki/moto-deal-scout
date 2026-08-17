@@ -5,6 +5,7 @@ import {
   modelsForBrand,
   suggestAliases,
 } from '../../src/catalog/motorcycleCatalog.js';
+import { fallbackDisplacementCc } from '../../src/catalog/modelDisplacement.js';
 
 describe('motorcycle catalog', () => {
   it('has unique brand names and non-empty model lists', () => {
@@ -24,6 +25,16 @@ describe('motorcycle catalog', () => {
     expect(modelsForBrand('yamaha')).toContain('MT-07');
     expect(modelsForBrand('YAMAHA')).toContain('MT-09');
     expect(modelsForBrand('Nonexistent')).toEqual([]);
+  });
+});
+
+describe('fallbackDisplacementCc', () => {
+  it('uses typical cc for series names that are not the engine size', () => {
+    expect(fallbackDisplacementCc('MT-07')).toBe(689);
+    expect(fallbackDisplacementCc('YZF-R1')).toBe(998);
+    expect(fallbackDisplacementCc('CB500F')).toBe(500);
+    expect(fallbackDisplacementCc('NMAX 155')).toBe(155);
+    expect(fallbackDisplacementCc('NMAX')).toBe(0);
   });
 });
 
