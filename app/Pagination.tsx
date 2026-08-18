@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { useT } from './i18n/I18nProvider.js';
 import type { Locale } from './i18n/locales.js';
 
@@ -35,15 +36,28 @@ export function Pagination({
   locale: Locale;
 }) {
   const t = useT(locale);
+  const navRef = useRef<HTMLElement>(null);
   if (pageCount <= 1) return null;
 
+  const go = (next: number) => {
+    onPage(next);
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const behavior: ScrollBehavior = reduce ? 'auto' : 'smooth';
+    const target = navRef.current?.closest('.browse-main');
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ behavior, block: 'start' });
+      return;
+    }
+    window.scrollTo({ top: 0, behavior });
+  };
+
   return (
-    <nav className="pagination" aria-label={t.common.pagination}>
+    <nav ref={navRef} className="pagination" aria-label={t.common.pagination}>
       <button
         type="button"
         className="page-btn"
         disabled={page <= 1}
-        onClick={() => onPage(page - 1)}
+        onClick={() => go(page - 1)}
       >
         {t.common.prev}
       </button>
@@ -58,7 +72,7 @@ export function Pagination({
             type="button"
             className={p === page ? 'page-btn active' : 'page-btn'}
             aria-current={p === page ? 'page' : undefined}
-            onClick={() => onPage(p)}
+            onClick={() => go(p)}
           >
             {p}
           </button>
@@ -68,7 +82,7 @@ export function Pagination({
         type="button"
         className="page-btn"
         disabled={page >= pageCount}
-        onClick={() => onPage(page + 1)}
+        onClick={() => go(page + 1)}
       >
         {t.common.next}
       </button>

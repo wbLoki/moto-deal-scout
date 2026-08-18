@@ -1374,6 +1374,7 @@ body.nav-open .container {
 
 .browse-main {
   min-width: 0;
+  scroll-margin-top: 5rem;
 }
 
 .browse-count {
