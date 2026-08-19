@@ -102,7 +102,20 @@ export async function updateSavedSearch(
 export async function deleteSavedSearch(userId: string, id: string): Promise<void> {
   const db = await openDatabaseFromEnv();
   try {
-    await new LibsqlSavedSearchRepository(db).delete(id, userId);
+    const repo = new LibsqlSavedSearchRepository(db);
+    const existing = await repo.get(id, userId);
+    await repo.delete(id, userId);
+    if (!existing) return;
+    const remaining = await repo.listForUser(userId, existing.vehicleType);
+    if (remaining.length > 0) return;
+    // Last search of this type: drop leftover watchlist rows so a later
+    // one-shot copy cannot rebuild the search the user just removed.
+    await db.execute({
+      sql: `DELETE FROM user_watched_models
+             WHERE user_id = ?
+               AND model_id IN (SELECT id FROM models WHERE vehicle_type = ?)`,
+      args: [userId, existing.vehicleType],
+    });
   } finally {
     db.close();
   }

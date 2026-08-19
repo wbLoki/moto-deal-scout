@@ -217,6 +217,12 @@ export const MIGRATIONS: readonly string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_user_saved_searches_user
      ON user_saved_searches (user_id, vehicle_type)`,
+  // One-shot data backfills (not DDL). Prevents re-running copies that would
+  // revive a saved search the user already deleted.
+  `CREATE TABLE IF NOT EXISTS schema_data_migrations (
+    id         TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  )`,
   // Individual listings a user bookmarked. Keyed by the listing's (source,
   // external) id so it survives re-scrapes; price-drop alerts also target these.
   `CREATE TABLE IF NOT EXISTS user_saved_listings (

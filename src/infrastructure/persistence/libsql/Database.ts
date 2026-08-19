@@ -155,12 +155,39 @@ async function copyLegacySearchRanges(client: Client): Promise<void> {
   `);
 }
 
+const WATCHLIST_COPY_MIGRATION = 'copy_watchlists_to_saved_searches';
+
 /**
  * One saved search per (user, vehicle type) from the old range + watchlist.
  * Users with a range but no watches get an open (any-model) search. Users with
- * watches but no range get the default budget/year for that type. Idempotent.
+ * watches but no range get the default budget/year for that type.
+ *
+ * This is a one-shot upgrade. The old "no search of this type yet" guard
+ * treated a deleted Cars search as "not migrated", so every scan (a fresh
+ * process) put the watchlist back and fired alerts again.
  */
-async function copyWatchlistsToSavedSearches(client: Client): Promise<void> {
+export async function copyWatchlistsToSavedSearches(client: Client): Promise<void> {
+  const already = await client.execute({
+    sql: 'SELECT 1 FROM schema_data_migrations WHERE id = ? LIMIT 1',
+    args: [WATCHLIST_COPY_MIGRATION],
+  });
+  if (already.rows.length > 0) return;
+
+  // A database that already has listings has already been scanned, so this
+  // copy has already had its chance. Running it again would recreate searches
+  // users deleted. Fresh/empty DBs still get the one-time conversion.
+  const listings = await client.execute('SELECT 1 FROM listings LIMIT 1');
+  if (listings.rows.length === 0) {
+    await insertCopiedSavedSearches(client);
+  }
+
+  await client.execute({
+    sql: 'INSERT INTO schema_data_migrations (id) VALUES (?)',
+    args: [WATCHLIST_COPY_MIGRATION],
+  });
+}
+
+async function insertCopiedSavedSearches(client: Client): Promise<void> {
   await client.execute(`
     INSERT INTO user_saved_searches
       (id, user_id, name, vehicle_type, budget_min, budget_max, year_min, year_max,
